@@ -187,6 +187,68 @@ defmodule Dran.ServicesTest do
     end
   end
 
+  # ── P11: descubrir no carga el catálogo entero ─────────────────────────────
+
+  describe "catálogo y búsqueda" do
+    setup do
+      composio_env()
+      Services.put_allowlist(["gmail"])
+      :ok
+    end
+
+    test "el detalle sale por toolkit y el esquema completo solo con el slug",
+         %{alice: alice} do
+      stub_composio(&discovery_stub/1)
+
+      assert {:ok, catalog} = Services.catalog(alice, "gmail")
+
+      # La petición pide UN toolkit, no el catálogo entero.
+      assert_receive {:composio, "GET", "/api/v3.1/tool_router/session/trs_reader/tools", params,
+                      _}
+
+      assert params["toolkit_slugs"] == ["gmail"]
+      refute Map.has_key?(params, "tool_slugs")
+
+      assert [%{slug: "GMAIL_SEND_EMAIL", name: "Send email"}] = catalog.tools
+      # Sin slug pedido NO viaja el esquema: solo el slug con su descripción.
+      refute Map.has_key?(hd(catalog.tools), :input_parameters)
+
+      assert {:ok, full} = Services.catalog(alice, "gmail", slug: "GMAIL_SEND_EMAIL")
+
+      assert_receive {:composio, "GET", "/api/v3.1/tool_router/session/trs_reader/tools", params,
+                      _}
+
+      assert params["tool_slugs"] == ["GMAIL_SEND_EMAIL"]
+
+      [tool] = full.tools
+      assert tool.slug == "GMAIL_SEND_EMAIL"
+      assert tool.input_parameters["to"]["required"] == true
+      assert Map.has_key?(tool, :output_parameters)
+    end
+
+    test "la búsqueda por caso de uso devuelve slugs, plan y trampas", %{alice: alice} do
+      stub_composio(&discovery_stub/1)
+
+      assert {:ok, result} = Services.search(alice, "send an email with an attachment")
+
+      assert result.query == "send an email with an attachment"
+      assert result.primary_tool_slugs == ["GMAIL_SEND_EMAIL"]
+      assert result.related_tool_slugs == ["GMAIL_CREATE_DRAFT"]
+      assert result.recommended_plan_steps == ["Attach the file"]
+      assert result.known_pitfalls == "Attachments must be uploaded first"
+
+      assert_received {:composio, "POST", "/api/v3.1/tool_router/session/trs_reader/search", _,
+                       %{"queries" => [%{"use_case" => "send an email with an attachment"}]}}
+    end
+
+    test "sin caso de uso no se llama al vendor", %{alice: alice} do
+      stub_composio(&discovery_stub/1)
+
+      assert {:error, :missing_query} = Services.search(alice, "   ")
+      refute_receive {:composio, _, _, _, _}
+    end
+  end
+
   # ── P4: UNA sesión por usuario, reusada ────────────────────────────────────
 
   describe "ensure_session/1" do
@@ -365,6 +427,51 @@ defmodule Dran.ServicesTest do
     case conn.query_string do
       "" -> %{}
       qs -> Plug.Conn.Query.decode(qs)
+    end
+  end
+
+  # El stub del DESCUBRIMIENTO: sesión + tools + search. Registra cada petición
+  # para poder afirmar qué se pidió (y qué NO).
+  defp discovery_stub(conn) do
+    {:ok, raw, conn} = Plug.Conn.read_body(conn)
+    payload = if raw == "", do: %{}, else: Jason.decode!(raw)
+
+    send(self(), {:composio, conn.method, conn.request_path, decode_query(conn), payload})
+
+    case {conn.method, conn.request_path} do
+      {"GET", "/api/v3.1/connected_accounts"} ->
+        Req.Test.json(conn, %{"items" => []})
+
+      {"GET", "/api/v3.1/toolkits"} ->
+        Req.Test.json(conn, %{"items" => []})
+
+      {"POST", "/api/v3.1/tool_router/session"} ->
+        Req.Test.json(conn, %{"session_id" => "trs_reader"})
+
+      {"GET", "/api/v3.1/tool_router/session/trs_reader/tools"} ->
+        Req.Test.json(conn, %{
+          "items" => [
+            %{
+              "slug" => "GMAIL_SEND_EMAIL",
+              "name" => "Send email",
+              "description" => "Send an email",
+              "input_parameters" => %{"to" => %{"type" => "string", "required" => true}},
+              "output_parameters" => %{"id" => %{"type" => "string"}}
+            }
+          ]
+        })
+
+      {"POST", "/api/v3.1/tool_router/session/trs_reader/search"} ->
+        Req.Test.json(conn, %{
+          "results" => [
+            %{
+              "primary_tool_slugs" => ["GMAIL_SEND_EMAIL"],
+              "related_tool_slugs" => ["GMAIL_CREATE_DRAFT"],
+              "recommended_plan_steps" => ["Attach the file"],
+              "known_pitfalls" => "Attachments must be uploaded first"
+            }
+          ]
+        })
     end
   end
 

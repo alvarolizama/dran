@@ -218,12 +218,124 @@ defmodule DranWeb.API.ServiceControllerTest do
     end
   end
 
+  # ── W4: descubrir y ejecutar por HTTP ──────────────────────────────────────
+
+  describe "GET /api/services/:toolkit/tools" do
+    test "el catálogo del toolkit, y el esquema completo con ?slug", %{
+      api_conn: conn,
+      alice: alice
+    } do
+      stub_composio(%{accounts: [account("gmail", alice.id, "ACTIVE", "alice@gmail.com")]})
+
+      body = json_response(get(conn, "/api/services/gmail/tools"), 200)
+      assert body["data"]["toolkit"] == "gmail"
+      assert [%{"slug" => "GMAIL_SEND_EMAIL"}] = body["data"]["tools"]
+      refute Map.has_key?(hd(body["data"]["tools"]), "input_parameters")
+
+      full = json_response(get(conn, "/api/services/gmail/tools?slug=GMAIL_SEND_EMAIL"), 200)
+      [tool] = full["data"]["tools"]
+      assert tool["input_parameters"]["to"]["required"] == true
+    end
+
+    test "un toolkit fuera de la allowlist no cataloga", %{api_conn: conn} do
+      stub_composio(%{})
+
+      body = json_response(get(conn, "/api/services/slack/tools"), 403)
+      assert body["errors"]["code"] == "not_allowed"
+      refute_receive {:composio, _, _, _, _}
+    end
+  end
+
+  describe "GET /api/services/search" do
+    test "la búsqueda por caso de uso", %{api_conn: conn} do
+      stub_composio(%{})
+
+      body = json_response(get(conn, "/api/services/search?q=send+an+email"), 200)
+      assert body["data"]["primary_tool_slugs"] == ["GMAIL_SEND_EMAIL"]
+      assert body["data"]["query"] == "send an email"
+    end
+
+    test "sin q es un 422 explícito", %{api_conn: conn} do
+      body = json_response(get(conn, "/api/services/search"), 422)
+      assert body["errors"]["code"] == "missing_query"
+    end
+  end
+
+  describe "POST /api/services/execute" do
+    test "ejecuta, responde con el log_id y registra el agente", %{api_conn: conn, alice: alice} do
+      stub_composio(%{accounts: [account("gmail", alice.id, "ACTIVE", "alice@gmail.com")]})
+
+      body =
+        json_response(
+          post(conn, "/api/services/execute", %{
+            "toolkit" => "gmail",
+            "tool_slug" => "GMAIL_SEND_EMAIL",
+            "arguments" => %{"to" => "x@y.z"}
+          }),
+          200
+        )
+
+      assert body["data"]["log_id"] == "log_1"
+      assert body["data"]["result"] == %{"sent" => true}
+
+      assert_receive {:composio, "POST", "/api/v3.1/tool_router/session/trs_reader/execute", _,
+                      payload}
+
+      assert payload["tool_slug"] == "GMAIL_SEND_EMAIL"
+      # El agent_name sale del header, resuelto en el borde.
+      [call] = Dran.Services.Call.recent(alice.id)
+      assert call.agent_name == "agent-test"
+    end
+
+    test "sin conexión ACTIVE: 409 con el link, no el error del vendor", %{
+      api_conn: conn,
+      alice: alice
+    } do
+      stub_composio(%{accounts: [account("gmail", alice.id, "EXPIRED", "alice@gmail.com")]})
+
+      body =
+        json_response(
+          post(conn, "/api/services/execute", %{
+            "toolkit" => "gmail",
+            "tool_slug" => "GMAIL_SEND_EMAIL",
+            "arguments" => %{}
+          }),
+          409
+        )
+
+      assert body["errors"]["code"] == "not_connected"
+      assert body["status"] == "EXPIRED"
+      assert body["connect_url"] == "https://app.composio.dev/link/abc"
+    end
+
+    test "sin tool_slug: 422 y ninguna llamada", %{api_conn: conn} do
+      stub_composio(%{})
+
+      body = json_response(post(conn, "/api/services/execute", %{"toolkit" => "gmail"}), 422)
+      assert body["errors"]["code"] == "missing_tool"
+      refute_receive {:composio, _, _, _, _}
+    end
+
+    test "sin token no ejecuta", %{alice: alice} do
+      conn = build_conn() |> Plug.Conn.put_req_header("accept", "application/json")
+
+      assert %{"errors" => _} =
+               json_response(
+                 post(conn, "/api/services/execute", %{"toolkit" => "gmail", "tool_slug" => "X"}),
+                 401
+               )
+
+      assert is_integer(alice.id)
+    end
+  end
+
   # ── helpers ────────────────────────────────────────────────────────────────
 
   defp api_conn(user) do
     build_conn()
     |> Plug.Conn.put_req_header("accept", "application/json")
     |> Plug.Conn.put_req_header("authorization", "Bearer #{user.api_token}")
+    |> Plug.Conn.put_req_header("x-hermes-agent", "agent-test")
   end
 
   defp browser_conn(user) do
@@ -266,6 +378,34 @@ defmodule DranWeb.API.ServiceControllerTest do
               %{"slug" => "gmail", "name" => "Gmail", "meta" => %{"description" => "Email"}}
             ]
           })
+
+        {"GET", "/api/v3.1/tool_router/session/trs_reader/tools"} ->
+          Req.Test.json(conn, %{
+            "items" => [
+              %{
+                "slug" => "GMAIL_SEND_EMAIL",
+                "name" => "Send email",
+                "description" => "Send an email",
+                "input_parameters" => %{"to" => %{"type" => "string", "required" => true}},
+                "output_parameters" => %{}
+              }
+            ]
+          })
+
+        {"POST", "/api/v3.1/tool_router/session/trs_reader/search"} ->
+          Req.Test.json(conn, %{
+            "results" => [
+              %{
+                "primary_tool_slugs" => ["GMAIL_SEND_EMAIL"],
+                "related_tool_slugs" => [],
+                "recommended_plan_steps" => ["Compose it"],
+                "known_pitfalls" => nil
+              }
+            ]
+          })
+
+        {"POST", "/api/v3.1/tool_router/session/trs_reader/execute"} ->
+          Req.Test.json(conn, %{"log_id" => "log_1", "data" => %{"sent" => true}})
       end
     end)
   end

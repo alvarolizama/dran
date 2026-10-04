@@ -341,6 +341,11 @@ defmodule DranWeb.Router do
     # contrato de la lectura (`Dran.Services`), no un detalle del controlador.
     get "/services", ServiceController, :index
 
+    # Descubrimiento: el catálogo viaja como DATO — por toolkit (o el esquema de
+    # un slug) y por caso de uso. Ninguna tool del plugin crece con esto.
+    get "/services/search", ServiceController, :search
+    get "/services/:toolkit/tools", ServiceController, :tools
+
     # Groups (read) — W7/P19: los grupos donde el lector es MIEMBRO, el mismo
     # conjunto al que puede apuntar con un `scope` de grupo (W6). El payload
     # está acotado al lector, así que no hay workspace que autorizar.
@@ -444,6 +449,10 @@ defmodule DranWeb.Router do
 
     post "/:toolkit/connect", ServiceController, :connect
     delete "/:toolkit", ServiceController, :delete
+
+    # Ejecutar es ESCRITURA contra la conexión del lector (y dran queda en medio
+    # de cada llamada: gate por allowlist, gate por estado y registro).
+    post "/execute", ServiceController, :execute
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

@@ -37,6 +37,7 @@ defmodule Dran.Services do
 
   alias Dran.Composio
   alias Dran.Repo
+  alias Dran.Services.Call
   alias Dran.Services.Session
   alias Dran.Settings
 
@@ -103,6 +104,19 @@ defmodule Dran.Services do
       toolkits: allowlist(),
       base_url: Composio.Config.base_url()
     }
+  end
+
+  @doc """
+  Prueba real de la integración para `/admin/system`: sin key es
+  `{:error, :not_configured}` sin salir a la red.
+  """
+  @spec ping() :: {:ok, map()} | {:error, term()}
+  def ping do
+    if enabled?() do
+      Composio.ping()
+    else
+      {:error, :not_configured}
+    end
   end
 
   # ── Identidad ─────────────────────────────────────────────────────────────
@@ -302,6 +316,252 @@ defmodule Dran.Services do
 
   defp link_url(%{redirect_url: url}) when is_binary(url) and url != "", do: {:ok, url}
   defp link_url(_link), do: {:error, :no_link}
+
+  # ── Descubrir ─────────────────────────────────────────────────────────────
+  #
+  # El catálogo viaja como DATO (F29): unas pocas tools fijas en el cliente y el
+  # detalle por toolkit o por caso de uso. Nada de una tool por servicio.
+
+  @doc """
+  El catálogo de UN toolkit expuesto: los slugs con su descripción.
+
+  Con `slug` se pide el esquema COMPLETO de esa tool —y solo de esa—: descubrir
+  no puede costar cargar el catálogo entero en el contexto (P11).
+  """
+  @spec catalog(map() | struct() | integer(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, term()}
+  def catalog(user, toolkit, opts \\ []) do
+    with :ok <- gate(toolkit),
+         {:ok, identity} <- identity_for(user),
+         {:ok, session} <- ensure_session(identity) do
+      slug = opts[:slug]
+
+      filters =
+        [toolkit_slugs: [toolkit]] ++ if(slug, do: [tool_slugs: [slug]], else: [])
+
+      case Composio.session_tools(session.composio_session_id, filters) do
+        {:ok, tools} ->
+          {:ok,
+           %{
+             toolkit: toolkit,
+             slug: slug,
+             tools: Enum.map(tools, &tool_entry(&1, toolkit, not is_nil(slug)))
+           }}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  @doc """
+  Búsqueda por CASO DE USO (F29): slugs primarios y relacionados, plan
+  recomendado y las trampas conocidas. Es el camino para «quiero mandar un
+  mail» sin conocer el slug.
+  """
+  @spec search(map() | struct() | integer(), String.t()) :: {:ok, map()} | {:error, term()}
+  def search(user, use_case) do
+    cond do
+      not enabled?() ->
+        {:error, :not_configured}
+
+      not is_binary(use_case) or String.trim(use_case) == "" ->
+        {:error, :missing_query}
+
+      true ->
+        with {:ok, identity} <- identity_for(user),
+             {:ok, session} <- ensure_session(identity) do
+          case Composio.search(session.composio_session_id, use_case) do
+            {:ok, body} -> {:ok, normalize_search(use_case, body)}
+            {:error, reason} -> {:error, reason}
+          end
+        end
+    end
+  end
+
+  # ── Ejecutar ──────────────────────────────────────────────────────────────
+
+  @doc """
+  Ejecuta una tool contra la conexión DEL LECTOR.
+
+  Tres gates, en este orden y todos antes de la llamada:
+
+  1. la instancia la expone (allowlist del owner);
+  2. la tool viene con nombre;
+  3. la conexión está `ACTIVE` — `INACTIVE` no ejecuta y un ciclo a medias
+     tampoco.
+
+  Cuando el gate 3 corta, NO se llama al vendor: se devuelve el link de conexión
+  (emitido nuevo) para que la web o el agente lo entreguen. Y todo intento queda
+  registrado, incluido el que dran cortó (`blocked`).
+  """
+  @spec execute(
+          map() | struct() | integer(),
+          String.t() | nil,
+          String.t() | nil,
+          map(),
+          keyword()
+        ) ::
+          {:ok, map()} | {:error, term()}
+  def execute(user, toolkit, tool_slug, arguments, opts \\ []) do
+    with :ok <- gate(toolkit),
+         :ok <- require_tool(tool_slug),
+         {:ok, identity} <- identity_for(user),
+         {:ok, status} <- connection_status(identity, toolkit) do
+      if executable?(status) do
+        run(identity, toolkit, tool_slug, arguments || %{}, opts)
+      else
+        blocked(user, identity, toolkit, tool_slug, status, opts)
+      end
+    end
+  end
+
+  # ── Helpers de ejecución ──────────────────────────────────────────────────
+
+  defp gate(toolkit) do
+    cond do
+      not enabled?() -> {:error, :not_configured}
+      not allowed?(toolkit) -> {:error, :not_allowed}
+      true -> :ok
+    end
+  end
+
+  defp require_tool(slug) when is_binary(slug) and slug != "", do: :ok
+  defp require_tool(_slug), do: {:error, :missing_tool}
+
+  defp connection_status(identity, toolkit) do
+    with {:ok, accounts} <- connected_accounts_for(identity, [toolkit]) do
+      {:ok, accounts |> best_account() |> then(&(&1 && &1["status"]))}
+    end
+  end
+
+  defp run(identity, toolkit, tool_slug, arguments, opts) do
+    started = System.monotonic_time(:millisecond)
+
+    with {:ok, session} <- ensure_session(identity) do
+      result =
+        Composio.execute(session.composio_session_id, tool_slug, arguments,
+          account: opts[:account]
+        )
+
+      elapsed = System.monotonic_time(:millisecond) - started
+      audit(identity, toolkit, tool_slug, result, elapsed, opts)
+
+      case result do
+        {:ok, body} ->
+          {:ok,
+           %{
+             toolkit: toolkit,
+             tool_slug: tool_slug,
+             log_id: body["log_id"],
+             result: body["data"],
+             error: body["error"]
+           }}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  defp blocked(user, identity, toolkit, tool_slug, status, opts) do
+    audit(identity, toolkit, tool_slug, {:blocked, status}, 0, opts)
+
+    {:error,
+     {:not_connected,
+      %{toolkit: toolkit, status: status, connect_url: connect_url_for(user, toolkit)}}}
+  end
+
+  # El link vencido no se reintenta: se emite uno NUEVO (F32). Si el proveedor
+  # no lo da, se devuelve la superficie de la instancia — nunca un mensaje del
+  # vendor como si fuera una instrucción para el usuario.
+  defp connect_url_for(user, toolkit) do
+    case connect_link(user, toolkit) do
+      {:ok, %{redirect_url: url}} -> url
+      _ -> callback_url()
+    end
+  end
+
+  # dran ve cada llamada (F30): una fila por intento, con el resumen truncado y
+  # sin credenciales. Best-effort: un registro que falla no deshace la ejecución
+  # que ya pasó — se avisa y sigue.
+  defp audit(identity, toolkit, tool_slug, result, elapsed, opts) do
+    {status, log_id, payload} =
+      case result do
+        {:ok, body} -> {"ok", body["log_id"], body["data"] || body["error"]}
+        {:error, {:composio, _status, body}} -> {"error", log_id_of(body), body}
+        {:error, reason} -> {"error", nil, inspect(reason)}
+        {:blocked, _status} -> {"blocked", nil, nil}
+      end
+
+    attrs = %{
+      user_id: identity,
+      toolkit: toolkit,
+      tool_slug: tool_slug,
+      actor: opts[:actor],
+      agent_name: opts[:agent_name],
+      log_id: log_id,
+      status: status,
+      result: Call.summarize(payload),
+      duration_ms: elapsed
+    }
+
+    case Call.record(attrs) do
+      {:ok, _call} ->
+        :ok
+
+      {:error, changeset} ->
+        require Logger
+        Logger.warning("service call not recorded: #{inspect(changeset.errors)}")
+    end
+  end
+
+  defp log_id_of(body) when is_map(body), do: body["log_id"]
+  defp log_id_of(_body), do: nil
+
+  defp tool_entry(tool, toolkit, full?) do
+    entry = %{
+      slug: tool["slug"] || tool["tool_slug"],
+      name: tool["name"] || tool["slug"] || tool["tool_slug"],
+      toolkit: toolkit,
+      description: tool["description"]
+    }
+
+    if full? do
+      Map.merge(entry, %{
+        input_parameters: tool["input_parameters"],
+        output_parameters: tool["output_parameters"]
+      })
+    else
+      entry
+    end
+  end
+
+  defp normalize_search(use_case, body) when is_map(body) do
+    result =
+      case body["results"] do
+        [first | _] when is_map(first) -> first
+        _ -> body
+      end
+
+    %{
+      query: use_case,
+      primary_tool_slugs: result["primary_tool_slugs"] || [],
+      related_tool_slugs: result["related_tool_slugs"] || [],
+      recommended_plan_steps: result["recommended_plan_steps"] || [],
+      known_pitfalls: result["known_pitfalls"]
+    }
+  end
+
+  defp normalize_search(use_case, _body) do
+    %{
+      query: use_case,
+      primary_tool_slugs: [],
+      related_tool_slugs: [],
+      recommended_plan_steps: [],
+      known_pitfalls: nil
+    }
+  end
 
   # ── Lectura: el estado real de lo conectado ───────────────────────────────
 

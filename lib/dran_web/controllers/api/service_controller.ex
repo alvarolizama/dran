@@ -15,6 +15,7 @@ defmodule DranWeb.API.ServiceController do
 
   use DranWeb, :controller
 
+  alias Dran.Auth
   alias Dran.Services
 
   @doc """
@@ -86,6 +87,81 @@ defmodule DranWeb.API.ServiceController do
     redirect(conn, to: "/services?returned=1")
   end
 
+  @doc """
+  GET /api/services/:toolkit/tools — el catálogo de UN toolkit expuesto.
+
+  Con `?slug=` sale el esquema completo de esa tool y solo de esa: descubrir no
+  puede costar el catálogo entero.
+  """
+  def tools(conn, %{"toolkit" => toolkit} = params) do
+    case Services.catalog(conn.assigns[:user], toolkit, slug: params["slug"]) do
+      {:ok, catalog} -> json(conn, %{data: catalog})
+      {:error, reason} -> failure(conn, reason)
+    end
+  end
+
+  @doc """
+  GET /api/services/search?q= — descubrimiento por caso de uso.
+  """
+  def search(conn, %{"q" => q}) do
+    case Services.search(conn.assigns[:user], q) do
+      {:ok, result} -> json(conn, %{data: result})
+      {:error, reason} -> failure(conn, reason)
+    end
+  end
+
+  # Sin `q` no hay caso de uso que buscar: 422 explícito antes de tocar el
+  # contexto (el error dice qué falta, no un 404 de ruta).
+  def search(conn, _params), do: failure(conn, :missing_query)
+
+  @doc """
+  POST /api/services/execute — ejecuta una tool contra la conexión del lector.
+
+  El registro y el gate viven en `Dran.Services`: acá solo se resuelve la
+  atribución (el `agent_name` del header, resuelto en el punto único del borde)
+  y se traduce la respuesta.
+  """
+  def execute(conn, %{"toolkit" => toolkit} = params)
+      when is_binary(toolkit) and toolkit != "" do
+    user = conn.assigns[:user]
+
+    opts = [
+      actor: Auth.resolve_created_by(user),
+      agent_name: user[:agent_name],
+      account: params["account"]
+    ]
+
+    case Services.execute(
+           user,
+           toolkit,
+           params["tool_slug"] || params["slug"],
+           params["arguments"] || %{},
+           opts
+         ) do
+      {:ok, result} ->
+        json(conn, %{data: result})
+
+      {:error, {:not_connected, info}} ->
+        conn
+        |> put_status(:conflict)
+        |> json(%{
+          errors: %{
+            detail: "the service is not connected",
+            code: "not_connected"
+          },
+          toolkit: info.toolkit,
+          status: info.status,
+          connect_url: info.connect_url
+        })
+
+      {:error, reason} ->
+        failure(conn, reason)
+    end
+  end
+
+  # Sin toolkit no hay conexión contra la cual ejecutar: 422 explícito.
+  def execute(conn, _params), do: failure(conn, :missing_toolkit)
+
   # ── Errores ────────────────────────────────────────────────────────────────
 
   @doc false
@@ -115,6 +191,24 @@ defmodule DranWeb.API.ServiceController do
     conn
     |> put_status(:unauthorized)
     |> json(%{errors: %{detail: "no identity for this credential", code: "no_identity"}})
+  end
+
+  def failure(conn, :missing_tool) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{errors: %{detail: "tool_slug is required", code: "missing_tool"}})
+  end
+
+  def failure(conn, :missing_toolkit) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{errors: %{detail: "toolkit is required", code: "missing_toolkit"}})
+  end
+
+  def failure(conn, :missing_query) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{errors: %{detail: "q is required", code: "missing_query"}})
   end
 
   def failure(conn, {:composio, status, body}) do

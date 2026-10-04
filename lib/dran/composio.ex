@@ -221,6 +221,31 @@ defmodule Dran.Composio do
     end
   end
 
+  @doc """
+  Health-check de la integración: prueba que la key SCOPED de la instancia
+  responde. Usa la lectura más barata de su alcance (una página de connected
+  accounts), no un catálogo entero.
+
+  Devuelve `{:ok, %{latency_ms: n, accounts: n}}` o el error tipado. Alimenta el
+  botón «Probar conexión» de `/admin/system`.
+  """
+  @spec ping() :: {:ok, %{latency_ms: non_neg_integer(), accounts: non_neg_integer()}} | error()
+  def ping do
+    start = System.monotonic_time(:millisecond)
+
+    case request(:get, "#{@api_prefix}/connected_accounts", params: [{"limit", "1"}]) do
+      {:ok, body} ->
+        {:ok,
+         %{
+           latency_ms: System.monotonic_time(:millisecond) - start,
+           accounts: length(items(body))
+         }}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   # ── Transport ──────────────────────────────────────────────────────────────
 
   @doc false
