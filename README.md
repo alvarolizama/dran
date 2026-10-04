@@ -268,6 +268,7 @@ Dran's own variables, alongside those:
 | `UPLOADS_DIR` | where uploads are stored (default `priv/static/uploads`) — mount a volume there in production |
 | `UPLOADS_MAX_SIZE` | max upload size in bytes (default 100 MiB) |
 | `DRAN_INFERENCE_API_URL` / `_API_KEY` | any OpenAI-compatible endpoint; powers embeddings, summaries, semantic search and the workers — without it Dran still works, minus those features |
+| `DRAN_COMPOSIO_API_KEY` / `_BASE_URL` | scoped Composio project key for the **services** surface (`/services`, `/api/services`, the agent's services tools). Instance state, server-side only — it is never shown in the UI (only its state) and never reaches a client. Unset = the whole surface is off and answers fail-closed |
 | `WORKER_MAX_STEPS` / `WORKER_PER_STEP_TIMEOUT` | worker step budget |
 | `SKIP_MIGRATIONS` / `DRAN_RESET` | entrypoint switches (see [Production](#production)) |
 
@@ -363,6 +364,31 @@ DATABASE_URL=ecto://nope:nope@127.0.0.1:1/nope SECRET_KEY_BASE=test \
 There is **no MCP server**. The agent surface is the Hermes plugin, and every
 tool it exposes is a thin client over the REST API — so a non-Hermes agent
 uses the same routes directly.
+
+### Services (the user's own apps)
+
+`/services` (and `/api/services`) is where a person connects THEIR apps — Gmail,
+calendar, GitHub, Slack… — and their agent uses them. The shape:
+
+- **One instance key, one user credential.** Composio is reached with the
+  instance's scoped project key (`DRAN_COMPOSIO_API_KEY`, server-side only); the
+  reader is identified by the credential that already exists, so `N` agents with
+  the same key are the same reader.
+- **The instance decides what is exposed** (owner's allowlist in Instance
+  settings) and **the user decides what to connect**: a service outside the
+  allowlist cannot be listed, catalogued or executed, and only the owner of a
+  connection runs against it.
+- **The state is a lifecycle, read from the server** (`INITIALIZING` →
+  `INITIATED` → `ACTIVE` / `EXPIRED`; `INACTIVE` does not run tools). The
+  callback after the provider's consent carries no authority: the state is
+  re-read, never believed.
+- **dran sits in the middle of every call** (allowlist gate, state gate, and a
+  row in `service_calls` with the tool, the agent and the provider's `log_id`),
+  which is why the vocabulary is connect / reconnect / disconnect — no pause —
+  and why disconnecting *deletes* with an upstream revocation.
+- **The catalog travels as data.** The agent has five fixed service tools; the
+  toolkit's tools are discovered by query, so the number of tools never grows
+  with the number of services.
 
 ### Security
 

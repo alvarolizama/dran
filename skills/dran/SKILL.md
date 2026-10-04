@@ -36,6 +36,8 @@ flowchart TD
 
   Q -->|"goals, tasks, plans (work + checklist)"| W[dran-work-flow]
 
+  Q -->|"connect / use the user's own apps (mail, calendar, issues, chat, files)"| SVC["THIS SKILL\nservices section"]
+
   style SELF fill:#d1fae5,stroke:#059669
 ```
 
@@ -82,6 +84,38 @@ flowchart TD
   creation and update. Memory facts are ALWAYS born private via tools — the
   API rejects a `visibility` param with 422.
 - Discover the instance's effective page types with `dran_list_page_types`.
+
+## Services (the user's apps)
+
+Dran connects the user's own apps (Gmail, calendar, GitHub, Slack…) so the
+agent can USE them — mail, calendar, issues and pull requests, messages,
+files. Five fixed tools, all thin clients over `/api/services`:
+
+| Tool | What it is for |
+| --- | --- |
+| `dran_services` | which services are exposed and which are connected for THIS reader, with the lifecycle state and the provider identity |
+| `dran_services_connect` | the hosted authorization link to paste for the user (it lives 10 minutes) |
+| `dran_services_tools` | discovery: one toolkit's tools, or a use case (`use_case`) |
+| `dran_services_run` | execute a tool against the user's connection |
+| `dran_services_wait` | wait (short cap) until the connection is `ACTIVE` before running |
+
+The rules, which are not negotiable:
+
+- **The catalog is DATA, not a new tool per service.** You never get
+  `dran_gmail_*`: you ask `dran_services_tools` for the toolkit or the use
+  case, and the schemas for the slug you actually need. Nothing here grows
+  with the toolkits connected.
+- **The state is a lifecycle read from the server** (`INITIATED` → `ACTIVE` /
+  `EXPIRED`; `INACTIVE` does not run). Connecting returns a link the USER
+  opens in their browser; when it expires, ask for a NEW one — an old link is
+  never retried.
+- **Execution fails closed with the link.** A `not_connected` answer carries
+  the fresh connect link: show it to the user instead of retrying.
+- **Only the owner runs against their own connection**, and only if the
+  instance exposes that service. Both gates are server-side; nothing you send
+  changes them (there is no `user_id` or `session_id` to send).
+- **Session start already tells you what is connected** — the inventory is
+  injected, so do not poll `dran_services` to find out.
 
 ## General rules (every flow obeys them)
 

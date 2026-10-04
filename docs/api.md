@@ -336,6 +336,68 @@ curl -s -X POST localhost:4000/api/memory \
   -d '{"workspace":"personal","content":"Prefers concise answers."}'
 ```
 
+### Services (Composio)
+
+La superficie de SERVICIOS. Cada persona conecta SUS apps y su agente las usa a
+través de dran: la instancia decide qué se expone (allowlist del owner), la
+conexión es del dueño y **solo el dueño ejecuta contra ella**. La key de
+Composio es de INSTANCIA y vive server-side: ninguna de estas rutas la devuelve.
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/services` | read | Servicios expuestos + el estado real de lo conectado POR EL LECTOR |
+| POST | `/api/services/:toolkit/connect` | write | Emite un link de conexión hospedado (vive 10 minutos) |
+| DELETE | `/api/services/:toolkit` | write | Desconecta BORRANDO, con revocación upstream (irreversible) |
+| GET | `/api/services/:toolkit/tools` | read | El catálogo de ESE toolkit (`?slug=` trae el esquema completo de una tool) |
+| GET | `/api/services/search` | read | Descubrimiento por caso de uso (`q=`) |
+| POST | `/api/services/execute` | write | Ejecuta una tool contra la conexión del lector |
+
+Identidad: la del token (`users.api_token`). **Ninguna ruta acepta `user_id` ni
+`session_id`**: la identidad se resuelve en el borde y la sesión en el contexto,
+así que un payload con esos campos no cambia de quién es la sesión.
+
+Estado de una conexión: un **ciclo de vida**, no la validez de una credencial —
+`INITIALIZING` → `INITIATED` → `ACTIVE` / `EXPIRED`; `INACTIVE` está
+deshabilitada y no ejecuta. La vuelta del consentimiento (`/services/callback`)
+no lee ningún parámetro: el estado se consulta al proveedor, nunca se cree de la
+query.
+
+```bash
+# Lo que este lector tiene conectado, con la identidad del proveedor
+curl -s localhost:4000/api/services -H "Authorization: Bearer ***"
+
+# Conectar: devuelve el link hospedado (re-emitir es la única forma de renovarlo)
+curl -s -X POST localhost:4000/api/services/gmail/connect -H "Authorization: Bearer ***"
+
+# Descubrir sin cargar el catálogo: por caso de uso…
+curl -s "localhost:4000/api/services/search?q=send+an+email+with+an+attachment" \
+  -H "Authorization: Bearer ***"
+
+# …y el detalle de un toolkit (o el esquema de UNA tool)
+curl -s "localhost:4000/api/services/gmail/tools?slug=GMAIL_SEND_EMAIL" \
+  -H "Authorization: Bearer ***"
+
+# Ejecutar
+curl -s -X POST localhost:4000/api/services/execute -H "Authorization: Bearer ***" \
+  -H "Content-Type: application/json" \
+  -d '{"toolkit":"gmail","tool_slug":"GMAIL_SEND_EMAIL","arguments":{"to":"x@y.z"}}'
+```
+
+| Result | Status | Body |
+|---|---|---|
+| lista | `200` | `{"data": [{"toolkit","name","description","connected","status","identity"}], "configured": true}` |
+| sin key de instancia | `200` | `{"data": [], "configured": false}` (la lectura lo dice como dato) |
+| link | `201` | `{"data": {"toolkit": "gmail", "redirect_url": "https://…", "expires_in": 600}}` |
+| ejecución | `200` | `{"data": {"toolkit","tool_slug","log_id","result","error"}}` |
+| sin conexión `ACTIVE` | `409` | `{"errors": {"code": "not_connected"}, "toolkit": "gmail", "status": "EXPIRED", "connect_url": "https://…"}` — el link va DENTRO de la respuesta, nunca el error del proveedor |
+| fuera de la allowlist | `403` | `{"errors": {"code": "not_allowed"}}` |
+| sin key de instancia (escrituras) | `503` | `{"errors": {"code": "not_configured"}}` |
+
+Cada intento de ejecución queda registrado en `service_calls` con el `tool_slug`,
+el actor, el `agent_name` del header `X-Hermes-Agent`, el `log_id` del proveedor
+y el toolkit; el resultado se guarda truncado y sin credenciales (`blocked`
+marca el intento que dran cortó antes de llamar).
+
 ### Goals, tasks and plans
 
 El contenedor de trabajo y el plan. `:slug` es **id-o-slug** (el uuid es

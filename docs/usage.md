@@ -180,6 +180,33 @@ The 3D graph draws pages, memories **and work entities**: goals and plans are
 nodes with their own colour, and they read with the reader's own reach. Its
 legend doubles as a type filter.
 
+## Services
+
+The user's own apps, connected to their account and used by their agent:
+mail, calendar, issues and pull requests, chat messages, files.
+
+| What | Where |
+|---|---|
+| Connect, see the state and disconnect your apps | `/services` (fourth block of the nav) |
+| Which apps the instance exposes (policy) | `/settings/instance` → Services (owner) |
+| Whether the integration is configured | `/admin/system` → Services (read-only + test connection) |
+
+- **The state is a lifecycle**: `INITIATED` (you opened the link, the consent is
+  not complete) → `ACTIVE` (it runs) / `EXPIRED` (reconnect issues a NEW link);
+  `INACTIVE` does not run tools. It is read from the provider every time — the
+  return trip from the consent carries no authority.
+- **Connecting is a trip to the provider**: dran emits a hosted link, the
+  provider collects the consent and keeps the credentials (dran never sees a
+  Gmail/Slack token). The link lives 10 minutes.
+- **The vocabulary is connect / reconnect / disconnect** — there is no pause.
+  Disconnecting *deletes* and revokes upstream: it cannot be undone, and the UI
+  says so before doing it.
+- **A connection belongs to its owner**: only that person runs against it, and
+  the agent runs with that person's credential.
+- **Everything the agent runs goes through dran**, so a call leaves a record
+  (which tool, which agent, the provider's `log_id`) — not only the calls that
+  worked.
+
 ## Settings
 
 | What | Where |
