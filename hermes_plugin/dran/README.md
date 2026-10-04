@@ -235,6 +235,30 @@ a lo sumo un `GET /api/services` por ventana) y la línea estática del provider
 nombra los disparadores, así que el agente sabe que la capacidad existe sin
 pedir la lista.
 
+### Skills (las instrucciones que el agente carga por tool)
+
+Un **skill** es instrucciones para un agente — no conocimiento que se lee. Vive
+sólo en Dran (tabla `skills`, con dueño y visibilidad por ítem) y viaja por tool:
+**nada se copia a disco** (nada de `external_dirs` ni `register_skill`), el
+cuerpo muere con la sesión y no hay índice anónimo (sin lector no hay scope).
+Cuatro tools FIJAS y el catálogo como DATO — una tool por skill sería una lista
+que el servidor no puede cambiar sin reiniciar el perfil.
+
+| Tool | Ruta que golpea |
+|---|---|
+| `dran_skills` | `GET /api/skills` — el catálogo VIVO del lector (slug, descripción, versión, hash, destino), **sin cuerpos** |
+| `dran_skill` | `GET /api/skills/:slug` — el cuerpo enmarcado con slug, versión y `content_hash`; `unchanged` cuando el hash no cambió desde la última carga de la SESIÓN |
+| `dran_skill_save` | `POST`/`PUT /api/skills[/:slug]` — slug nuevo crea, existente edita versionado (misma puerta y misma validación server-side que la web) |
+| `dran_skill_delete` | `DELETE /api/skills/:slug` |
+
+El descubrimiento no depende de la red en el camino crítico: `initialize()`
+(que corre ANTES del build del prompt) calienta el caché del índice, y la
+sección de prompt `dran-skills` —posición `after_memory`, `max_chars` 3000 bajo
+el tope de 4000— renderiza una línea por skill desde ESE caché y manda a
+`dran_skills` para el listado vivo, porque el bloque se congela por sesión. La
+sección se registra SIEMPRE y con Dran caído devuelve `""`: Hermes la descarta y
+el prompt no se rompe (fail-open).
+
 Cada tool escribe por `_DranClient`, así que **todo write lleva
 `X-Hermes-Agent`** con el nombre del perfil. El handler recibe `(args, **kw)`
 — Hermes no pasa el nombre de la tool — así que `register()` ata el nombre

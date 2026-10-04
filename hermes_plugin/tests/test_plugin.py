@@ -72,6 +72,7 @@ class FakeCtx:
         self.config = config or {}
         self.providers = []
         self.tools = []
+        self.prompt_sections = []
 
     def register_memory_provider(self, provider):
         self.providers.append(provider)
@@ -80,6 +81,9 @@ class FakeCtx:
         self.tools.append(
             {"name": name, "toolset": toolset, "schema": schema, "handler": handler}
         )
+
+    def register_system_prompt_section(self, section_id, content, **kwargs):
+        self.prompt_sections.append({"id": section_id, "content": content, **kwargs})
 
 
 # ── register(ctx) ────────────────────────────────────────────────────────────
@@ -138,6 +142,12 @@ def test_register_registers_memory_provider_and_tools(plugin):
         "dran_services_tools",
         "dran_services_run",
         "dran_services_wait",
+        # Skills remotos (contrato de skills remotos, W4) — 4 tools FIJAS y el
+        # catálogo como DATO: el cuerpo viaja por tool y nunca se baja a disco.
+        "dran_skills",
+        "dran_skill",
+        "dran_skill_save",
+        "dran_skill_delete",
     ]
     assert len(set(names)) == len(names), "no duplicate tool names"
 
@@ -928,3 +938,276 @@ def test_services_tools_hit_documented_routes(plugin):
     assert "user_id" not in execute and "session_id" not in execute
     assert execute["toolkit"] == "gmail"
     assert execute["arguments"] == {"to": "a@b.c"}
+
+
+# ── Skills remotos (contrato de skills remotos, W4) ──────────────────────────
+#
+# P11: las 4 tools se registran y el manifiesto las declara (el invariante de la
+#      suite mide los dos lados).
+# P12: `initialize()` calienta el índice ANTES del build del prompt y la sección
+#      es fail-open (con Dran caído queda vacía y el prompt no se rompe).
+# P13: `dran_skill` enmarca el cuerpo con slug/versión/hash y responde
+#      `unchanged` cuando el hash de la sesión no cambió.
+
+_SKILL_TOOL_NAMES = {"dran_skills", "dran_skill", "dran_skill_save", "dran_skill_delete"}
+
+
+def test_skills_tools_registered_and_declared(plugin):
+    ctx = FakeCtx()
+    plugin.register(ctx)
+    names = {t["name"] for t in ctx.tools}
+    assert _SKILL_TOOL_NAMES <= names, _SKILL_TOOL_NAMES - names
+
+    manifest = (_PLUGIN_DIR / "plugin.yaml").read_text(encoding="utf-8")
+    declared = set(re.findall(r"^\s*-\s+(dran_[a-z_]+)\s*$", manifest, re.M))
+    assert _SKILL_TOOL_NAMES <= declared, _SKILL_TOOL_NAMES - declared
+
+
+def test_no_per_skill_tool_exists(plugin):
+    """El catálogo es DATO: no se genera una tool por skill.
+
+    El plugin registra ESTÁTICO al cargarse, así que una tool por skill sería una
+    lista que el servidor no puede cambiar sin reiniciar el perfil — la misma
+    lección que servicios ya cerró.
+    """
+    ctx = FakeCtx()
+    plugin.register(ctx)
+    names = [t["name"] for t in ctx.tools]
+
+    assert sorted(n for n in names if n.startswith("dran_skill")) == [
+        "dran_skill", "dran_skill_delete", "dran_skill_save", "dran_skills"]
+    assert "dran_skill_weekly_review" not in names
+
+
+def test_skills_prompt_section_registered_always_and_fail_open(plugin):
+    """La sección se registra SIEMPRE, en `after_memory` y bajo el tope de 4000."""
+    ctx = FakeCtx()
+    plugin.register(ctx)
+
+    [section] = ctx.prompt_sections
+    assert section["id"] == "dran-skills"
+    assert section["position"] == "after_memory"
+    assert 0 < section["max_chars"] <= 4_000
+    assert callable(section["content"])
+
+    # Sin skills legibles (o con Dran caído) el bloque es "": Hermes lo descarta
+    # y el prompt no se rompe.
+    plugin._SKILLS_INDEX = {"skills": [], "loaded_at": 0.0}
+    assert plugin._skills_prompt_section({}) == ""
+
+
+def test_prompt_section_describes_existence_not_content(plugin):
+    """Una línea por skill y el listado vivo por tool: el cuerpo NO entra acá."""
+    plugin._SKILLS_INDEX = {
+        "skills": [
+            {"slug": "weekly-review", "version": 2, "description": "Cómo revisar la semana",
+             "content_hash": "abc", "body": "CUERPO QUE NO DEBE APARECER"},
+        ],
+        "loaded_at": 0.0,
+    }
+
+    text = plugin._skills_prompt_section({})
+    assert "weekly-review" in text
+    assert "v2" in text
+    assert "Cómo revisar la semana" in text
+    assert "dran_skills" in text  # el listado VIVO es la tool
+    assert "dran_skill" in text
+    assert "CUERPO QUE NO DEBE APARECER" not in text
+    assert len(text) <= plugin.SKILLS_SECTION_MAX_CHARS
+
+
+def test_prompt_section_truncates_by_budget_never_overflows(plugin):
+    """El bloque que se pasa del tope lo OMITE Hermes ENTERO: acá se corta.
+
+    Con muchas skills el corte es explícito y declara cuántas quedaron fuera —
+    nunca una sección que se pasa y desaparece sin decir nada.
+    """
+    plugin._SKILLS_INDEX = {
+        "skills": [{"slug": f"skill-{i:04d}", "version": 1, "description": "x" * 60}
+                   for i in range(500)],
+        "loaded_at": 0.0,
+    }
+
+    text = plugin._skills_prompt_section({})
+    assert len(text) <= plugin.SKILLS_SECTION_MAX_CHARS
+    assert "more" in text
+    assert "dran_skills" in text
+
+
+def test_initialize_warms_the_index_before_the_prompt(plugin):
+    """P12: el caché se llena en `initialize()` — el build del prompt lee el caché."""
+
+    class WarmClient:
+        def __init__(self):
+            self.calls = 0
+
+        def list_skills(self, limit=None, timeout=None):
+            self.calls += 1
+            return [{"slug": "sembrado", "version": 1, "description": "d"}]
+
+    client = WarmClient()
+    provider = plugin.DranMemoryProvider()
+    plugin._SKILL_HASHES = {"viejo": "hash-de-otra-sesion"}
+
+    with mock.patch.object(plugin, "_load_dran_config",
+                           lambda _home: {"base_url": "http://dran.test", "api_key": "k",
+                                          "workspace": "personal", "scope": "private",
+                                          "scope_group": ""}), \
+            mock.patch.object(plugin, "_DranClient", return_value=client), \
+            mock.patch.object(plugin.DranMemoryProvider, "_probe_connection", lambda self: None):
+        provider.initialize("sess-1")
+
+    assert client.calls == 1
+    assert plugin._SKILLS_INDEX["skills"][0]["slug"] == "sembrado"
+    # La sesión arranca sin hashes cargados: lo de la sesión anterior no cuenta.
+    assert plugin._SKILL_HASHES == {}
+
+
+def test_initialize_leaves_the_index_empty_when_dran_is_down(plugin):
+    """Con Dran caído el caché queda vacío: la sección se descarta, sin excepción."""
+
+    class BrokenClient:
+        def list_skills(self, limit=None, timeout=None):
+            raise ConnectionError("dran unreachable")
+
+    provider = plugin.DranMemoryProvider()
+
+    with mock.patch.object(plugin, "_load_dran_config",
+                           lambda _home: {"base_url": "http://dran.test", "api_key": "k",
+                                          "workspace": "personal", "scope": "private",
+                                          "scope_group": ""}), \
+            mock.patch.object(plugin, "_DranClient", return_value=BrokenClient()), \
+            mock.patch.object(plugin.DranMemoryProvider, "_probe_connection", lambda self: None):
+        provider.initialize("sess-down")
+
+    assert plugin._SKILLS_INDEX["skills"] == []
+    assert plugin._skills_prompt_section({}) == ""
+
+
+def _skills_plugin(plugin):
+    """Registra las tools con un cliente falso y devuelve (handlers, rutas, skills)."""
+    ctx = FakeCtx(config={"api_key": "k", "base_url": "http://dran.test",
+                          "workspace": "personal"})
+    import os
+    with mock.patch.object(plugin, "_load_dran_config", lambda _home: {}), \
+            mock.patch.object(os.path, "expanduser", lambda p: p):
+        plugin.register(ctx)
+        handlers = {t["name"]: t["handler"] for t in ctx.tools}
+
+    routes = []
+    detail = {"/api/skills/weekly": {"slug": "weekly", "name": "weekly",
+                                     "description": "cómo revisar", "version": 3,
+                                     "content_hash": "hash3", "body": "# cuerpo",
+                                     "visibility": "private"}}
+
+    def fake_request(m, path, payload=None, timeout=None):
+        routes.append((m, path, payload))
+        if m == "GET" and path.startswith("/api/skills?"):
+            return {"data": [{"slug": "weekly", "version": 3, "content_hash": "hash3",
+                              "description": "cómo revisar", "visibility": "private"}]}
+        if m == "GET" and path in detail:
+            return {"data": detail[path]}
+        if m == "POST":
+            return {"data": {"slug": payload["slug"], "version": 1,
+                             "content_hash": "hash-nuevo",
+                             "visibility": payload.get("visibility", "private")}}
+        if m == "PUT":
+            return {"data": {"slug": "weekly", "version": 4, "content_hash": "hash4",
+                             "visibility": "private"}}
+        if m == "DELETE":
+            return {}
+        raise urllib.error.HTTPError(path, 404, "not found", None, None)
+
+    client = plugin._DranClient("http://dran.test", "k", "personal")
+    client.request = fake_request  # type: ignore[assignment]
+    return handlers, routes, detail, client, ctx
+
+
+def test_skill_tools_hit_documented_routes(plugin):
+    handlers, routes, _detail, client, ctx = _skills_plugin(plugin)
+    plugin._SKILL_HASHES = {}
+
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        index = json.loads(handlers["dran_skills"]({}, ctx=ctx))
+        load = json.loads(handlers["dran_skill"]({"slug": "weekly"}, ctx=ctx))
+        again = json.loads(handlers["dran_skill"]({"slug": "weekly"}, ctx=ctx))
+        created = json.loads(handlers["dran_skill_save"](
+            {"slug": "nuevo", "description": "d", "body": "# x", "visibility": "public"},
+            ctx=ctx))
+        updated = json.loads(handlers["dran_skill_save"](
+            {"slug": "weekly", "description": "d2", "body": "# y"}, ctx=ctx))
+        deleted = json.loads(handlers["dran_skill_delete"]({"slug": "weekly"}, ctx=ctx))
+
+    verbs = {(m, p) for m, p, _ in routes}
+    assert ("GET", "/api/skills?limit=200") in verbs
+    assert ("GET", "/api/skills/weekly") in verbs
+    assert ("POST", "/api/skills") in verbs
+    assert ("PUT", "/api/skills/weekly") in verbs
+    assert ("DELETE", "/api/skills/weekly") in verbs
+
+    # El índice NUNCA trae el cuerpo; el detalle sí, y viene enmarcado.
+    assert "body" not in index["skills"][0]
+    assert load["body"] == "# cuerpo"
+    assert load["version"] == 3
+    assert load["content_hash"] == "hash3"
+    assert load["frame"].startswith("[dran skill weekly")
+    assert "hash3"[:12] in load["frame"]
+
+    # P13: el mismo hash de la SESIÓN no re-inyecta el cuerpo.
+    assert again["status"] == "unchanged"
+    assert "body" not in again
+
+    assert created["created"] is True and created["slug"] == "nuevo"
+    assert updated["updated"] is True and updated["version"] == 4
+    assert deleted["deleted"] is True
+
+    # El alta manda el vocabulario del destino, nunca estado del cliente.
+    create_payload = [pl for m, p, pl in routes if (m, p) == ("POST", "/api/skills")][0]
+    assert create_payload["visibility"] == "public"
+    assert "owner_user_id" not in create_payload
+
+
+def test_skill_body_survives_a_new_load_after_saving(plugin):
+    """Guardar limpia el hash de la sesión: el próximo `dran_skill` trae el cuerpo."""
+    handlers, _routes, _detail, client, ctx = _skills_plugin(plugin)
+    plugin._SKILL_HASHES = {"weekly": "hash3"}
+
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        handlers["dran_skill_save"](
+            {"slug": "weekly", "description": "d2", "body": "# y"}, ctx=ctx)
+        reloaded = json.loads(handlers["dran_skill"]({"slug": "weekly"}, ctx=ctx))
+
+    assert reloaded.get("body") == "# cuerpo"
+    assert reloaded.get("status") != "unchanged"
+
+
+def test_skill_tools_reject_missing_arguments_without_calling_the_api(plugin):
+    class ExplodingClient:
+        def request(self, *args, **kwargs):
+            raise AssertionError("no debe llamarse al API sin argumentos válidos")
+
+    cases = [
+        ("dran_skill", {}),
+        ("dran_skill", {"slug": "  "}),
+        ("dran_skill_save", {"slug": "x"}),
+        ("dran_skill_save", {"slug": "x", "description": "d", "body": "# y",
+                             "visibility": "amigos"}),
+        ("dran_skill_delete", {}),
+    ]
+
+    for name, args in cases:
+        out = json.loads(plugin._handle_skill_tool(ExplodingClient(), name, args))
+        assert "error" in out, (name, args, out)
+
+
+def test_skill_not_found_is_an_error_never_an_invented_body(plugin):
+    """Un slug fuera del scope del lector es 404: no existe O no se puede leer."""
+    handlers, _routes, _detail, client, ctx = _skills_plugin(plugin)
+    plugin._SKILL_HASHES = {}
+
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        out = json.loads(handlers["dran_skill"]({"slug": "ajeno-privado"}, ctx=ctx))
+
+    assert "error" in out
+    assert "ajeno-privado" in out["error"]
+    assert "body" not in out

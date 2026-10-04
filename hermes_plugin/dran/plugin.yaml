@@ -1,5 +1,5 @@
 name: dran
-version: 1.3.0
+version: 1.4.0
 description: "Dran — shared multi-agent memory store + knowledge tools backed by your Dran instance (REST, per-account API token attribution, X-Hermes-Agent identity)."
 author: Álvaro Lizama
 license: MIT
@@ -87,6 +87,15 @@ provides_tools:
   - dran_services_tools
   - dran_services_run
   - dran_services_wait
+  # Skills remotos (contrato de skills remotos, W4): 4 tools FIJAS y el
+  # catálogo como DATO — el plugin registra estático al cargarse, así que una
+  # tool por skill sería una lista que el servidor no puede cambiar sin
+  # reiniciar el perfil. El cuerpo viaja por tool y NUNCA se baja a disco
+  # (`dran_skill` es la única puerta del cuerpo; el índice no lo trae).
+  - dran_skills
+  - dran_skill
+  - dran_skill_save
+  - dran_skill_delete
 # Credential for BOTH surfaces — one token, one attribution: the account token
 # (Dran → Settings → Account → API token). The runtime reads it from the
 # profile .env; the panel's `api_key` field resolves to it.

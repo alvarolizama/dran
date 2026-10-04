@@ -16,14 +16,16 @@ short: it is injected every turn, and the detail lives in the skills.
   it stops capability from being lost.
 - **Dran (second brain)** — when operating the Dran workspace (knowledge
   pages, typed relations, memories, its workers, the user's own connected
-  services, or the work surface: goals, tasks and plans), load the `dran` skill
-  and whichever apply:
+  services, the work surface: goals, tasks and plans, or the skills the instance
+  serves to agents), load the `dran` skill and whichever apply:
   `dran-knowledge-flow` (pages), `dran-relations-flow` (typed links),
   `dran-memory-flow` (durable facts), `dran-workers-flow`
   (curator / link_gardener / graph_rag), `dran-services-flow` (the user's apps:
   connect and run), `dran-goal-flow` (goals · tasks · destination),
-  `dran-plan-flow` (plans · checklist). Dran stores and returns what is known —
-  it does not decide it.
+  `dran-plan-flow` (plans · checklist), `dran-skills-flow` — **the Dran skills
+  are REMOTE**: list them with `dran_skills` and follow the one that applies with
+  `dran_skill`; nothing is copied to disk. Dran stores and returns what is
+  known — it does not decide it.
 ```
 
 ## Why this shape

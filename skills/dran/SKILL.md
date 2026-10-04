@@ -1,13 +1,13 @@
 ---
 name: dran
 description: "Use when operating Dran: router + shared rules."
-version: 13.0.0
+version: 14.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:
     tags: [dran, second-brain, tools, knowledge-graph]
-    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-workers-flow, dran-memory-flow, dran-goal-flow, dran-plan-flow, dran-services-flow]
+    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-workers-flow, dran-memory-flow, dran-goal-flow, dran-plan-flow, dran-services-flow, dran-skills-flow]
 ---
 
 # dran — plugin tools reference + suite router
@@ -39,6 +39,8 @@ flowchart TD
   Q -->|"plans and their checklist"| PL[dran-plan-flow]
 
   Q -->|"connect / use the user's own apps\n(mail, calendar, issues, chat, files)"| SV[dran-services-flow]
+
+  Q -->|"the skills Dran serves\n(load one / distil a new one)"| SK[dran-skills-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
@@ -107,6 +109,24 @@ Two things worth knowing from here: the connection state is a **lifecycle read
 from the server** (`INITIATED` → `ACTIVE` / `EXPIRED`; `INACTIVE` does not run),
 and the inventory is **injected at turn start**, so you never poll for it.
 
+## Skills (instructions Dran serves to agents)
+
+Four fixed tools over `/api/skills`: the catalog is DATA and the body travels by
+tool. A skill lives ONLY in Dran — unlike the suite you are reading, it is not a
+file on disk and there is no anonymous index of them.
+
+| Tool | What it is for |
+| --- | --- |
+| `dran_skills` | the LIVE catalog this key can read (never carries bodies) |
+| `dran_skill` | ONE body by slug, framed with slug, version and `content_hash` |
+| `dran_skill_save` | create (new slug) or update — **ASK the user first** |
+| `dran_skill_delete` | delete by slug — **ASK the user first** |
+
+The block the prompt carries is a snapshot from session start: `dran_skills` is
+the live truth. `dran_skill` answers `unchanged` when the hash did not move since
+you loaded that slug in this session. **The sequences, the failure modes and the
+ASK live in `dran-skills-flow`** — load it and run the flow.
+
 ## General rules (every flow obeys them)
 
 ```mermaid
@@ -136,10 +156,11 @@ flowchart LR
 | `dran-goal-flow` | Goals and their tasks: alta, captura rápida, movimiento de columna, checklist de una task y destino (`scope`/grupo) |
 | `dran-plan-flow` | Plans (entidad propia) y su checklist: alta, contenido, los pasos de una vez o de a uno |
 | `dran-services-flow` | The user's own apps: connect (hosted link), wait for `ACTIVE`, discover the catalog by toolkit/use case, run a tool, and what every failure answer means |
+| `dran-skills-flow` | The skills Dran serves to agents: list the live catalog, load one body by tool, distil a new one (ASK), retire one (ASK) |
 
 ## Brain health and discovery (real tools, no flow of their own)
 
-The suite has seven flows; these tools belong to the one that owns their
+The suite has eight flows; these tools belong to the one that owns their
 subject:
 
 | Tool | Lives in | What it is for |

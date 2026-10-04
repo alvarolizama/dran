@@ -146,7 +146,7 @@ probe, not a readiness check (see [Production](#production)).
 
 ### The Hermes plugin
 
-Gives an agent the tools (`dran_*`, 37) **and** the memory provider
+Gives an agent the tools (`dran_*`, 46) **and** the memory provider
 (`dran_memory_*`, 4) — one key, one attribution, its owner's reach.
 
 **a. Create the credential.** In Dran → **Settings → API Keys**: create the key
@@ -213,7 +213,7 @@ One suite, versioned with this repo. Install it:
 mkdir -p ~/Workspace/Skills
 for s in dran dran-knowledge-flow dran-memory-flow \
          dran-relations-flow dran-workers-flow dran-goal-flow \
-         dran-plan-flow dran-services-flow; do
+         dran-plan-flow dran-services-flow dran-skills-flow; do
   ln -sfn /path/to/dran/skills/$s ~/Workspace/Skills/$s
 done
 ```
@@ -229,6 +229,13 @@ Full details — the 60-char description limit, the naming convention, why
 `external_dirs` and not the plugin's `register_skill` — in
 [skills/README.md](skills/README.md).
 
+> **These are the LOCAL suite (the skills that teach an agent to operate Dran).
+> A Dran instance can also SERVE skills of its own** — instructions written in
+> the web UI (`/skills`), with their own per-item read scope, that any agent with
+> an API key lists with `dran_skills` and loads with `dran_skill`. Those live ONLY
+> in Dran: no file on disk, no anonymous index, and the body dies with the
+> session.
+
 Then point the agent at them from its system prompt:
 
 ```
@@ -242,14 +249,16 @@ Then point the agent at them from its system prompt:
   it stops capability from being lost.
 - **Dran (second brain)** — when operating the Dran workspace (knowledge
   pages, typed relations, memories, its workers, the user's own connected
-  services, or the work surface: goals, tasks and plans), load the `dran` skill
-  and whichever apply:
+  services, the work surface: goals, tasks and plans, or the skills the instance
+  serves to agents), load the `dran` skill and whichever apply:
   `dran-knowledge-flow` (pages), `dran-relations-flow` (typed links),
   `dran-memory-flow` (durable facts), `dran-workers-flow`
   (curator / link_gardener / graph_rag), `dran-services-flow` (the user's apps:
   connect and run), `dran-goal-flow` (goals · tasks · destination),
-  `dran-plan-flow` (plans · checklist). Dran stores and returns what is known —
-  it does not decide it.
+  `dran-plan-flow` (plans · checklist), `dran-skills-flow` — **the Dran skills
+  are REMOTE**: list them with `dran_skills` and follow the one that applies with
+  `dran_skill`; nothing is copied to disk. Dran stores and returns what is
+  known — it does not decide it.
 ```
 
 Keep it that short: the prompt references the skills, it never embeds them.
@@ -356,7 +365,7 @@ DATABASE_URL=ecto://nope:nope@127.0.0.1:1/nope SECRET_KEY_BASE=test \
 ## Architecture
 
 ```
-┌──────────────┐   plugin tools (42)   ┌──────────────────┐
+┌──────────────┐   plugin tools (46)   ┌──────────────────┐
 │ Hermes agent │ ────────────────────► │                  │
 └──────────────┘                       │   Dran server    │
 ┌──────────────┐   REST /api/*         │   (Phoenix)      │

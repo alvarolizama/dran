@@ -478,6 +478,66 @@ curl -s -X POST localhost:4000/api/goals \
 **El plan es una ENTIDAD** (tabla `plans` con dueño y visibilidad), no un tipo de
 página: `page_type: "plan"` en `/api/knowledge-pages` es `422`.
 
+### Skills
+
+El catálogo de **instrucciones** que un agente conectado por API descubre y
+carga por tool. Un skill es una entidad propia (tabla `skills` con dueño y
+visibilidad, como goals y planes), no un tipo de página: **no** entra al grafo,
+a la búsqueda semántica ni a los workers.
+
+`:slug` es la dirección del wire (`^[a-z][a-z0-9_-]*$`), **no un id y no se
+renombra** — renombrarlo rompe a quien lo tenga cargado. Un skill fuera del
+alcance del lector es `404`, nunca `403`: la existencia no se filtra. **No hay
+ruta sin credencial**: sin lector no hay scope, así que no existe `.well-known`
+ni índice anónimo.
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/skills` | read | El catálogo legible, **sin cuerpos** (`visibility`, `order`, `limit`) |
+| GET | `/api/skills/:slug` | read | El `SKILL.md` montado (frontmatter + body) + `body` crudo, `version` y `content_hash` |
+| POST | `/api/skills` | write | Alta (sella el dueño de la credencial; el slug se deriva del `name` si no viene) |
+| PUT | `/api/skills/:slug` | write | Edición versionada del cuerpo/descripción; un `scope` re-traduce el destino |
+| DELETE | `/api/skills/:slug` | write | Borrar (sólo el dueño o un lector privilegiado) |
+
+**El contrato de wire** es `name` + `description` (≤ 60 chars) + `body` +
+`version` + `content_hash`. La validación es server-side y el changeset es la
+ÚNICA puerta (la web y `dran_skill_save` pasan por él): un nombre fuera de
+formato, una descripción de más de 60 o un cuerpo fuera de tamaño (1 byte a
+100 KB) son `422` **sin dejar fila**; la descripción se valida al guardar, nunca
+se trunca al servir.
+
+**La versión es monotónica.** Una escritura que cambia el cuerpo bumpea
+`version` y recalcula `content_hash` (sha256 del body, y sólo del body);
+reescribir el MISMO cuerpo deja hash y versión iguales. Eso es lo que sostiene
+el `unchanged` del agente — sin él habría que re-inyectar el cuerpo en cada
+turno.
+
+**El destino** es el mismo vocabulario que páginas, goals y planes:
+`private` (default) | `public` | `shared`. `shared` se comparte con
+`content_shares` — el mismo diálogo de la casa, `resource_type: "skill"` — y sin
+grant lo lee sólo su dueño. La escritura es del dueño (o de un lector
+privilegiado): un skill `public` ajeno **se lee, no se edita** (`403`).
+
+```bash
+# El catálogo del lector (sin cuerpos)
+curl -s localhost:4000/api/skills -H "Authorization: Bearer ***"
+
+# El SKILL.md montado de un slug legible
+curl -s localhost:4000/api/skills/revision-semanal -H "Authorization: Bearer ***"
+
+# Alta (el slug se deriva del nombre si no viene) con destino público
+curl -s -X POST localhost:4000/api/skills \
+  -H "Authorization: Bearer ***" -H "Content-Type: application/json" \
+  -d '{"name":"revision-semanal","description":"Cómo revisar la semana","body":"# Pasos","visibility":"public"}'
+```
+
+**Las cuatro tools del plugin** (`dran_skills`, `dran_skill`,
+`dran_skill_save`, `dran_skill_delete`) son clientes delgados de estas rutas; el
+cuerpo viaja por tool y **nunca se copia a disco** (nada de `external_dirs` ni
+`register_skill`). La sección de prompt del plugin describe la EXISTENCIA (una
+línea por skill, congelada al inicio de la sesión) y manda a `dran_skills` para
+el listado vivo.
+
 ## Health
 
 | Method | Path | Auth | Purpose |

@@ -229,6 +229,34 @@ mail, calendar, issues and pull requests, chat messages, files.
   (which tool, which agent, the provider's `log_id`) — not only the calls that
   worked.
 
+## Skills (instructions your agents load)
+
+A **skill** is a set of instructions for an agent — the equivalent of a note that
+tells an agent *how* to do something. Unlike pages, a skill is not knowledge to
+read: it lives in its own table (`skills`), never enters the graph or the
+semantic search, and an agent loads it **by tool**, not from a file.
+
+| What | Where |
+|---|---|
+| Write a skill, set its destination, edit it | `/skills` (own block of the nav) |
+| Read it, see its version and hash, share it | `/skills/:slug` → Compartir |
+| Filter the catalog by destination / order | `/skills?visibility=…&order=…` (the defaults are not written in the URL) |
+
+- **The name is the address.** It is lowercase letters, digits, dashes and
+  underscores (`revision-semanal`), it is set ONCE and never renamed — agents
+  cite it by that slug. To "rename", create the new one and share it.
+- **The destination is the usual one**: Private (only you) | Public (everyone on
+  the instance) | Shared (only the people you invite — add them from Compartir).
+  A `shared` skill with no grants reads only for you.
+- **The description is what an agent sees** in its index: 60 characters max,
+  validated when you save (never truncated behind your back).
+- **Every body change is a new version**, with a hash of the body. Agents use
+  that hash to avoid loading the same instructions twice in a session.
+- **An agent with an API key sees your skills** exactly as you do (own ∪ public ∪
+  shared-with-you) and can distil a new one with `dran_skill_save` — it will ask
+  you first. Nothing is ever copied to the agent's disk: the body arrives as a
+  tool result and dies with the session.
+
 ## Settings
 
 | What | Where |
@@ -239,8 +267,8 @@ mail, calendar, issues and pull requests, chat messages, files.
 
 ## What an agent can do
 
-The agent surface is the Hermes plugin (`dran_*`): 42 tools for knowledge, work
-and services, plus 4 memory tools. Every one is a thin client over the REST API
+The agent surface is the Hermes plugin (`dran_*`): 46 tools for knowledge, work,
+services and skills, plus 4 memory tools. Every one is a thin client over the REST API
 ([docs/api.md](api.md)), so any agent with an API key has the same reach.
 
 The rules the tools obey:
