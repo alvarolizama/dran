@@ -354,7 +354,7 @@ defmodule DranWeb.SettingsLive do
                 />
                 <p class="text-xs text-base-content/60">
                   {gettext(
-                    "English is the default. Your choice is saved to your account and applies to every workspace."
+                    "English is the default. Your choice is saved to your account and applies to the whole instance."
                   )}
                 </p>
               </.form>

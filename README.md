@@ -15,7 +15,7 @@ by you.
 |---|---|---|
 | **See it in** | the browser — a wiki with search, graph, timeline | tool calls |
 | **Write it via** | the editor | plugin tools, or the REST API directly |
-| **Attribution** | your user account | the API key + `X-Hermes-Agent`, resolved server-side |
+| **Attribution** | your user account | your account token + `X-Hermes-Agent`, resolved server-side |
 
 Two things live inside, and they are different on purpose:
 
@@ -54,8 +54,9 @@ Two things live inside, and they are different on purpose:
   [docs/page-types.md](docs/page-types.md).
 - **13 relation types**: 5 you set by hand (`related`, `contradicts`,
   `supersedes`, `part_of`, `embeds`), 8 machine-owned (`semantic`, `mentions`,
-  `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`, `informs`).
-  Five `meta.props` keys auto-materialize into edges.
+  `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`, `informs`)
+  — count: `Dran.Relation.relation_types/0`. Five `meta.props` keys
+  auto-materialize into edges.
 - **TipTap markdown editor** — tables, code blocks, mermaid, `![[slug]]`
   embeds of your own pages and `![[yt:ID]]` / `![[vimeo:ID]]` / `![[map:q]]`
   third-party embeds (paste a URL, Dran builds the frame — no key, no raw
@@ -91,7 +92,7 @@ Two things live inside, and they are different on purpose:
 - **3 background workers**: `curator` (duplicates/conflicts), `link_gardener`
   (relations for orphans), `graph_rag` (Q&A with citations). Start and poll
   them from a tool.
-- **7 scheduled jobs** (Quantum cron, toggleable, run-now from `/admin`).
+- **7 scheduled jobs** (Quantum cron, toggleable, run-now from `/admin/jobs`; count: `Dran.Jobs`).
 - **Entity linker** — auto-creates entity pages from names in page bodies.
 
 **App**
@@ -101,8 +102,9 @@ Two things live inside, and they are different on purpose:
   at `/graph`; clusters with LLM summaries at `/clusters`; smart collections
   at `/collections`; reports at `/reports/:slug`; hybrid search at `/search`;
   activity feed at `/activity`; journey timeline at `/journey`.
-- Account and instance settings at `/settings`; Admin (owner-only) at
-  `/admin`: users, groups, models, system, jobs.
+- Your account and its credential at `/settings/account`; instance
+  administration (owner-only) at `/admin`: settings, users, groups, models,
+  system, jobs.
 - **How to use each surface** — [docs/usage.md](docs/usage.md): pages, custom
   page types, goals, plans and memory, with the destination of every item and
   what an agent can do by tool.
@@ -139,7 +141,8 @@ mix phx.server                           # http://localhost:4000
 
 Open [localhost:4000](http://localhost:4000) — first run redirects to `/setup`
 to create the owner account. **The instance IS the workspace** — everything
-lives in one place. Manage your keys in **Settings → API Keys**.
+lives in one place. Your API credential lives in **Settings → Account**
+(Profile): copy or regenerate `users.api_token` there.
 
 `GET /health` answers `200` without touching the database: it is the container's
 probe, not a readiness check (see [Production](#production)).
@@ -147,13 +150,15 @@ probe, not a readiness check (see [Production](#production)).
 ### The Hermes plugin
 
 Gives an agent the tools (`dran_*`, 46) **and** the memory provider
-(`dran_memory_*`, 4) — one key, one attribution, its owner's reach.
+(`dran_memory_*`, 4) — 50 in total — one token, one attribution, its owner's
+reach.
 
-**a. Create the credential.** In Dran → **Settings → API Keys**: create the key
-and pick its access level (`read` | `write` — a key reads and writes with
-exactly its owner's reach). The token is shown once. A key
-creates no actor: every write is attributed server-side to the key (or to the
-`X-Hermes-Agent` header when the client sends one).
+**a. Create the credential.** In Dran → **Settings → Account** (Profile):
+copy your API token (`users.api_token` — shown in full; regenerate there when
+you need to rotate it). There are no per-agent keys and no access levels to
+pick: the token reads and writes exactly what its owner can read. Every write
+is attributed server-side to the account (or to the `X-Hermes-Agent` header
+when the client sends one).
 
 **b. Store the secret** in the profile's `.env` — single source of truth,
 shared by the tools and the memory provider:
@@ -198,7 +203,7 @@ stays in `.env`. Either:
 }
 ```
 
-> **`workspace` is deprecated (informational only).** Dran is single-workspace:
+> **`workspace` is deprecated (informational only).** Dran is single-instance:
 > the instance IS the workspace and every call targets it regardless of this
 > value. The setting stays so existing config files keep loading.
 
@@ -361,11 +366,13 @@ DATABASE_URL=ecto://nope:nope@127.0.0.1:1/nope SECRET_KEY_BASE=test \
 - **Plugin** — [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md)
 - **Skills** — [skills/README.md](skills/README.md)
 - **UI standard** — [DESIGN.md](DESIGN.md)
+- **History** — [docs/archive/](docs/archive/) — superseded analyses, kept as
+  provenance (read-only)
 
 ## Architecture
 
 ```
-┌──────────────┐   plugin tools (46)   ┌──────────────────┐
+┌──────────────┐   plugin tools (50)   ┌──────────────────┐
 │ Hermes agent │ ────────────────────► │                  │
 └──────────────┘                       │   Dran server    │
 ┌──────────────┐   REST /api/*         │   (Phoenix)      │
@@ -409,8 +416,8 @@ calendar, GitHub, Slack… — and their agent uses them. The shape:
 
 - First-run `/setup` creates the owner; Google OAuth optional
 - Instance owner + instance roles (`owner` / `admin` / `editor` / `viewer`)
-- Per-user API keys (`read` | `write`): a key reads and writes exactly as its
-  owner
+- One credential per account (`users.api_token`, copy/regenerate in
+  **Settings → Account**): it reads and writes exactly as its owner
 - Per-item visibility: every page/memory/collection/report/goal/plan is
   `private` (default), `public`, or `shared` with users and groups; the read
   filter is one module (`Dran.ContentVisibility`)

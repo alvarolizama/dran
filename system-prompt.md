@@ -39,12 +39,13 @@ short: it is injected every turn, and the detail lives in the skills.
   (ledger, briefs, delegation) is Riel, not Dran — so it gets its own line
   rather than a clause inside Dran's.
 
-## Workspace
+## The credential
 
-Every Dran call is workspace-scoped. If your deployment pins a default
-workspace, name it in the line — e.g. ``… the Dran workspace `alvaro` …`` —
-so the agent does not have to ask. The slug is set in Dran → **Settings →
-Agents** (the key's workspace × access-level matrix).
+One credential, no per-agent keys: the account's `users.api_token`, shown and
+regenerated in Dran → **Settings → Account** (Profile). Store it in the
+profile's `.env` as `DRAN_API_KEY` — the tools and the memory provider share
+it. Attribution goes through `X-Hermes-Agent` (the agent's profile name);
+the key grants whatever its owner can read.
 
 ## Activation levels (reminder)
 

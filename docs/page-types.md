@@ -5,7 +5,7 @@ the built-ins, `Dran.Workspace` (`lib/dran/workspace.ex`) for the custom ones.
 This document explains **how to use each type** — the registry defines them;
 this page tells you when to pick which.
 
-There are exactly **four built-in page types** and a workspace may **declare
+There are exactly **four built-in page types** and the instance may **declare
 its own**. `meta.kind` **does not exist**: the type is the only classifier, and
 every page accepts `meta.props` — a free-form key-value bag (e.g.
 `%{"role" => "sales"}`) that survives round-trips and is indexed. Type-specific
@@ -20,7 +20,7 @@ flowchart TD
   Q -->|"a named thing: person,\ncompany, tool, place"| E[entity]
   Q -->|"an abstract notion\nyou define"| C[concept]
   Q -->|"an external source\nyou point at"| R[reference]
-  Q -->|"anything else your\nworkspace declares"| X["custom type\n(Settings → workspace)"]
+  Q -->|"anything else your\ninstance declares"| X["custom type\n(/admin/instance → Page types)"]
 
   style N fill:#dbeafe
   style E fill:#ffe4e6
@@ -82,11 +82,12 @@ anything you point at.
 
 References are pointers; your own take goes in `note` or in a custom type.
 
-## Custom types per workspace
+## Custom types of the instance
 
-A workspace **adds** page types on top of the built-ins by declaring
-`workspace_page_types` (ordered jsonb list; edited in the workspace settings
-UI). No schema migration is involved — the list is data.
+The instance **adds** page types on top of the built-ins by declaring
+`workspace_page_types` (ordered jsonb list; edited in the instance settings
+UI — `/admin/instance` → Page types; the key keeps its legacy name). No schema
+migration is involved — the list is data.
 
 ```json
 [
@@ -121,13 +122,13 @@ UI). No schema migration is involved — the list is data.
 error, never a silent drop or a silent dedupe:
 
 - `slug` and `path` are **required** on every entry.
-- **Slugs are unique** and **paths are unique** within the workspace.
+- **Slugs are unique** and **paths are unique** within the instance.
 - The slug must match `^[a-z0-9][a-z0-9_-]*$`.
 - The **path** must match the same pattern — it becomes a URL segment, so
   `/`, `..`, spaces and uppercase are refused.
 - The **path** must not be a **reserved route segment**. The router matches
-  these *before* the generic `/:workspace_slug/:type` route, so declaring one
-  would make the type unreachable or shadow a real page — the full set is
+  these *before* the generic `/:type` route, so declaring one would make the
+  type unreachable or shadow a real page — the full set is
   `collections clusters reports search activity journey graph memory collection
   letter settings api dev login session auth health docs admin` plus the
   built-in paths `notes entities concepts references` and the first-class
@@ -147,16 +148,16 @@ prefix gets it (`beaker` → `hero-beaker`), and an empty one falls back to
 before normalization existed is repaired instead of crashing the render —
 `<.icon>` only matches `hero-*` names.
 
-At **write** time the API validates `page_type` against the workspace's
+At **write** time the API validates `page_type` against the instance's
 **effective types** — the 4 built-in ∪ the custom ones. A type that is not in
-that set (a retired slug, or another workspace's custom type) is refused;
+that set (a retired slug) is refused;
 `Knowledge.create_page/1` / `update_page/2` are the gate.
 
 ### Effective types
 
 ```
-effective_page_types(workspace) = built-in (note, entity, concept, reference)
-                                  ∪ workspace_page_types (declaration order)
+effective_page_types(instance) = built-in (note, entity, concept, reference)
+                                 ∪ workspace_page_types (declaration order)
 ```
 
 `Dran.Knowledge.effective_page_types/1` is the accessor. It is what the web
@@ -166,12 +167,13 @@ discover the vocabulary instead of hardcoding the built-in four.
 
 `Dran.Knowledge.page_type_defs/1` is the full-definition twin (built-ins first
 with `"builtin": true`, then custom in declaration order). It backs
-`GET /api/workspaces/:slug/page-types`, reachable by any identity with read
-access, which is what the Hermes plugin's `dran_list_page_types` tool calls.
+`GET /api/workspaces/:slug/page-types` (the legacy path — any segment resolves
+the instance), reachable by any identity with read access, which is what the
+Hermes plugin's `dran_list_page_types` tool calls.
 
 `disabled_page_types` still exists and is still validated against the
-workspace's effective types — a workspace can disable a type, but only for
-types it actually has.
+instance's effective types — a type can be disabled, but only one the instance
+actually has.
 
 ## Adding or changing a BUILT-IN type
 
@@ -185,4 +187,5 @@ mix precommit                 # test/dran/page_types_test.exs pins the list
 ```
 
 Adding a **custom** type needs no code change at all: declare it in the
-workspace settings and it is immediately usable on the web and through the API.
+instance settings (`/admin/instance`) and it is immediately usable on the web
+and through the API.

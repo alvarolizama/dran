@@ -1,15 +1,21 @@
+> **Archivado (2026-10-04).** Análisis previo ya EJECUTADO — la verdad viva
+> del modelo de páginas está en [docs/page-types.md](../page-types.md) y en el
+> código (`lib/dran/page_registry.ex`). No lo edites: es proveniencia.
+
 # Simplificación del modelo de Dran — 4 tipos de página, kinds fuera, tipos por workspace, API keys
 
 **Fecha:** 2026-09-16 · **Repo:** `/Users/alvaro/Workspace/Repos/alvarolizama/dran`
 **Estado del árbol al analizar:** `main`, working tree limpio, 26 commits por delante de `origin/main` (`0286755`).
-**Alcance de este documento:** análisis técnico **previo**. El plan ejecutable vive en
-`.riel/contract.md`; el estándar visual en `DESIGN.md`.
+**Alcance de este documento:** análisis técnico **previo**. El plan ejecutable de entonces vivió en
+un `contract.md` de `.riel/` ya archivado; el estándar visual en `DESIGN.md`.
 
-> **Estado: modelo EJECUTADO y vigente.** D1–D6 se aplicaron en las olas W1–W4:
-> el registry tiene 4 tipos built-in, `meta.kind` ya no existe en ninguna capa,
-> los tipos custom por workspace (`workspace_page_types`, validación fail-closed)
-> están vivos, y `/settings/agents` es `/settings/api-keys` sin CRUD de actores
-> (la key no crea actor; la atribución va por key + header `X-Hermes-Agent`).
+> **Estado: modelo EJECUTADO y ya SUPERADO (la segunda generación, de instancia única, también pasó).** D1–D6 se aplicaron en las olas W1–W4:
+> el registry tiene 4 tipos built-in, `meta.kind` ya no existe en ninguna capa
+> y los tipos custom están declarados fail-closed — entonces por workspace, hoy
+> a nivel de instancia (la clave es `workspace_page_types`; se mantiene por
+> compatibilidad). `/settings/agents` es hoy `/settings/account`: la credencial
+> es la ÚNICA (`users.api_token`, mostrada y regenerada en Account), y la
+> atribución va por header `X-Hermes-Agent`.
 > **El contrato vigente es `docs/page-types.md`** (+ `docs/api.md` para la API y
 > `DESIGN.md` para el UI). Las secciones §2 (estado previo, verificado antes del
 > cambio) y las preguntas/decisiones de §4 se conservan como registro del

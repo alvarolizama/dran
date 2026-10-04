@@ -37,7 +37,9 @@ defmodule DranWeb.AdminLive do
           <div>
             <h1 class="text-title">{gettext("Admin")}</h1>
             <p class="text-caption mt-1">
-              {gettext("Instance-level administration — users, workspaces, models, system, and jobs.")}
+              {gettext(
+                "Instance-level administration — settings, users, groups, models, system, and jobs."
+              )}
             </p>
           </div>
 
@@ -46,7 +48,7 @@ defmodule DranWeb.AdminLive do
               href={~p"/admin/users"}
               icon="hero-users"
               title={gettext("Users")}
-              description={gettext("Manage users, assign workspaces, copy tokens.")}
+              description={gettext("Manage users, roles, tokens, and impersonation.")}
             />
 
             <.admin_card

@@ -2,16 +2,15 @@ defmodule DranWeb.HomeLive do
   @moduledoc """
   Home — workspace browser for contexts with `wiki_enabled: true`.
 
-  Six actions:
-  - `:index`         — landing: list of wiki-enabled contexts
-  - `:workspace_home`  — home of a workspace: collections + pinned + index by type
+  Five actions:
+  - `:workspace_home`  — home of the instance: collections + pinned + index by type
   - `:type_list`      — alphabetical list of pages of one type
   - `:page_show`     — rendered page (markdown + mermaid, read-only)
   - `:collection`     — smart collection results in wiki mode
-  - `:graph`          — graph of the workspace's pages
+  - `:graph`          — graph of the instance's pages
 
-  Authenticated but accessible to ALL logged-in users, including wiki-only
-  users (no contexts assigned). No edit/delete/create controls — pure browse.
+  Authenticated, browsable by ALL logged-in users. No edit/delete/create
+  controls — pure browse.
   """
 
   use DranWeb, :live_view
@@ -47,9 +46,8 @@ defmodule DranWeb.HomeLive do
     # The URL slug wins over the session (see Plugs.Auth.assign_to_socket/3).
     {socket, workspace} = Auth.assign_to_socket(socket, session, params)
 
-    # The wiki is browsable by ALL logged-in users (including wiki-only
-    # auto-registered accounts with no contexts assigned). The sidebar
-    # workspace selector must therefore list every wiki-enabled workspace, not
+    # Browsable by ALL logged-in users. The sidebar lists the instance's
+    # workspaces (the single container plus whatever the data keeps), not
     # just the current user's assigned contexts. `assign_to_socket` sets
     # `contexts` to the user's accessible contexts, so override it here.
     socket = assign(socket, contexts: Knowledge.list_home_workspaces())
@@ -95,24 +93,6 @@ defmodule DranWeb.HomeLive do
   @impl true
   def handle_params(params, _url, socket) do
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
-  end
-
-  # ── :index — landing page with all wiki-enabled contexts ──────────────────
-
-  defp apply_action(socket, :index, _params) do
-    contexts = Knowledge.list_home_workspaces()
-
-    socket
-    |> assign(
-      active_nav: nil,
-      contexts: contexts,
-      workspace: nil,
-      page_title: gettext("Wiki"),
-      type_index: [],
-      collections: [],
-      pinned_pages: [],
-      search_results: nil
-    )
   end
 
   # ── :workspace_home — collections + pinned + index by type ───────────────────
@@ -408,8 +388,6 @@ defmodule DranWeb.HomeLive do
         />
       <% else %>
         <%= case @live_action do %>
-          <% :index -> %>
-            <.index_view workspaces={@workspaces} />
           <% :workspace_home -> %>
             <.context_home_view
               workspace={@workspace}
@@ -509,47 +487,6 @@ defmodule DranWeb.HomeLive do
           <p :if={result[:excerpt]} class="text-sm text-base-content/60 mt-1 line-clamp-2">
             {raw(result.excerpt)}
           </p>
-        </.link>
-      </div>
-    </div>
-    """
-  end
-
-  defp index_view(assigns) do
-    ~H"""
-    <div class="p-4 sm:p-6">
-      <div class="mb-8">
-        <h1 class="text-display">Wiki</h1>
-        <p class="text-base-content/60 mt-2">
-          {gettext("Browse knowledge bases. Pick a workspace to start exploring.")}
-        </p>
-      </div>
-
-      <div :if={@workspaces == []} class="text-center py-16">
-        <.icon name="hero-book-open" class="size-12 text-base-content/30 mx-auto mb-4" />
-        <p class="text-base-content/50">
-          {gettext("No wikis available yet. An admin needs to enable the wiki on a workspace.")}
-        </p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <.link
-          :for={ctx <- @workspaces}
-          navigate={~p"/#{ctx.slug}"}
-          class="card bg-base-100 border border-base-300 hover:border-primary/40 transition cursor-pointer group"
-        >
-          <div class="card-body p-5">
-            <div class="flex items-center gap-2 mb-1">
-              <.icon
-                name="hero-book-open"
-                class="size-5 text-primary/70 group-hover:text-primary transition-colors"
-              />
-              <h2 class="card-title text-lg">{ctx.name}</h2>
-            </div>
-            <p class="text-sm text-base-content/40 italic">
-              {gettext("No description")}
-            </p>
-          </div>
         </.link>
       </div>
     </div>

@@ -14,8 +14,8 @@ surfaces.
 
 ## One instance, one workspace
 
-There is no per-workspace URL prefix and no `/dashboard`. The instance **is**
-the workspace: `/` is the workspace home, and every route is flat.
+There is no URL prefix and no `/dashboard`. The instance **is** the workspace:
+`/` is the home, and every route is flat.
 
 ## The destination — who can read an item
 
@@ -89,7 +89,7 @@ straight into a note).
 
 | What | Where |
 |---|---|
-| Declare, disable, remove | `/settings/instance` → **Page types** |
+| Declare, disable, remove | `/admin/instance` → **Page types** |
 
 A custom type declares its slug, label, colour, path segment and its own meta
 fields. The moment it exists it gets its own sidebar section, list, graph
@@ -170,8 +170,8 @@ whoever created it. The sidebar never writes a relation on its own.
 |---|---|
 | List and search | `/memory` |
 
-Memory is the **shared fact store**: atomic facts with a trust score, written
-by agents and workers through the API, deduplicated per owner. The UI does not
+Memory is the **shared fact store** of the instance: atomic facts with a trust
+score, written by agents and workers through the API, deduplicated per owner. The UI does not
 create facts — it reads them live, searches them (hybrid search, which does not
 inflate the retrieval counters), filters by status (`Active` / `Stale` /
 `All`), rates them (`helpful` / `not helpful`), marks one stale, and purges the
@@ -210,7 +210,7 @@ mail, calendar, issues and pull requests, chat messages, files.
 | What | Where |
 |---|---|
 | Connect, see the state and disconnect your apps | `/services` (fourth block of the nav) |
-| Which apps the instance exposes (policy) | `/settings/instance` → Services (owner) |
+| Which apps the instance exposes (policy) | `/admin/instance` → Services (owner) |
 | Whether the integration is configured | `/admin/system` → Services (read-only + test connection) |
 
 - **The state is a lifecycle**: `INITIATED` (you opened the link, the consent is
@@ -261,19 +261,20 @@ semantic search, and an agent loads it **by tool**, not from a file.
 
 | What | Where |
 |---|---|
-| Your account and API key | `/settings/account` |
-| Instance policy (page types, features, tuning, users) | `/settings/instance` |
+| Your account and its API token | `/settings/account` |
+| Instance policy (page types, features, tuning) | `/admin/instance` → Settings (owner) |
 | Administration (users, groups, models, system, jobs) | `/admin` |
 
 ## What an agent can do
 
 The agent surface is the Hermes plugin (`dran_*`): 46 tools for knowledge, work,
-services and skills, plus 4 memory tools. Every one is a thin client over the REST API
-([docs/api.md](api.md)), so any agent with an API key has the same reach.
+services and skills, plus 4 memory tools (count: `grep -c '"name": "dran_' hermes_plugin/dran/__init__.py` → 50).
+Every one is a thin client over the REST API ([docs/api.md](api.md)), so any agent
+with an account token has the same reach.
 
 The rules the tools obey:
 
-- **An agent reads with exactly the reach of its owner.** A key is not a way
+- **An agent reads with exactly the reach of its owner.** A token is not a way
   around visibility: a private page of another user does not exist for it.
 - **Writes are attributed.** The owner is resolved server-side from the
   credential, never from the body.

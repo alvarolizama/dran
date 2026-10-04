@@ -207,7 +207,7 @@ defmodule DranWeb.AdminUsersLive do
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 class="text-title">{gettext("Users")}</h1>
-              <p class="text-caption mt-1">{gettext("Manage users and their workspace access.")}</p>
+              <p class="text-caption mt-1">{gettext("Manage users and their instance access.")}</p>
             </div>
             <.button phx-click="new_user" id="new-user-btn">
               <.icon name="hero-plus" class="size-4" />

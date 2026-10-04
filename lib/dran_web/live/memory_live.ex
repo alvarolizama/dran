@@ -575,7 +575,7 @@ defmodule DranWeb.MemoryLive do
   end
 
   defp scope_label("own"), do: gettext("Showing only your memories")
-  defp scope_label(_), do: gettext("Showing the whole workspace")
+  defp scope_label(_), do: gettext("Showing the whole instance")
 
   defp blank?(nil), do: true
   defp blank?(""), do: true
@@ -608,10 +608,10 @@ defmodule DranWeb.MemoryLive do
     """
   end
 
-  defp workspace_name(nil), do: gettext("this workspace")
+  defp workspace_name(nil), do: gettext("the instance")
 
   defp workspace_name(%{name: name}) when is_binary(name), do: name
-  defp workspace_name(_), do: gettext("this workspace")
+  defp workspace_name(_), do: gettext("the instance")
 
   attr :id, :string, required: true
   attr :value, :string, required: true

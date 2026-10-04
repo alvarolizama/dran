@@ -8,10 +8,12 @@ Source of truth: `lib/dran_web/router.ex` and the controllers in
 `lib/dran_web/controllers/api/`. If this document and those disagree, the code
 wins.
 
-> **Terminology.** "Workspace" and "context" are the same thing. The API was
-> originally built around "contexts"; the UI and the rest of the code now say
-> "workspace". Both words appear in params (`workspace`, `workspace_id`,
-> `context`) and mean the same entity.
+> **Terminology.** Dran is a SINGLE-WORKSPACE instance: there is exactly one
+> container (the instance) and every call targets it. History left its marks:
+> the API was built around "contexts", then "workspaces", and both words still
+> appear in params (`workspace`, `workspace_id`, `context`) and in legacy
+> `/api/workspaces/*` paths — they all resolve the same single instance. New
+> integrations can omit the parameter entirely.
 
 ## Base URL
 
@@ -30,17 +32,16 @@ Every `/api` route except `GET /health` requires a bearer token:
 Authorization: Bearer <token>
 ```
 
-Three token shapes are accepted (`DranWeb.Router.require_api_token/2`):
+Two token shapes are accepted (`DranWeb.Router.require_api_token/2`):
 
 | Token | Resolves to | Scope |
 |---|---|---|
-| **Legacy admin token** | instance owner (`is_owner: true`) | every workspace |
-| **Per-user token** | the user row | workspaces the user can access (membership ∪ public) |
-| **Per-agent API key** | the key itself (no actor row) | only the workspaces granted to the key, each with its own `access_level` (`read` / `write`) |
+| **Legacy admin token** | instance owner (`is_owner: true`) | the whole instance |
+| **Account token** (`users.api_token`) | the user row | everything its owner can read |
 
-An API key **does not create an actor**. Its identity is the key: the key
-`name` plus the workspaces granted to it in `api_key_workspaces`. It belongs to
-the user that created it (`created_by_user_id`).
+There are no per-agent API keys: the credential is the account's ONE token
+(shown and regenerated in **Settings → Account**). The agent identity comes
+from the `X-Hermes-Agent` header — attribution, not authorization.
 
 A missing or malformed header returns:
 
@@ -51,27 +52,29 @@ A missing or malformed header returns:
 ## Authorization model
 
 - **Read routes** authenticate, then enforce row-level read access against the
-  same matrix the write gate uses (`require_read_access`). Two routes are
-  exempt because they are scoped to the identity by construction:
-  `GET /api/workspaces` (returns only what the token reaches) and
-  `GET /api/agent/config` (key-scoped).
-- **Write routes** require `write_access` on the key for the target workspace.
-  Otherwise `403 {"errors":{"detail":"API key does not have write access to this workspace"}}`.
-- **Workspace create / update / delete** additionally require the instance
-  owner (`require_admin`).
+  same matrix the write gate uses (`require_read_access` — it resolves the
+  instance workspace server-side; the request names no container). Two routes
+  are exempt because they are scoped to the identity by construction:
+  `GET /api/workspaces` and `GET /api/agent/config`.
+- **Write routes** require write authorization for the instance workspace
+  (`require_write_access`). Otherwise
+  `403 {"errors":{"detail":"Token does not have write access to this workspace"}}`.
+- The API never creates, updates or deletes workspaces: the container set is
+  instance policy, not an agent capability (those operations live in the admin
+  UI).
 - **Attribution is server-side** (`Dran.Auth`), never client-settable:
   - `created_by` / `updated_by` — the `X-Hermes-Agent` header when it came
-    (the Hermes profile name), otherwise the **key name**; user tokens fall
-    back to the user email; the legacy admin token maps to `admin` / `system`.
+    (the Hermes profile name), otherwise the account email; the legacy admin
+    token maps to `admin` / `system`.
   - `agent_name` — the same `X-Hermes-Agent` value, persisted on the written
     content. The header is attribution, not authorization: it never widens
     access.
-  - `owner_user_id` — the **owner of the key** (`api_keys.created_by_user_id`);
-    for a user token, that user. `nil` for keys with no creator and for the
-    legacy admin token (historical content is workspace-wide). The `owner`
-    field was dropped with the actor model.
-- Workspaces are referenced by **slug** or **UUID**. Query param `workspace=`
-  accepts either.
+  - `owner_user_id` — the owner of the credential: for an account token, that
+    user. `nil` for the legacy admin token (historical content is
+    instance-wide).
+- The instance is referenced by **slug** or **UUID** in query param
+  `workspace=` (either value resolves it) — and can be omitted: a request that
+  names no workspace targets the instance.
 
 ## Errors
 
@@ -97,26 +100,26 @@ insufficient access, `404` not found, `405` (method not allowed), `409` conflict
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/api/agent/config` | agent API key only | Self-description for agent clients: agent identity + reachable workspaces + access levels + **effective page types** |
+| GET | `/api/agent/config` | any token | Self-description for agent clients: agent identity + the instance (as a one-entry list) + **effective page types** |
 
-`GET /api/agent/config` returns `404` for identities that are not an agent API
-key (user tokens and the legacy admin token have no agent identity).
+An account token resolves its agent identity here; the legacy admin token gets
+a fallback description (header/email, no actor row).
 
-**Page types.** Each workspace reports its **effective** page types — the 4
-built-in types (`note`, `entity`, `concept`, `reference`) plus the workspace's
-own custom types (`workspace_page_types`). Same shape as
-`Dran.Knowledge.effective_page_types/1`, so an agent discovers custom
-vocabulary instead of hardcoding the built-in four:
-
-Note that `page_type_defs[].icon` is always normalized to a `hero-` prefixed
-name, and `path` is validated on write (format + reserved route segments) —
-see [page-types.md](page-types.md) for the rules a client must satisfy when
-declaring types through `PUT /api/workspaces/:slug`.
+**Page types.** The response reports the instance's **effective** page types —
+the 4 built-in types (`note`, `entity`, `concept`, `reference`) plus the
+instance's custom types (stored under the legacy key `workspace_page_types`).
+Same shape as `Dran.Knowledge.effective_page_types/1`, so an agent discovers
+custom vocabulary instead of hardcoding the built-in four. `page_type_defs[].icon`
+is always normalized to a `hero-` prefixed name, and `path` is validated on
+write (format + reserved route segments) — see [page-types.md](page-types.md)
+for the rules a client must satisfy when declaring types in the instance
+settings UI.
 
 | Field | Shape | Meaning |
 |---|---|---|
-| `data.page_types` | `["note", "entity", "concept", "reference", "recipe"]` | union across every workspace this key reaches |
-| `data.workspaces[].page_types` | same | effective types of that workspace |
+| `data.page_types` | `["note", "entity", "concept", "reference", "recipe"]` | effective types of the instance |
+| `data.workspaces` | one-entry array | the instance, kept as a list for backward compatibility with plugin builds that iterate it |
+| `data.workspaces[].page_types` | same | same list, per entry |
 | `data.workspaces[].page_type_defs` | `[{slug, label, plural, path, icon, color, meta_fields, builtin}]` | full definitions: built-ins first with `"builtin": true`, then the custom ones with `"builtin": false`, in declaration order |
 
 ```json
@@ -138,23 +141,25 @@ declaring types through `PUT /api/workspaces/:slug`.
         ]
       }
     ],
-    "access_levels": { "personal": "write" }
+    "access_levels": {}
   }
 }
 ```
 
-The Hermes memory plugin uses this endpoint to pick its memory workspace
-locally and to render the effective page types in its tool descriptions; with
-Dran unreachable it falls back to the 4 built-in types.
+`access_levels` is always an empty map (the per-key access matrix died with
+the per-agent key; kept so old plugin builds that read it keep working without
+inventing data). The Hermes memory plugin uses this endpoint to pick its
+memory workspace locally and to render the effective page types in its tool
+descriptions; with Dran unreachable it falls back to the 4 built-in types.
 
 ```bash
 curl -s localhost:4000/api/agent/config -H "Authorization: Bearer ***"
 ```
 
-Any identity with read access to a workspace (agent key, user token or the
-legacy admin token) can fetch the same vocabulary for **one** workspace via
-`GET /api/workspaces/:slug/page-types`, which returns the same
-`page_types` / `page_type_defs` shape:
+Any identity with read access can fetch the same vocabulary via
+`GET /api/workspaces/:slug/page-types` (the legacy path — any segment
+resolves the instance), which returns the same `page_types` /
+`page_type_defs` shape:
 
 ```json
 {
@@ -172,22 +177,21 @@ legacy admin token) can fetch the same vocabulary for **one** workspace via
 }
 ```
 
-This is what the plugin's `dran_list_page_types` tool calls; unlike
-`/api/agent/config` it is not restricted to agent keys.
+This is what the plugin's `dran_list_page_types` tool calls.
 
-### Workspaces
+### Instance (legacy `/workspaces` paths)
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/api/workspaces` | read | List workspaces reachable by this identity |
-| GET | `/api/workspaces/:slug` | read | Get one workspace |
+| GET | `/api/instance` | read | The instance — flat, current path |
+| GET | `/api/workspaces` | read | Same answer (legacy path) |
+| GET | `/api/workspaces/:slug` | read | Same answer (any segment resolves the instance) |
 | GET | `/api/workspaces/:slug/page-types` | read | Effective page types (4 built-in ∪ custom) with full definitions |
-| POST | `/api/workspaces` | write **+ owner** | Create a workspace |
-| PUT | `/api/workspaces/:slug` | write **+ owner** | Update a workspace |
-| DELETE | `/api/workspaces/:slug` | write **+ owner** | Delete a workspace |
+| GET | `/api/workspaces/:slug/export` | read | Export the instance (by any segment) |
 
-- `POST` body: `{ "name": "...", "slug": "..." }` (both required).
-- `PUT` drops `slug` from the body (slug is immutable via this route).
+There is no create / update / delete over the API: the container is the
+instance, and its settings are instance policy edited in the admin UI. The
+legacy paths stay so old plugin builds survive an upgrade.
 
 ### Pages
 
@@ -205,16 +209,17 @@ This is what the plugin's `dran_list_page_types` tool calls; unlike
 
 | Param | Meaning |
 |---|---|
-| `workspace` | workspace slug or UUID (also accepted as `workspace_id`) |
-| `type` | page type — one of the workspace's effective types (built-in ∪ custom); see [page-types.md](page-types.md) and `GET /api/agent/config` |
+| `workspace` | optional — instance slug or UUID (also accepted as `workspace_id`); omit it and the request targets the instance |
+| `type` | page type — one of the instance's effective types (built-in ∪ custom); see [page-types.md](page-types.md) and `GET /api/agent/config` |
 | `tag` | filter by tag |
 | `status` | filter by meta status |
 | `owner` / `created_by` | filter by attribution |
 | `limit` | max rows |
 | `include=body` | include full bodies (default: lightweight summaries, no body) |
 
-**Show / update / delete** require `?workspace=<slug>` (the slug alone is not
-globally unique). `include=body` on the show route returns the full body.
+**Show / update / delete** do not require a workspace param: the request
+targets the instance. `include=body` on the show route returns the full
+body.
 
 **Update** whitelists client-settable fields only:
 `title`, `body`, `tags`, `meta`, `summary`, `archived`, `kb_confidence`,
@@ -225,10 +230,10 @@ globally unique). `include=body` on the show route returns the full body.
 # create
 curl -s -X POST localhost:4000/api/knowledge-pages \
   -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-  -d '{"workspace":"personal","page_type":"note","title":"Hello","body":"# Hi"}'
+  -d '{"page_type":"note","title":"Hello","body":"# Hi"}'
 
 # read back (verify the write)
-curl -s "localhost:4000/api/knowledge-pages/hello?workspace=personal&include=body" \
+curl -s "localhost:4000/api/knowledge-pages/hello?include=body" \
   -H "Authorization: Bearer $KEY"
 ```
 
@@ -260,7 +265,7 @@ an `<iframe>` sent through the API never renders.
 `POST` body — by slugs (preferred):
 
 ```json
-{ "workspace": "personal", "source_slug": "a", "target_slug": "b", "relation_type": "related" }
+{ "source_slug": "a", "target_slug": "b", "relation_type": "related" }
 ```
 
 or by ids: `{ "source_id": "...", "target_id": "...", "relation_type": "related" }`.
@@ -269,7 +274,7 @@ or by ids: `{ "source_id": "...", "target_id": "...", "relation_type": "related"
 `mentions`, `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`,
 `informs` (machine-owned).
 
-`DELETE` validates read access to the relation's workspace before deleting.
+`DELETE` validates read access before deleting.
 
 ### Search
 
@@ -279,7 +284,7 @@ or by ids: `{ "source_id": "...", "target_id": "...", "relation_type": "related"
 | GET | `/api/search/fuzzy` | read | Trigram (typo-tolerant) search |
 | GET | `/api/search/semantic` | read | Vector search (`hybrid=true` for fts + semantic) |
 
-Params: `q` (required), `workspace`, `type`, `limit`. Semantic/hybrid require
+Params: `q` (required), `workspace` (optional — ignored, targets the instance), `type`, `limit`. Semantic/hybrid require
 the inference API; without it they return `503` (or degrade to fts, per
 strategy).
 
@@ -289,7 +294,8 @@ strategy).
 |---|---|---|---|
 | GET | `/api/lint` | read | Brain hygiene audit (orphans, stale, contested) |
 
-Param: `workspace` (required).
+Param: `workspace` (still validated by the controller — pass any value or the
+instance's slug).
 
 ### Index, graph, log (read-only)
 
@@ -299,17 +305,17 @@ Param: `workspace` (required).
 | GET | `/api/graph` | read | Full graph (`{nodes, edges}`) |
 | GET | `/api/log` | read | Activity log |
 
-Params: `workspace` (required); `/api/log` also accepts `action`, `limit`.
+Params: `workspace` (still validated by the controller — pass any value or the instance's slug); `/api/log` also accepts `action`, `limit`.
 
 ### Export
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/api/workspaces/:slug/export` | read | Export a workspace by slug |
-| GET | `/api/export/:workspace/full` | read | Full export by workspace UUID (sent as a download attachment) |
+| GET | `/api/workspaces/:slug/export` | read | Export the instance (any segment resolves it) |
+| GET | `/api/export/:workspace/full` | read | Full export by the instance's UUID (sent as a download attachment) |
 
 The `full` export sets `content-disposition: attachment` and includes
-workspace, pages, relations, and page versions.
+the instance, pages, relations, and page versions.
 
 ### Memory (shared multi-agent store)
 
@@ -325,15 +331,18 @@ workspace, pages, relations, and page versions.
 
 Params:
 
-- **List:** `workspace`, `status`, `limit`, `offset`.
-- **Search:** `q` + `workspace` (both required), `limit`.
-- **Create:** `content`, `workspace`, `source_session`, `force`.
-- **Update:** `content`, `workspace`.
-- **Feedback:** `id`, `helpful` (boolean), `workspace`.
-- **Ingest:** `workspace`, `transcript` (string or `[{role, content}]`),
+All memory writes target the instance (the `workspace` param is accepted for
+compatibility and ignored). Params:
+
+- **List:** `status`, `limit`, `offset`.
+- **Search:** `q` (required), `limit`.
+- **Create:** `content`, `source_session`, `force`.
+- **Update:** `content`.
+- **Feedback:** `id`, `helpful` (boolean).
+- **Ingest:** `transcript` (string or `[{role, content}]`),
   `source_session`. The transcript is **never persisted** — facts are
   extracted server-side and the raw text is discarded.
-- **Delete:** `workspace`, `purge` (`true` = permanent).
+- **Delete:** `purge` (`true` = permanent).
 
 **Dedupe semantics** (`POST /api/memory`): exact hash → semantic duplicate →
 semantic near-duplicate grey zone (cosine 0.88–0.95) → create.
@@ -351,7 +360,7 @@ start at trust `0.35` (probation); manual adds start at `0.5`.
 ```bash
 curl -s -X POST localhost:4000/api/memory \
   -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
-  -d '{"workspace":"personal","content":"Prefers concise answers."}'
+  -d '{"content":"Prefers concise answers."}'
 ```
 
 ### Services (Composio)
@@ -551,5 +560,5 @@ The Hermes plugin (`hermes_plugin/dran/`) exposes the same operations as tools
 REST routes above. There is no separate protocol surface: what an agent can do is
 what these endpoints expose. See `hermes_plugin/dran/README.md`.
 
-Non-Hermes agents skip the plugin and call these endpoints with a Bearer key —
-same auth, same attribution, same visibility rules.
+Non-Hermes agents skip the plugin and call these endpoints with their Bearer
+token — same auth, same attribution, same visibility rules.
