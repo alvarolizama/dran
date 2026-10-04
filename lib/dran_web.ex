@@ -60,9 +60,10 @@ defmodule DranWeb do
       import DranWeb.PageComponents
       import DranWeb.PageListComponents
       import DranWeb.ResourceComponents
+      import DranWeb.TaskComponents, only: [task_modal: 1]
 
       import DranWeb.MarkdownEditorComponents,
-        only: [markdown_editor: 1, meta_fields: 1, tag_input: 1]
+        only: [markdown_editor: 1, meta_fields: 1, tag_input: 1, checklist_editor: 1]
 
       import DranWeb.VersionDiffComponent
     end

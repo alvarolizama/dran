@@ -95,6 +95,20 @@ defmodule Dran.Tasks.Task do
   def update_changeset(%__MODULE__{} = task, attrs), do: changeset(task, attrs)
 
   @doc """
+  Changeset del checklist: reescribe el array con bloqueo optimista.
+
+  El checklist se edita como un RMW (tachar un ítem lee el array ACTUAL), así
+  que la escritura exige la versión: un `lock_version` desfasado se convierte
+  en un error de changeset en ese campo, que `Dran.Tasks.toggle_checklist/2`
+  traduce a `{:error, :stale}`.
+  """
+  def checklist_changeset(%__MODULE__{} = task, attrs) do
+    task
+    |> cast(prepare_attrs(attrs), [:checklist, :lock_version])
+    |> optimistic_lock(:lock_version)
+  end
+
+  @doc """
   Changeset de movimiento (estado, columna y/u goal) con bloqueo optimista.
 
   `optimistic_lock/2` convierte un `lock_version` desfasado en un error de
@@ -110,7 +124,7 @@ defmodule Dran.Tasks.Task do
 
   defp changeset(task, attrs) do
     task
-    |> cast(attrs, [
+    |> cast(prepare_attrs(attrs), [
       :goal_id,
       :title,
       :slug,
@@ -154,6 +168,19 @@ defmodule Dran.Tasks.Task do
         changeset
     end
   end
+
+  # El checklist se NORMALIZA ANTES del cast (la misma función que el plan):
+  # `{:array, :map}` no sabe castear textos sueltos (`["uno", "dos"]`) ni el JSON
+  # que manda el editor, así que la forma canónica se resuelve primero y el cast
+  # sólo ve `[%{text, done}]`.
+  defp prepare_attrs(attrs) when is_map(attrs) do
+    case Map.get(attrs, "checklist") || Map.get(attrs, :checklist) do
+      nil -> attrs
+      value -> Map.put(attrs, "checklist", Dran.Checklist.cast(value))
+    end
+  end
+
+  defp prepare_attrs(attrs), do: attrs
 
   @doc "Estados válidos (columnas del board)."
   def statuses, do: @statuses
