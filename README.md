@@ -101,6 +101,9 @@ Two things live inside, and they are different on purpose:
   activity feed at `/activity`; journey timeline at `/journey`.
 - Account and instance settings at `/settings`; Admin (owner-only) at
   `/admin`: users, groups, models, system, jobs.
+- **How to use each surface** — [docs/usage.md](docs/usage.md): pages, custom
+  page types, goals, plans and memory, with the destination of every item and
+  what an agent can do by tool.
 
 ## Stack
 
@@ -336,6 +339,7 @@ DATABASE_URL=ecto://nope:nope@127.0.0.1:1/nope SECRET_KEY_BASE=test \
 
 ## Documentation
 
+- **Usage** — [docs/usage.md](docs/usage.md) — the surfaces, the destination and the tools
 - **REST API** — [docs/api.md](docs/api.md)
 - **Page types** — [docs/page-types.md](docs/page-types.md)
 - **Plugin** — [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md)
