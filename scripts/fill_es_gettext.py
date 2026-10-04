@@ -350,6 +350,22 @@ ES = {
     # Estaba como identidad inglesa en el catálogo: el buscador del panel de
     # miembros ahora lo dice en español.
     "No users match your search.": "Ningún usuario coincide con tu búsqueda.",
+    # Contrato del lector personal (W1/W2/W3/W4/W5): el estado del home, la
+    # píldora heredada del board, el cambio de destino de memory y el sidebar de
+    # páginas relacionadas. «Goal» se queda en inglés (ya es palabra del dominio
+    # en este catálogo, como «task») y «Suggested» habla del fallback semántico
+    # —una sugerencia, no una relación declarada—, no de una promesa.
+    "Could not change the visibility": "No se pudo cambiar la visibilidad",
+    "From the graph": "Del grafo",
+    "Inherited from its goal": "Heredado de su goal",
+    "Link a page…": "Vincular una página…",
+    "No related pages yet.": "Todavía no hay páginas relacionadas.",
+    "Page linked.": "Página vinculada.",
+    "Suggested": "Sugeridas",
+    "Your status": "Tu estado",
+    "facts you can read": "hechos que puedes leer",
+    "inherited": "heredado",
+    "pages you can read": "páginas que puedes leer",
 }
 
 STR = re.compile(r'"((?:[^"\\]|\\.)*)"')
