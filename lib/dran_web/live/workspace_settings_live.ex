@@ -41,6 +41,26 @@ defmodule DranWeb.WorkspaceSettingsLive do
   @brain_keys ~w(worker_max_pages entity_linker_enabled summary_language)
   @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
 
+  # Meta fields del alta de tipos: los tipos que acepta el validador y el tipo
+  # con el que nace una fila nueva. El formato de cable sigue siendo la lista
+  # JSON `[[tipo, key, label]]` (ver `parse_meta_fields/1`).
+  @meta_field_types ~w(text date props checklist)
+  @blank_meta_field_type "text"
+
+  # Defaults del selector de iconos del alta de tipos: son las sugerencias del
+  # datalist y los botones que se pintan bajo el campo. TODOS existen en el dep
+  # vendorizado (`deps/heroicons/optimized/24/outline`) — el plugin de
+  # assets/vendor/heroicons.js genera una clase por icono, así que un nombre
+  # inventado se dibuja como un cuadrado vacío, no como un error.
+  @icon_choices ~w(
+    hero-document-text hero-book-open hero-academic-cap hero-beaker
+    hero-clipboard-document-list hero-check-circle hero-map-pin hero-calendar
+    hero-clock hero-flag hero-trophy hero-code-bracket hero-cpu-chip hero-wrench
+    hero-bolt hero-light-bulb hero-heart hero-users hero-sparkles
+    hero-squares-2x2 hero-folder hero-globe-alt hero-building-office
+    hero-puzzle-piece
+  )
+
   @impl true
   def mount(_params, session, socket) do
     {socket, _context} = Auth.assign_to_socket(socket, session)
@@ -178,6 +198,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
                 workspace={@workspace}
                 custom_type_form={@custom_type_form}
                 custom_type_error={@custom_type_error}
+                meta_field_rows={@meta_field_rows}
               />
             </div>
 
@@ -253,11 +274,58 @@ defmodule DranWeb.WorkspaceSettingsLive do
   # fastest way to make a config screen feel hostile.
 
   @impl true
-  def handle_event("validate_custom_page_type", %{"workspace" => params}, socket) do
+  def handle_event("validate_custom_page_type", %{"workspace" => params} = payload, socket) do
     # Re-validates on every keystroke and clears the previous server-side
     # error: the message must describe what is in the box right now.
+    #
+    # `_target` decide quién cambió: si el que se movió es una FILA, el JSON se
+    # re-deriva de las filas COMPLETAS; si fue el JSON crudo, las filas se
+    # re-pintan de él (sin esto, escribir en el textarea sería pisado por las
+    # filas viejas).
+    {params, rows} =
+      if meta_field_rows_target?(payload["_target"]) do
+        case payload_meta_field_rows(payload["meta_field_rows"]) do
+          {:ok, rows} ->
+            rows = with_current_extras(rows, socket.assigns.meta_field_rows)
+            {Map.put(params, "meta_fields", encode_meta_field_rows(rows)), {:ok, rows}}
+
+          :error ->
+            {params, socket.assigns.meta_field_rows}
+        end
+      else
+        {params, rows_state(params["meta_fields"])}
+      end
+
     {:noreply,
-     assign(socket, custom_type_form: to_form(params, as: :workspace), custom_type_error: nil)}
+     assign(socket,
+       custom_type_form: to_form(params, as: :workspace),
+       meta_field_rows: rows,
+       custom_type_error: nil
+     )}
+  end
+
+  @impl true
+  def handle_event("pick_icon", %{"icon" => icon}, socket) do
+    # Solo los defaults del selector: el valor entra al MISMO campo del form
+    # (`workspace[icon]`), así que el preview y la normalización no cambian.
+    if icon in @icon_choices do
+      params = custom_type_form_params(socket, "icon", icon)
+
+      {:noreply,
+       assign(socket, custom_type_form: to_form(params, as: :workspace), custom_type_error: nil)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("add_meta_field_row", _params, socket) do
+    {:noreply, update_meta_field_rows(socket, &(&1 ++ [blank_meta_field_row()]))}
+  end
+
+  @impl true
+  def handle_event("remove_meta_field_row", %{"index" => index}, socket) do
+    {:noreply, update_meta_field_rows(socket, &drop_meta_field_row(&1, index))}
   end
 
   @impl true
@@ -284,49 +352,31 @@ defmodule DranWeb.WorkspaceSettingsLive do
   end
 
   @impl true
-  def handle_event("add_custom_page_type", %{"workspace" => params}, socket) do
-    workspace = socket.assigns.workspace
+  def handle_event("add_custom_page_type", %{"workspace" => params} = payload, socket) do
+    # Las filas del DOM entran al submit como cualquier otro input del form, y
+    # mandan sobre el assign (son lo que el lector tiene delante). Una fila a
+    # medio llenar FRENA el alta con el mensaje del validador: a medias no se
+    # guarda nada, ni la fila ni el tipo.
+    case payload_meta_field_rows(payload["meta_field_rows"]) do
+      {:ok, rows} ->
+        rows = with_current_extras(rows, socket.assigns.meta_field_rows)
 
-    case parse_meta_fields(params["meta_fields"]) do
-      {:error, message} ->
-        {:noreply,
-         assign(socket,
-           custom_type_form: to_form(params, as: :workspace),
-           custom_type_error: message
-         )}
+        case incomplete_meta_field_row(rows) do
+          nil ->
+            params = Map.put(params, "meta_fields", encode_meta_field_rows(rows))
+            add_custom_page_type(params, socket)
 
-      {:ok, meta_fields} ->
-        entry = %{
-          "slug" => params["slug"],
-          "label" => params["label"],
-          "plural" => params["plural"],
-          "path" => params["path"],
-          "icon" => params["icon"],
-          "color" => params["color"],
-          "meta_fields" => meta_fields
-        }
-
-        existing = Dran.Workspace.custom_page_types(workspace)
-
-        case Knowledge.update_workspace_settings(workspace, %{
-               workspace_page_types: existing ++ [entry]
-             }) do
-          {:ok, updated} ->
-            {:noreply,
-             socket
-             |> assign(workspace: updated, custom_type_error: nil)
-             |> assign_custom_type_form()
-             |> put_flash(:info, gettext("Page type added"))}
-
-          {:error, changeset} ->
-            # Keep every submitted value (the JSON too) so the user can fix
-            # and resubmit instead of retyping the whole definition.
+          message ->
             {:noreply,
              assign(socket,
-               custom_type_error: custom_type_message(changeset),
-               custom_type_form: to_form(params, as: :workspace)
+               custom_type_form: to_form(params, as: :workspace),
+               meta_field_rows: {:ok, rows},
+               custom_type_error: message
              )}
         end
+
+      :error ->
+        add_custom_page_type(params, socket)
     end
   end
 
@@ -494,6 +544,52 @@ defmodule DranWeb.WorkspaceSettingsLive do
     end
   end
 
+  defp add_custom_page_type(params, socket) do
+    workspace = socket.assigns.workspace
+
+    case parse_meta_fields(params["meta_fields"]) do
+      {:error, message} ->
+        {:noreply,
+         assign(socket,
+           custom_type_form: to_form(params, as: :workspace),
+           custom_type_error: message
+         )}
+
+      {:ok, meta_fields} ->
+        entry = %{
+          "slug" => params["slug"],
+          "label" => params["label"],
+          "plural" => params["plural"],
+          "path" => params["path"],
+          "icon" => params["icon"],
+          "color" => params["color"],
+          "meta_fields" => meta_fields
+        }
+
+        existing = Dran.Workspace.custom_page_types(workspace)
+
+        case Knowledge.update_workspace_settings(workspace, %{
+               workspace_page_types: existing ++ [entry]
+             }) do
+          {:ok, updated} ->
+            {:noreply,
+             socket
+             |> assign(workspace: updated, custom_type_error: nil)
+             |> assign_custom_type_form()
+             |> put_flash(:info, gettext("Page type added"))}
+
+          {:error, changeset} ->
+            # Keep every submitted value (the JSON too) so the user can fix
+            # and resubmit instead of retyping the whole definition.
+            {:noreply,
+             assign(socket,
+               custom_type_error: custom_type_message(changeset),
+               custom_type_form: to_form(params, as: :workspace)
+             )}
+        end
+    end
+  end
+
   # -- View components --------------------------------------------------------
 
   attr :active, :boolean, default: false
@@ -623,6 +719,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
   attr :workspace, Workspace, required: true
   attr :custom_type_form, :any, required: true
   attr :custom_type_error, :any, default: nil
+  attr :meta_field_rows, :any, required: true
 
   defp page_types_section(assigns) do
     ~H"""
@@ -792,15 +889,42 @@ defmodule DranWeb.WorkspaceSettingsLive do
               {gettext("Presentation")}
             </h4>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-              <div>
+              <div class="sm:col-span-2">
+                <%!-- Texto libre CON sugerencias (Commons C8.2): el `<.input
+                     type="datalist">` de core_components — el mismo id
+                     (`workspace_icon`) y el mismo name (`workspace[icon]`). --%>
                 <.input
                   field={@custom_type_form[:icon]}
+                  type="datalist"
+                  options={icon_choices()}
                   label={gettext("Icon")}
                   placeholder="hero-beaker"
+                  hint={
+                    gettext(
+                      "Heroicons name. The “hero-” prefix is added automatically; pick one of the defaults below or type any other."
+                    )
+                  }
                 />
-                <p class="text-xs text-base-content/50 mt-1.5">
-                  {gettext("Heroicons name. The “hero-” prefix is added automatically.")}
-                </p>
+
+                <div class="flex flex-wrap items-center gap-1 mt-2" id="icon-choices">
+                  <button
+                    :for={icon <- icon_choices()}
+                    type="button"
+                    id={"icon-choice-#{icon}"}
+                    phx-click="pick_icon"
+                    phx-value-icon={icon}
+                    title={icon}
+                    aria-label={icon}
+                    class={[
+                      "size-7 rounded-lg flex items-center justify-center transition-colors duration-150",
+                      preview.icon == icon && "bg-primary/15 text-primary",
+                      preview.icon != icon &&
+                        "bg-base-200/60 text-base-content/60 hover:bg-base-200 hover:text-base-content"
+                    ]}
+                  >
+                    <.icon name={icon} class="size-4" />
+                  </button>
+                </div>
               </div>
               <div>
                 <.input
@@ -837,8 +961,13 @@ defmodule DranWeb.WorkspaceSettingsLive do
             </div>
           </div>
 
-          <%!-- Meta fields: validated JSON editor --%>
+          <%!-- Meta fields: las FILAS son el editor (tipo / key / label) y el JSON
+               sigue siendo el formato de cable — mismo id, mismo phx-change y el
+               mismo validador (`parse_meta_fields/1`). --%>
           <% feedback = meta_fields_feedback(@custom_type_form[:meta_fields].value) %>
+          <% rows = @meta_field_rows %>
+          <% field_rows = rows_list(rows) %>
+          <% drafts = draft_meta_field_rows(rows) %>
           <div class="space-y-2">
             <div class="flex items-baseline justify-between gap-3">
               <h4 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
@@ -849,18 +978,104 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
             <p class="text-xs text-base-content/60">
               {gettext(
-                "Extra fields the editor renders for this type. One JSON array per field: [type, key, label] with type one of %{types}.",
-                types: "text, date, props"
+                "Extra fields the editor renders for this type: the type, the key and the label it shows. Available types: %{types}.",
+                types: "text, date, props, checklist"
               )}
             </p>
 
-            <.input
-              field={@custom_type_form[:meta_fields]}
-              type="textarea"
-              rows="6"
-              placeholder={~s([["text", "cuisine", "Cuisine"]])}
-              class="w-full rounded-lg border border-base-300 bg-base-100 px-3 py-2 font-mono text-xs leading-relaxed transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-base-content/30"
-            />
+            <div :if={rows != :invalid} id="meta-field-rows" class="space-y-2">
+              <div
+                :for={{row, index} <- Enum.with_index(field_rows)}
+                id={"meta-field-row-#{index}"}
+                class="flex items-start gap-2"
+              >
+                <select
+                  name={"meta_field_rows[#{index}][type]"}
+                  id={"meta-field-type-#{index}"}
+                  aria-label={gettext("Field type")}
+                  class="select select-sm w-32 shrink-0"
+                >
+                  <option :for={type <- meta_field_types()} value={type} selected={row.type == type}>
+                    {meta_field_type_label(type)}
+                  </option>
+                </select>
+                <input
+                  type="text"
+                  name={"meta_field_rows[#{index}][key]"}
+                  id={"meta-field-key-#{index}"}
+                  value={row.key}
+                  placeholder="cuisine"
+                  aria-label={gettext("Field key")}
+                  class="input input-sm flex-1 min-w-0"
+                />
+                <input
+                  type="text"
+                  name={"meta_field_rows[#{index}][label]"}
+                  id={"meta-field-label-#{index}"}
+                  value={row.label}
+                  placeholder="Cuisine"
+                  aria-label={gettext("Field label")}
+                  class="input input-sm flex-1 min-w-0"
+                />
+                <button
+                  type="button"
+                  phx-click="remove_meta_field_row"
+                  phx-value-index={index}
+                  id={"remove-meta-field-#{index}"}
+                  aria-label={gettext("Remove field")}
+                  class="btn btn-ghost btn-xs shrink-0 text-base-content/50 hover:text-error"
+                >
+                  <.icon name="hero-x-mark" class="size-4" />
+                </button>
+              </div>
+
+              <button
+                type="button"
+                phx-click="add_meta_field_row"
+                id="add-meta-field-row"
+                class="btn btn-ghost btn-xs"
+              >
+                <.icon name="hero-plus" class="size-3.5" />
+                {gettext("Add field")}
+              </button>
+            </div>
+
+            <p :if={rows == :invalid} class="text-xs text-base-content/50">
+              {gettext("Fix the JSON below to keep editing these fields as rows.")}
+            </p>
+
+            <%!-- Una fila a medio llenar no viaja: se avisa acá en vez de
+                 dejar que desaparezca en silencio. --%>
+            <p :if={drafts != []} class="text-xs text-base-content/50">
+              {ngettext(
+                "One row is still missing its key or its label.",
+                "%{count} rows are still missing their key or their label.",
+                length(drafts)
+              )}
+            </p>
+
+            <%!-- Fallback avanzado: el JSON crudo, con su id de siempre. --%>
+            <details class="rounded-xl border border-base-content/10 px-3 py-2">
+              <summary class="flex items-center gap-2 cursor-pointer select-none text-xs text-base-content/60">
+                <.icon name="hero-chevron-right" class="size-3.5 shrink-0" />
+                {gettext("Advanced: edit as JSON")}
+              </summary>
+              <div class="pt-3">
+                <p class="text-xs text-base-content/60 mb-2">
+                  {gettext(
+                    "One JSON array per field: [type, key, label], with type one of %{types}.",
+                    types: "text, date, props, checklist"
+                  )}
+                </p>
+                <.input
+                  field={@custom_type_form[:meta_fields]}
+                  type="textarea"
+                  rows="6"
+                  placeholder={~s([["text", "cuisine", "Cuisine"]])}
+                  class="w-full rounded-lg border border-base-300 bg-base-100 px-3 py-2 font-mono text-xs leading-relaxed transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-base-content/30"
+                />
+              </div>
+            </details>
 
             <%= case feedback do %>
               <% {:empty, _} -> %>
@@ -1498,7 +1713,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
   defp assign_custom_type_form(socket) do
     assign(socket,
       custom_type_form: to_form(blank_custom_type_params(), as: :workspace),
-      custom_type_error: nil
+      custom_type_error: nil,
+      # Las filas del editor se re-derivan del JSON en cada evento; el alta (y
+      # cualquier reset) arranca sin filas.
+      meta_field_rows: {:ok, []}
     )
   end
 
@@ -1530,7 +1748,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
   # not describe a field, is reported with the reason instead of being silently
   # dropped (the old behaviour turned a typo into "no fields, saved fine").
 
-  @meta_field_types ~w(text date props checklist)
+  # El template no lee atributos de módulo (en HEEx `@` es assigns): estas dos
+  # funciones son la puerta a las listas que usan el form y el validador.
+  defp icon_choices, do: @icon_choices
+  defp meta_field_types, do: @meta_field_types
 
   defp parse_meta_fields(nil), do: {:ok, []}
   defp parse_meta_fields(""), do: {:ok, []}
@@ -1620,6 +1841,206 @@ defmodule DranWeb.WorkspaceSettingsLive do
   end
 
   defp meta_fields_feedback(_other), do: {:empty, []}
+
+  # ── meta_fields: filas (editor) ⇄ la lista JSON (formato de cable) ────────
+  #
+  # El JSON sigue siendo el ÚNICO formato de cable: `workspace[meta_fields]` es
+  # lo que viaja y lo que valida `parse_meta_fields/1`. Las filas son su editor:
+  # se derivan del JSON y cada fila COMPLETA se vuelve a serializar a la MISMA
+  # lista `[[tipo, key, label]]`. Una fila a medio llenar no se serializa (no
+  # entra al JSON ni se guarda) pero sigue visible mientras se edita, y el
+  # submit la frena con el mismo mensaje del validador. Un JSON que no decodifica
+  # apaga el editor de filas (`:invalid`) y conserva el texto para arreglarlo.
+
+  # `:meta_field_rows` (assign): `{:ok, [row]}` o `:invalid`.
+  defp rows_state(raw) when is_binary(raw) do
+    case String.trim(raw) do
+      "" ->
+        {:ok, []}
+
+      trimmed ->
+        case Jason.decode(trimmed) do
+          {:ok, list} when is_list(list) ->
+            if Enum.all?(list, &meta_field_entry?/1) do
+              {:ok, Enum.map(list, &meta_field_row/1)}
+            else
+              :invalid
+            end
+
+          _other ->
+            :invalid
+        end
+    end
+  end
+
+  defp rows_state(_raw), do: {:ok, []}
+
+  defp meta_field_entry?([_type, _key | _rest]), do: true
+  defp meta_field_entry?(_other), do: false
+
+  # Los elementos extra viajan intactos (`["props", "props", "Label", %{...}]`):
+  # las filas editan tipo/key/label, no el resto.
+  defp meta_field_row([type, key | rest]) do
+    {label, extra} =
+      case rest do
+        [label | extra] -> {label, extra}
+        [] -> {"", []}
+      end
+
+    %{
+      type: to_string(type || ""),
+      key: to_string(key || ""),
+      label: to_string(label || ""),
+      extra: extra
+    }
+  end
+
+  defp meta_field_row(_other), do: blank_meta_field_row()
+
+  defp blank_meta_field_row do
+    %{type: @blank_meta_field_type, key: "", label: "", extra: []}
+  end
+
+  # Una fila COMPLETA es la que puede viajar: key y label con contenido.
+  defp meta_field_row_complete?(row) do
+    String.trim(row.key) != "" and String.trim(row.label) != ""
+  end
+
+  defp draft_meta_field_rows({:ok, rows}), do: Enum.reject(rows, &meta_field_row_complete?/1)
+  defp draft_meta_field_rows(:invalid), do: []
+
+  # La lista de filas que el template pinta: el assign guarda `{:ok, rows}` o
+  # `:invalid` (JSON ilegible), y el editor solo pinta lo primero.
+  defp rows_list({:ok, rows}), do: rows
+  defp rows_list(_rows), do: []
+
+  # Solo las completas se serializan: una fila a medio llenar no es un dato.
+  defp encode_meta_field_rows(rows) do
+    rows
+    |> Enum.filter(&meta_field_row_complete?/1)
+    |> Enum.map(fn row -> [row.type, row.key, row.label | List.wrap(row.extra)] end)
+    |> Jason.encode!()
+  end
+
+  # El primer motivo por el que una fila no puede viajar, con el MISMO mensaje
+  # que usa el validador del JSON: una redacción por defecto, no dos.
+  defp incomplete_meta_field_row(rows) do
+    rows
+    |> Enum.with_index(1)
+    |> Enum.find_value(fn {row, index} ->
+      if meta_field_row_complete?(row) do
+        nil
+      else
+        meta_field_error([row.type, row.key, row.label], index)
+      end
+    end)
+  end
+
+  # Las filas que llegan del DOM conservan los opts por POSICIÓN: no se
+  # reordenan (se agregan al final y se borran por índice), así que editar un
+  # label no puede tirar los opts del registry.
+  defp with_current_extras(rows, current) do
+    extras =
+      case current do
+        {:ok, current} -> Enum.map(current, & &1.extra)
+        :invalid -> []
+      end
+
+    rows
+    |> Enum.with_index()
+    |> Enum.map(fn {row, index} -> %{row | extra: Enum.at(extras, index, [])} end)
+  end
+
+  defp payload_meta_field_rows(rows) when is_map(rows) do
+    indexed =
+      Enum.flat_map(rows, fn {index, row} ->
+        case Integer.parse(to_string(index)) do
+          {position, ""} when is_map(row) -> [{position, row}]
+          _other -> []
+        end
+      end)
+
+    case indexed do
+      [] ->
+        :error
+
+      indexed ->
+        {:ok,
+         indexed
+         |> Enum.sort_by(&elem(&1, 0))
+         |> Enum.map(fn {_position, row} -> payload_meta_field_row(row) end)}
+    end
+  end
+
+  # Sin payload de filas (o con uno ilegible) no hay filas que aplicar.
+  defp payload_meta_field_rows(_rows), do: :error
+
+  defp payload_meta_field_row(row) do
+    %{
+      type: row_value(row, "type", @blank_meta_field_type),
+      key: row_value(row, "key", ""),
+      label: row_value(row, "label", ""),
+      extra: []
+    }
+  end
+
+  defp row_value(row, key, default) do
+    case Map.get(row, key) do
+      value when is_binary(value) -> value
+      _other -> default
+    end
+  end
+
+  # `_target` del form: la lista de inputs que disparó el `phx-change` (o el
+  # nombre suelto). Las filas del editor son las que empiezan con
+  # `meta_field_rows[`.
+  defp meta_field_rows_target?(target) when is_list(target) do
+    Enum.any?(target, &meta_field_rows_target?/1)
+  end
+
+  defp meta_field_rows_target?(target) when is_binary(target) do
+    String.starts_with?(target, "meta_field_rows[")
+  end
+
+  defp meta_field_rows_target?(_target), do: false
+
+  # Los botones de fila son `phx-click` y no llevan el payload del form: el
+  # estado sale del assign que el `phx-change` mantiene al día. Con el JSON roto
+  # no se toca nada (fail-closed: no se pisa lo que el lector escribió).
+  defp update_meta_field_rows(socket, fun) do
+    case socket.assigns.meta_field_rows do
+      :invalid ->
+        socket
+
+      {:ok, rows} ->
+        rows = fun.(rows)
+
+        params =
+          custom_type_form_params(socket, "meta_fields", encode_meta_field_rows(rows))
+
+        assign(socket,
+          custom_type_form: to_form(params, as: :workspace),
+          meta_field_rows: {:ok, rows},
+          custom_type_error: nil
+        )
+    end
+  end
+
+  defp drop_meta_field_row(rows, index) do
+    case Integer.parse(to_string(index)) do
+      {position, ""} when position >= 0 and position < length(rows) ->
+        List.delete_at(rows, position)
+
+      _other ->
+        rows
+    end
+  end
+
+  defp meta_field_type_label("text"), do: gettext("Text")
+  defp meta_field_type_label("date"), do: gettext("Date")
+  defp meta_field_type_label("props"), do: gettext("Properties")
+  defp meta_field_type_label("checklist"), do: gettext("Checklist")
+  defp meta_field_type_label(other), do: other
 
   # Ready-to-load templates. `key` is the DOM value, `json` goes straight into
   # the textarea so the shape is learned by example, not by documentation.

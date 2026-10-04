@@ -614,6 +614,164 @@ defmodule DranWeb.SettingsLiveTest do
     end
   end
 
+  describe "el alta de tipos se edita con controles" do
+    setup do
+      {:ok, ws: Dran.DataCase.ensure_workspace!()}
+    end
+
+    test "el icono es un datalist y los defaults escriben el mismo campo", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+      open_page_types_tab(view)
+
+      # C8.2 de la casa: texto libre CON sugerencias, sobre el mismo campo.
+      assert has_element?(view, "#workspace_icon[list='workspace_icon-list']")
+      assert has_element?(view, "#workspace_icon-list option[value='hero-beaker']")
+
+      # Los defaults son nombres REALES: el plugin de heroicons genera una clase
+      # por icono del dep, así que uno inventado se dibujaría vacío.
+      names =
+        render(view)
+        |> then(&Regex.scan(~r/id="icon-choice-(hero-[a-z0-9-]+)"/, &1))
+        |> Enum.map(&Enum.at(&1, 1))
+
+      assert length(names) >= 12
+
+      for name <- names do
+        file =
+          "deps/heroicons/optimized/24/outline/" <>
+            String.replace_prefix(name, "hero-", "") <> ".svg"
+
+        assert File.exists?(file), "el default #{name} no existe en el dep"
+      end
+
+      # Lleno lo mínimo y elijo un default: escribe el MISMO campo del form…
+      render_change(view, "validate_custom_page_type", %{
+        "workspace" => type_params(meta_fields: ""),
+        "_target" => ["workspace[label]"]
+      })
+
+      render_click(view, "pick_icon", %{"icon" => "hero-trophy"})
+      assert has_element?(view, "#workspace_icon[value='hero-trophy']")
+
+      # …y el submit guarda ESE icono (un solo valor, sin normalización nueva).
+      view |> form("#custom-page-type-form") |> render_submit()
+
+      reloaded = Knowledge.get_workspace!(ws.id)
+      assert Dran.Workspace.page_type_ui(reloaded, "recipe").icon == "hero-trophy"
+
+      # Un valor fuera de los defaults no entra por el evento (fail-closed).
+      render_click(view, "pick_icon", %{"icon" => "hero-inventado"})
+      refute has_element?(view, "#workspace_icon[value='hero-inventado']")
+    end
+
+    test "un tipo armado con filas persiste su lista JSON", %{conn: conn, ws: ws} do
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+      open_page_types_tab(view)
+
+      # Agrego la primera fila: nace vacía y visible (tipo por defecto).
+      render_click(view, "add_meta_field_row")
+
+      assert has_element?(view, "#meta-field-row-0")
+      assert has_element?(view, "#meta-field-key-0")
+      assert has_element?(view, "#meta-field-label-0")
+      assert has_element?(view, "#meta-field-type-0")
+
+      # La lleno: el JSON del form se re-deriva de la FILA.
+      render_change(view, "validate_custom_page_type", %{
+        "workspace" => type_params(meta_fields: ~s([["text", "", ""]])),
+        "meta_field_rows" => %{
+          "0" => %{"type" => "text", "key" => "cuisine", "label" => "Cuisine"}
+        },
+        "_target" => ["meta_field_rows[0][key]"]
+      })
+
+      # El fallback avanzado muestra exactamente lo mismo: un solo valor.
+      assert has_element?(view, "#workspace_meta_fields")
+      assert has_element?(view, "#meta-field-key-0[value='cuisine']")
+
+      # Y el submit guarda ESA lista: el formato de cable no cambia.
+      render_submit(view, "add_custom_page_type", %{
+        "workspace" => type_params(meta_fields: ~s([["text", "", ""]])),
+        "meta_field_rows" => %{
+          "0" => %{"type" => "text", "key" => "cuisine", "label" => "Cuisine"}
+        }
+      })
+
+      reloaded = Knowledge.get_workspace!(ws.id)
+
+      assert Dran.Workspace.page_type_meta_fields(reloaded, "recipe") == [
+               {"text", "cuisine", "Cuisine"}
+             ]
+    end
+
+    test "quitar una fila y los payloads forjados no rompen el editor", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+      open_page_types_tab(view)
+
+      render_change(view, "validate_custom_page_type", %{
+        "workspace" => type_params(meta_fields: ~s([["text", "a", "A"], ["date", "b", "B"]])),
+        "_target" => ["workspace[meta_fields]"]
+      })
+
+      assert has_element?(view, "#meta-field-row-0")
+      assert has_element?(view, "#meta-field-row-1")
+
+      # Quitar la primera deja la segunda con su tipo y su key.
+      render_click(view, "remove_meta_field_row", %{"index" => "0"})
+
+      refute has_element?(view, "#meta-field-row-1")
+      assert has_element?(view, "#meta-field-key-0[value='b']")
+      assert has_element?(view, "#meta-field-type-0 option[value='date'][selected]")
+
+      # Un índice forjado no revienta ni cambia la lista (fail-closed).
+      render_click(view, "remove_meta_field_row", %{"index" => "no-existe"})
+
+      assert has_element?(view, "#meta-field-key-0[value='b']")
+    end
+
+    test "una fila sin key se reporta, y un JSON roto conserva el texto", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+      open_page_types_tab(view)
+
+      # Una fila a medio llenar: el validador dice qué falta…
+      render_change(view, "validate_custom_page_type", %{
+        "workspace" => type_params(meta_fields: ~s([["text", "", ""]])),
+        "_target" => ["workspace[meta_fields]"]
+      })
+
+      assert render(view) =~ "Field 1: the key must be a non-empty string."
+
+      # …y el submit la rechaza sin guardar nada.
+      render_submit(view, "add_custom_page_type", %{
+        "workspace" => type_params(meta_fields: ~s([["text", "", ""]]))
+      })
+
+      assert render(view) =~ "Field 1: the key must be a non-empty string."
+      assert Dran.Workspace.custom_page_type_slugs(Knowledge.get_workspace!(ws.id)) == []
+
+      # Un JSON que no decodifica NO se pisa: las filas se apagan y el texto
+      # queda ahí para arreglarlo.
+      html =
+        render_change(view, "validate_custom_page_type", %{
+          "workspace" => type_params(meta_fields: "[["),
+          "_target" => ["workspace[meta_fields]"]
+        })
+
+      refute has_element?(view, "#meta-field-rows")
+      assert html =~ t("Fix the JSON below to keep editing these fields as rows.")
+      assert has_element?(view, "#workspace_meta_fields")
+
+      # Y agregar una fila con el JSON roto tampoco lo destruye.
+      render_click(view, "add_meta_field_row")
+
+      refute has_element?(view, "#meta-field-rows")
+      assert render(view) =~ t("Invalid JSON")
+    end
+  end
+
   defp open_page_types_tab(view) do
     view
     |> element("button[phx-click='select_tab'][phx-value-tab='page_types']")
