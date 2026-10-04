@@ -35,9 +35,6 @@ dran-*.tar
 npm-debug.log
 /assets/node_modules/
 
-# Screenshot tooling deps (reinstall with: cd scripts/screenshot && npm install)
-/scripts/screenshot/node_modules/
-
 # phx.digest output — regenerated at deploy time. Keep the source files only.
 /priv/static/**/*.gz
 /priv/static/favicon-*.svg
@@ -58,7 +55,7 @@ mise.toml
 .spike/
 __pycache__/
 
-# Artefactos locales de las sesiones: el cookie jar de curl (lleva credenciales
-# de la instancia) y el symlink que el runner de Hermes crea hacia /skills.
-sc.txt
+# Artefactos locales de las sesiones: el symlink que el runner de Hermes crea
+# hacia /skills. El cookie jar de curl NO se ignora: una credencial en claro en
+# el árbol es un hallazgo, no un temporal (sc.txt se borró 2026-10-04).
 .hermes/
