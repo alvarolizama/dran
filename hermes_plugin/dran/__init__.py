@@ -60,6 +60,12 @@ BREAKER_COOLDOWN_SECS = 60.0
 # HTTP retry (idempotent GETs only): attempts and backoff between them.
 HTTP_RETRY_ATTEMPTS = 2
 HTTP_RETRY_BACKOFF_SECS = 0.5
+# Connected services (cliente delgado del REST /api/services). El connect link
+# dura 10 minutos server-side; el wait es corto y acotado: NUNCA bloquea el turno
+# más de SERVICE_WAIT_MAX_SECS y nunca duerme más que el cap.
+SERVICE_WAIT_DEFAULT_SECS = 15.0
+SERVICE_WAIT_MAX_SECS = 30.0
+SERVICE_WAIT_POLL_SECS = 2.0
 # Ingest cursor state file (per profile): session_id -> messages digested.
 INGEST_CURSOR_FILE = "dran_memory_cursor.json"
 
@@ -690,6 +696,99 @@ class _DranClient:
         except Exception:
             return None
 
+    # -- Services endpoints (cliente delgado del REST /api/services) ------
+    #
+    # El catálogo de toolkits viaja como DATO: el plugin NO registra una tool
+    # por toolkit. Estas llamadas son transporte puro — toda la lógica (qué
+    # toolkit, qué tool, la conexión OAuth) vive server-side. La identidad es
+    # la credencial: NUNCA viaja un user_id ni un session_id en el body.
+
+    def list_services(self) -> dict:
+        """GET /api/services -> {"configured": bool, "data": [...]}.
+
+        `status` es ACTIVE | INITIALIZING | INITIATED | EXPIRED | INACTIVE,
+        o null cuando nunca se conectó; `identity` puede ser null. Sin key
+        de Composio el server responde {"configured": false, "data": []}.
+        """
+        data = self.request("GET", "/api/services")
+        return data if isinstance(data, dict) else {}
+
+    def connect_service(self, toolkit: str) -> dict:
+        """POST /api/services/:toolkit/connect -> el link hosted (redirect_url).
+
+        El link dura 10 minutos: vencido se pide uno NUEVO, nunca se reintenta.
+        """
+        from urllib.parse import quote
+        seg = quote(str(toolkit or "").strip(), safe="")
+        return self.request("POST", f"/api/services/{seg}/connect", {})
+
+    def list_service_tools(self, toolkit: str, slug: str = "") -> Optional[dict]:
+        """GET /api/services/:toolkit/tools[?slug=…] -> catálogo de tools.
+
+        Sin `slug`, la lista liviana (slug, name, description). Con `slug`,
+        la tool completa (input_parameters, output_parameters).
+        """
+        from urllib.parse import quote, urlencode
+        seg = quote(str(toolkit or "").strip(), safe="")
+        path = f"/api/services/{seg}/tools"
+        if slug:
+            path += "?" + urlencode({"slug": slug})
+        data = self.request("GET", path)
+        return data.get("data") if isinstance(data, dict) else None
+
+    def search_service_tools(self, use_case: str) -> Optional[dict]:
+        """GET /api/services/search?q=… -> búsqueda por caso de uso."""
+        from urllib.parse import urlencode
+        qs = urlencode({"q": use_case})
+        data = self.request("GET", f"/api/services/search?{qs}")
+        return data.get("data") if isinstance(data, dict) else None
+
+    def execute_service(self, toolkit: str, tool_slug: str, arguments: Any) -> dict:
+        """POST /api/services/execute -> corre una tool del toolkit.
+
+        Fail-closed: cuando el toolkit no está ACTIVE el server responde 409
+        {"errors": {"code": "not_connected"}, "connect_url": …} y el handler
+        devuelve ese link (nunca simula éxito).
+        """
+        return self.request("POST", "/api/services/execute", {
+            "toolkit": toolkit,
+            "tool_slug": tool_slug,
+            "arguments": arguments if isinstance(arguments, dict) else {},
+        })
+
+
+def _services_line(payload: Any) -> str:
+    """Una línea compacta del inventario: estado + identidad del proveedor.
+
+    Ej. "Dran services: gmail ACTIVE (alvaro@gmail.com), github not connected".
+    Sin secretos y sin ids crudos de vendor (`trs_…`, `ca_…`, `ac_…`): sólo el
+    toolkit, su estado y la identidad que el usuario reconoce. Devuelve "" sin
+    key configurada (el server responde configured:false) o sin servicios.
+    """
+    if not isinstance(payload, dict) or not payload.get("configured"):
+        return ""
+    parts: List[str] = []
+    for svc in payload.get("data") or []:
+        if not isinstance(svc, dict):
+            continue
+        toolkit = str(svc.get("toolkit") or "").strip()
+        if not toolkit:
+            continue
+        label = str(svc.get("status") or "").strip().upper()
+        identity = svc.get("identity")
+        if bool(svc.get("connected")) and label == "ACTIVE":
+            piece = f"{toolkit} ACTIVE"
+            if identity:
+                piece += f" ({identity})"
+        elif label:
+            piece = f"{toolkit} {label.lower()}"
+        else:
+            piece = f"{toolkit} not connected"
+        parts.append(piece)
+    if not parts:
+        return ""
+    return "Dran services: " + ", ".join(parts)
+
 
 class DranMemoryProvider(MemoryProvider):
     """Hermes memory provider backed by a Dran workspace."""
@@ -818,7 +917,12 @@ class DranMemoryProvider(MemoryProvider):
             "your agents. Relevant memories are injected automatically at turn "
             "start. When the user states a durable fact (decision, preference, "
             "project fact), offer to store it with dran_memory_add. "
-            "Rate a memory helpful/unhelpful with dran_memory_feedback."
+            "Rate a memory helpful/unhelpful with dran_memory_feedback. "
+            "Connected services: the user's mail, calendar, issues/pull requests, "
+            "chat messages and files are reachable through the dran_services tools "
+            "once they connect. Connecting a service returns a link you paste for "
+            "the user as a markdown link. The current inventory is injected "
+            "automatically at turn start — do not poll for it."
         )
 
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
@@ -854,6 +958,18 @@ class DranMemoryProvider(MemoryProvider):
                 results = client.search(enriched,
                                         limit=self._config["max_recall_results"])
                 text, injected_ids = self._format_results(results)
+                # Inventario de servicios: MISMA pasada y MISMA cadencia que la
+                # memoria — a lo sumo un GET /api/services por ventana de
+                # prefetch, nunca uno por turno ni en el camino crítico del turno.
+                try:
+                    services_line = _services_line(client.list_services())
+                except Exception:
+                    services_line = ""
+                if services_line:
+                    text = f"{text}\n{services_line}" if text else services_line
+                    # Si cambia el inventario, se re-inyecta aunque el set de
+                    # hechos sea idéntico.
+                    injected_ids = injected_ids | {f"__services__:{services_line}"}
                 with self._prefetch_lock:
                     self._prefetch_cache = text
                     self._prefetch_count = len(results)
@@ -1756,6 +1872,65 @@ def _tool_schemas() -> List[Dict[str, Any]]:
                 "required": ["id"],
             },
         },
+        # ── Servicios conectados (cliente delgado del REST /api/services) ──
+        #
+        # El catálogo viaja como DATO, nunca como una tool por toolkit: hay UN
+        # descubrimiento (`dran_services_tools`) y UNA ejecución
+        # (`dran_services_run`). Conectar devuelve un link hosted que el agente
+        # le pega al usuario; el inventario se inyecta solo al inicio del turno.
+        {
+            "name": "dran_services",
+            "description": "List the user's connected services (mail, calendar, issues/pull requests, chat, files) with each toolkit's connection state and account identity. This is the inventory — read it before assuming a service is available.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "dran_services_connect",
+            "description": "Get the hosted connection link for a service toolkit; the user opens it to authorize. Show it to the user as a markdown link. The link expires after 10 minutes — when it expires, call this again for a fresh one instead of retrying the old link.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "toolkit": {"type": "string", "description": "Service toolkit to connect (e.g. gmail)"},
+                },
+                "required": ["toolkit"],
+            },
+        },
+        {
+            "name": "dran_services_tools",
+            "description": "Discover the tools a service exposes, or search the catalog by use case. With `toolkit`, list its tools (add `slug` for one tool's full input/output schema). With `use_case`, search the whole catalog for the best tool slugs for a task. The catalog is data — always discover through this tool, there is no per-toolkit tool.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "toolkit": {"type": "string", "description": "List this service's tools"},
+                    "slug": {"type": "string", "description": "One tool's full schema (with toolkit)"},
+                    "use_case": {"type": "string", "description": "Search the catalog by use case instead of a toolkit"},
+                },
+            },
+        },
+        {
+            "name": "dran_services_run",
+            "description": "Run one tool of a connected service: pass the toolkit, the tool_slug (from dran_services_tools) and its arguments. If the service is not connected it fails closed with a connect link to show the user — it never pretends to succeed.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "toolkit": {"type": "string", "description": "Service toolkit (e.g. gmail)"},
+                    "tool_slug": {"type": "string", "description": "Tool slug (e.g. GMAIL_SEND_EMAIL)"},
+                    "arguments": {"type": "object", "description": "Tool arguments object, per the tool's input schema"},
+                },
+                "required": ["toolkit", "tool_slug"],
+            },
+        },
+        {
+            "name": "dran_services_wait",
+            "description": "After the user opens a connect link, poll briefly until that service becomes ACTIVE. Short cap (default 15s, max 30s, a check every ~2s) — it never blocks longer than the cap. If it does not reach ACTIVE in time, the connect link has expired: re-emit a new one with dran_services_connect.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "toolkit": {"type": "string", "description": "Service toolkit to wait for"},
+                    "timeout_seconds": {"type": "integer", "description": "Max seconds to wait (default 15, max 30)"},
+                },
+                "required": ["toolkit"],
+            },
+        },
     ]
 
 
@@ -1771,6 +1946,18 @@ _WORK_TOOLS = frozenset({
     "dran_update_task", "dran_move_task", "dran_delete_task",
     "dran_list_plans", "dran_get_plan", "dran_create_plan", "dran_update_plan",
     "dran_set_plan_checklist", "dran_toggle_checklist", "dran_delete_plan",
+})
+
+# Servicios conectados (cliente delgado del REST /api/services): listar, emitir
+# el link de conexión, descubrir el catálogo, ejecutar y esperar a ACTIVE. Se
+# despachan juntas por la misma razón que las de trabajo: el dispatcher principal
+# no crece con una rama por tool.
+_SERVICES_TOOLS = frozenset({
+    "dran_services",
+    "dran_services_connect",
+    "dran_services_tools",
+    "dran_services_run",
+    "dran_services_wait",
 })
 
 
@@ -1936,6 +2123,9 @@ def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> 
 
         if tool_name in _WORK_TOOLS:
             return _handle_work_tool(client, tool_name, args)
+
+        if tool_name in _SERVICES_TOOLS:
+            return _handle_services_tool(client, tool_name, args)
 
         return json.dumps({"error": f"unknown tool {tool_name}"})
     except Exception as exc:
@@ -2162,6 +2352,162 @@ def _handle_work_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str:
             detail = None
         return json.dumps({"error": detail or f"dran answered HTTP {exc.code}",
                            "status": exc.code})
+
+
+def _coerce_wait_timeout(value: Any) -> float:
+    """El cap del wait: default ~15s, máximo 30s, nunca negativo."""
+    try:
+        secs = float(value)
+    except (TypeError, ValueError):
+        return SERVICE_WAIT_DEFAULT_SECS
+    return max(0.0, min(SERVICE_WAIT_MAX_SECS, secs))
+
+
+def _services_http_error(exc: "urllib.error.HTTPError", toolkit: str = "") -> str:
+    """Traduce el error del REST conservando lo que el agente necesita.
+
+    El 409 `not_connected` trae el `connect_url`: se devuelve para que el
+    agente se lo muestre al usuario — fail-closed, nunca un falso éxito.
+    """
+    raw = exc.read().decode("utf-8", "replace")
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    errors = body.get("errors")
+    if not isinstance(errors, dict):
+        errors = {}
+    out: Dict[str, Any] = {
+        "error": errors.get("detail") or f"dran answered HTTP {exc.code}",
+        "status": exc.code,
+    }
+    if errors.get("code"):
+        out["code"] = errors["code"]
+    if body.get("toolkit") or toolkit:
+        out["toolkit"] = body.get("toolkit") or toolkit
+    connect_url = body.get("connect_url")
+    if connect_url:
+        out["connect_url"] = connect_url
+        out["hint"] = ("the service is not connected — show this link to the user "
+                       "so they can connect it, then retry")
+    return json.dumps(out)
+
+
+def _handle_services_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str:
+    """Servicios conectados: cliente delgado del REST /api/services.
+
+    El catálogo viaja como DATO (`dran_services_tools`), nunca como una tool
+    por toolkit. Las respuestas van acotadas y el 409 `not_connected` se
+    traduce con su connect_url — fail-closed, nunca un falso éxito.
+    """
+    try:
+        if tool_name == "dran_services":
+            payload = client.list_services()
+            if not isinstance(payload, dict):
+                payload = {}
+            services = []
+            for svc in payload.get("data") or []:
+                if not isinstance(svc, dict):
+                    continue
+                services.append({
+                    "toolkit": svc.get("toolkit"),
+                    "name": svc.get("name"),
+                    "description": svc.get("description"),
+                    "connected": bool(svc.get("connected")),
+                    "status": svc.get("status"),
+                    "identity": svc.get("identity"),
+                })
+            return json.dumps({
+                "configured": bool(payload.get("configured")),
+                "services": services,
+            })
+
+        if tool_name == "dran_services_connect":
+            toolkit = str(args.get("toolkit", "")).strip()
+            if not toolkit:
+                return json.dumps({"error": "toolkit is required"})
+            data = client.connect_service(toolkit)
+            payload = data.get("data") if isinstance(data, dict) else None
+            payload = payload if isinstance(payload, dict) else {}
+            redirect_url = payload.get("redirect_url")
+            if not redirect_url:
+                return json.dumps({"error": "no connect link returned", "toolkit": toolkit})
+            return json.dumps({
+                "toolkit": payload.get("toolkit") or toolkit,
+                "redirect_url": redirect_url,
+                "expires_in": payload.get("expires_in"),
+                "hint": ("show the user this link as a markdown link; it expires "
+                         "after ~10 minutes — if it expires, call dran_services_connect "
+                         "again for a fresh one"),
+            })
+
+        if tool_name == "dran_services_tools":
+            toolkit = str(args.get("toolkit") or "").strip()
+            slug = str(args.get("slug") or "").strip()
+            use_case = str(args.get("use_case") or "").strip()
+            if toolkit:
+                catalog = client.list_service_tools(toolkit, slug=slug)
+                if catalog is None:
+                    return json.dumps({"error": f"unknown toolkit: {toolkit}",
+                                       "toolkit": toolkit})
+                return json.dumps(catalog)
+            if use_case:
+                found = client.search_service_tools(use_case)
+                if found is None:
+                    return json.dumps({"error": "search unavailable"})
+                return json.dumps(found)
+            return json.dumps({
+                "error": "toolkit or use_case is required",
+                "hint": "call dran_services first to see the available toolkits",
+            })
+
+        if tool_name == "dran_services_run":
+            toolkit = str(args.get("toolkit", "")).strip()
+            tool_slug = str(args.get("tool_slug", "")).strip()
+            if not toolkit or not tool_slug:
+                return json.dumps({"error": "toolkit and tool_slug are required"})
+            try:
+                data = client.execute_service(toolkit, tool_slug, args.get("arguments"))
+            except urllib.error.HTTPError as exc:
+                return _services_http_error(exc, toolkit)
+            payload = data.get("data") if isinstance(data, dict) else None
+            return json.dumps(payload if isinstance(payload, dict) else {})
+
+        if tool_name == "dran_services_wait":
+            toolkit = str(args.get("toolkit", "")).strip()
+            if not toolkit:
+                return json.dumps({"error": "toolkit is required"})
+            timeout = _coerce_wait_timeout(args.get("timeout_seconds"))
+            deadline = time.monotonic() + timeout
+            status = None
+            while True:
+                payload = client.list_services()
+                rows = payload.get("data") if isinstance(payload, dict) else None
+                for svc in rows or []:
+                    if isinstance(svc, dict) and str(svc.get("toolkit") or "") == toolkit:
+                        status = svc.get("status")
+                        break
+                if str(status or "").upper() == "ACTIVE":
+                    return json.dumps({"toolkit": toolkit, "status": "ACTIVE",
+                                       "active": True})
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(min(SERVICE_WAIT_POLL_SECS, remaining))
+            return json.dumps({
+                "toolkit": toolkit,
+                "status": status,
+                "active": False,
+                "hint": (f"still {status or 'INITIATED'} after waiting {timeout:.0f}s — "
+                         "the connect link expires after 10 minutes; re-emit a new one "
+                         "with dran_services_connect and ask the user to open it"),
+            })
+
+        return json.dumps({"error": f"unknown tool {tool_name}"})
+    except urllib.error.HTTPError as exc:
+        return _services_http_error(exc, str(args.get("toolkit") or ""))
 
 
 def _brief(row: Any) -> Dict[str, Any]:

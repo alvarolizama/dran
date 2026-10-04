@@ -13,9 +13,12 @@ Run: python3 -m pytest hermes_plugin/tests/ -q
 
 from __future__ import annotations
 
+import io
 import json
+import re
 import sys
 import types
+import urllib.error
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -128,6 +131,13 @@ def test_register_registers_memory_provider_and_tools(plugin):
         "dran_set_plan_checklist",
         "dran_toggle_checklist",
         "dran_delete_plan",
+        # Servicios conectados — cliente delgado del REST /api/services. UNA
+        # tool de descubrimiento (el catálogo es DATO), NUNCA una por toolkit.
+        "dran_services",
+        "dran_services_connect",
+        "dran_services_tools",
+        "dran_services_run",
+        "dran_services_wait",
     ]
     assert len(set(names)) == len(names), "no duplicate tool names"
 
@@ -657,3 +667,264 @@ def test_toggle_checklist_surfaces_a_stale_lock_as_a_conflict(plugin):
                                               {"target": "plan", "id": "s", "index": 0}))
     assert out["error"] == "stale"
     assert out["status"] == 409
+
+
+# ── Servicios conectados (cliente delgado del REST /api/services) ────────────
+# El catálogo viaja como DATO, NUNCA como una tool por toolkit: hay UNA tool de
+# descubrimiento y UNA de ejecución. El inventario se inyecta con la MISMA
+# cadencia que la memoria (a lo sumo un GET /api/services por ventana).
+
+_SERVICE_TOOL_NAMES = {
+    "dran_services",
+    "dran_services_connect",
+    "dran_services_tools",
+    "dran_services_run",
+    "dran_services_wait",
+}
+
+_SERVICES_PAYLOAD = {
+    "configured": True,
+    "data": [
+        {"toolkit": "gmail", "name": "Gmail", "connected": True,
+         "status": "ACTIVE", "identity": "alvaro@gmail.com"},
+        {"toolkit": "github", "name": "GitHub", "connected": False,
+         "status": None, "identity": None},
+    ],
+}
+
+
+def test_services_tools_registered_and_declared(plugin):
+    ctx = FakeCtx()
+    plugin.register(ctx)
+    names = {t["name"] for t in ctx.tools}
+    assert _SERVICE_TOOL_NAMES <= names, _SERVICE_TOOL_NAMES - names
+
+    manifest = (_PLUGIN_DIR / "plugin.yaml").read_text(encoding="utf-8")
+    declared = set(re.findall(r"^\s*-\s+(dran_[a-z_]+)\s*$", manifest, re.M))
+    assert _SERVICE_TOOL_NAMES <= declared, _SERVICE_TOOL_NAMES - declared
+
+
+def test_no_per_toolkit_service_tool_exists(plugin):
+    """El catálogo es DATO: no hay `dran_gmail_*` ni equivalentes."""
+    ctx = FakeCtx()
+    plugin.register(ctx)
+    names = [t["name"] for t in ctx.tools]
+    per_toolkit = re.compile(
+        r"^dran_(gmail|slack|github|gitlab|jira|linear|notion|drive|calendar|"
+        r"outlook|discord|telegram|asana|trello|sheets|docs)(_|$)"
+    )
+    offenders = [n for n in names if per_toolkit.match(n)]
+    assert offenders == [], offenders
+    # Una sola puerta de descubrimiento, una sola de ejecución.
+    assert names.count("dran_services_tools") == 1
+    assert names.count("dran_services_run") == 1
+
+
+def test_system_prompt_block_names_service_triggers(plugin):
+    """El anuncio de capacidad no necesita servidor: sólo texto estático."""
+    block = plugin.DranMemoryProvider().system_prompt_block().lower()
+    for trigger in ("mail", "calendar", "issues", "messages", "files"):
+        assert trigger in block, trigger
+    assert "dran_services" in block
+    assert "injected" in block  # el inventario llega solo, no se poletea
+
+
+class _FakeServiceClient:
+    """Cliente falso: cuenta GET /api/services y sirve un inventario canned."""
+
+    def __init__(self, services_payload, memories=None):
+        self.workspace = "personal"
+        self._services = services_payload
+        self._memories = memories or []
+        self.service_calls = 0
+        self.search_calls = 0
+
+    def agent_config(self, timeout=3.0):
+        return None
+
+    def search(self, query, limit=5):
+        self.search_calls += 1
+        return list(self._memories)
+
+    def list_services(self):
+        self.service_calls += 1
+        return self._services
+
+
+def _armed_provider(plugin, client, *, cadence=1):
+    provider = plugin.DranMemoryProvider()
+    provider._config = {"auto_recall": True, "recall_cadence": cadence,
+                        "max_recall_results": 5, "max_recall_chars": 800}
+    provider._client = client
+    provider._turns_since_inject = 1_000_000
+    provider._workspace_resolved_at = 0.0
+    return provider
+
+
+def test_services_inventory_is_injected_in_prefetch(plugin):
+    client = _FakeServiceClient(_SERVICES_PAYLOAD)
+    provider = _armed_provider(plugin, client, cadence=1)
+
+    provider.queue_prefetch("hola", session_id="s1")
+    provider.shutdown()  # join the background recall pass
+    text = provider.prefetch("hola", session_id="s1")
+
+    assert "Dran services:" in text
+    assert "gmail ACTIVE (alvaro@gmail.com)" in text
+    assert "github not connected" in text
+    assert client.service_calls == 1
+
+
+def test_services_inventory_respects_cadence_and_dedupe(plugin):
+    """Dos prefetches en la MISMA ventana: a lo sumo un GET /api/services."""
+    client = _FakeServiceClient(_SERVICES_PAYLOAD)
+    provider = _armed_provider(plugin, client, cadence=3)
+
+    provider.queue_prefetch("uno", session_id="s1")
+    provider.shutdown()
+    provider.prefetch("uno", session_id="s1")
+
+    provider.queue_prefetch("dos", session_id="s1")  # dentro de la ventana
+    provider.shutdown()
+    text = provider.prefetch("dos", session_id="s1")
+
+    assert client.service_calls == 1, "one GET /api/services per prefetch window"
+    assert text == ""
+
+
+def test_services_inventory_absent_when_not_configured(plugin):
+    assert plugin._services_line({"configured": False, "data": []}) == ""
+    assert plugin._services_line({}) == ""
+
+
+def test_services_connect_returns_redirect_url(plugin):
+    ctx = FakeCtx()
+
+    class Client:
+        def connect_service(self, toolkit):
+            return {"data": {"toolkit": toolkit,
+                             "redirect_url": "https://dran.test/connect/abc",
+                             "expires_in": 600}}
+
+    with mock.patch.object(plugin, "_client_for", return_value=Client()):
+        out = json.loads(plugin._handle_plugin_tool(
+            "dran_services_connect", {"toolkit": "gmail"}, ctx=ctx))
+
+    assert out["redirect_url"] == "https://dran.test/connect/abc"
+    assert out["toolkit"] == "gmail"
+    assert out["expires_in"] == 600
+
+
+def test_services_run_surfaces_not_connected_409(plugin):
+    """Fail-closed: el 409 not_connected devuelve el connect_url, no un falso éxito."""
+    ctx = FakeCtx()
+
+    class NotConnected:
+        def execute_service(self, toolkit, tool_slug, arguments):
+            raise urllib.error.HTTPError(
+                "http://dran.test/api/services/execute", 409, "Conflict", {},
+                io.BytesIO(json.dumps({
+                    "errors": {"detail": "gmail is not connected",
+                               "code": "not_connected"},
+                    "toolkit": "gmail",
+                    "connect_url": "https://dran.test/connect/xyz",
+                }).encode()))
+
+    with mock.patch.object(plugin, "_client_for", return_value=NotConnected()):
+        out = json.loads(plugin._handle_plugin_tool(
+            "dran_services_run",
+            {"toolkit": "gmail", "tool_slug": "GMAIL_SEND_EMAIL",
+             "arguments": {"to": "a@b.c"}}, ctx=ctx))
+
+    assert out["status"] == 409
+    assert out["code"] == "not_connected"
+    assert out["connect_url"] == "https://dran.test/connect/xyz"
+    assert "error" in out
+
+
+def test_services_wait_returns_when_active(plugin):
+    ctx = FakeCtx()
+
+    class Client:
+        def list_services(self):
+            return {"configured": True, "data": [
+                {"toolkit": "gmail", "connected": True, "status": "ACTIVE"}]}
+
+    with mock.patch.object(plugin, "_client_for", return_value=Client()):
+        out = json.loads(plugin._handle_plugin_tool(
+            "dran_services_wait", {"toolkit": "gmail"}, ctx=ctx))
+
+    assert out["active"] is True
+    assert out["status"] == "ACTIVE"
+
+
+def test_services_wait_times_out_with_expiry_hint(plugin):
+    """No llega a ACTIVE: dice que el link expira y hay que reemitir uno nuevo."""
+    ctx = FakeCtx()
+
+    class Client:
+        def list_services(self):
+            return {"configured": True, "data": [
+                {"toolkit": "gmail", "connected": False, "status": "INITIATED"}]}
+
+    with mock.patch.object(plugin, "_client_for", return_value=Client()):
+        out = json.loads(plugin._handle_plugin_tool(
+            "dran_services_wait", {"toolkit": "gmail", "timeout_seconds": 0},
+            ctx=ctx))
+
+    assert out["active"] is False
+    assert "10 minutes" in out["hint"]
+    assert "expires" in out["hint"]
+
+
+def test_services_tools_hit_documented_routes(plugin):
+    ctx = FakeCtx(config={"api_key": "k", "base_url": "http://dran.test",
+                          "workspace": "personal"})
+    import os
+    with mock.patch.object(plugin, "_load_dran_config", lambda _home: {}), \
+            mock.patch.object(os.path, "expanduser", lambda p: p):
+        plugin.register(ctx)
+        handlers = {t["name"]: t["handler"] for t in ctx.tools}
+        routes = []
+
+        def fake_request(m, path, payload=None, timeout=None):
+            routes.append((m, path, payload))
+            if path.startswith("/api/services/search"):
+                return {"data": {"query": "x", "primary_tool_slugs": []}}
+            if path.startswith("/api/services/gmail/tools"):
+                return {"data": {"toolkit": "gmail", "tools": []}}
+            if path == "/api/services":
+                return {"configured": True, "data": []}
+            if path == "/api/services/execute":
+                return {"data": {"toolkit": "gmail", "tool_slug": "X", "result": {}}}
+            return {"data": {"toolkit": "gmail",
+                             "redirect_url": "https://d.test/c", "expires_in": 600}}
+
+        with mock.patch.object(plugin, "_client_for") as client_for:
+            client = plugin._DranClient("http://dran.test", "k", "personal")
+            client.request = fake_request  # type: ignore[assignment]
+            client_for.return_value = client
+
+            handlers["dran_services"]({}, ctx=ctx)
+            handlers["dran_services_connect"]({"toolkit": "gmail"}, ctx=ctx)
+            handlers["dran_services_tools"](
+                {"toolkit": "gmail", "slug": "GMAIL_SEND_EMAIL"}, ctx=ctx)
+            handlers["dran_services_tools"]({"use_case": "send an email"}, ctx=ctx)
+            handlers["dran_services_run"](
+                {"toolkit": "gmail", "tool_slug": "GMAIL_SEND_EMAIL",
+                 "arguments": {"to": "a@b.c"}}, ctx=ctx)
+            handlers["dran_services_wait"](
+                {"toolkit": "gmail", "timeout_seconds": 0}, ctx=ctx)
+
+    paths = [p for _, p, _ in routes]
+    assert ("GET", "/api/services") in [(m, p) for m, p, _ in routes]
+    assert ("POST", "/api/services/gmail/connect") in [(m, p) for m, p, _ in routes]
+    assert any(p.startswith("/api/services/gmail/tools?slug=") for p in paths), paths
+    assert any(p.startswith("/api/services/search?q=") for p in paths), paths
+    assert ("POST", "/api/services/execute") in [(m, p) for m, p, _ in routes]
+
+    # La identidad es la credencial: nunca viaja un user_id/session_id.
+    execute = [pl for _, p, pl in routes if p == "/api/services/execute"][0]
+    assert "user_id" not in execute and "session_id" not in execute
+    assert execute["toolkit"] == "gmail"
+    assert execute["arguments"] == {"to": "a@b.c"}

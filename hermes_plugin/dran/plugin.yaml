@@ -77,6 +77,16 @@ provides_tools:
   - dran_set_plan_checklist
   - dran_toggle_checklist
   - dran_delete_plan
+  # Servicios conectados (cliente delgado del REST /api/services): listar el
+  # estado, emitir el link de conexión, DESCUBRIR el catálogo, ejecutar una
+  # tool y esperar a ACTIVE. El catálogo viaja como DATO — una tool de
+  # descubrimiento (`dran_services_tools`), NUNCA una tool por toolkit; por eso
+  # no hay `dran_gmail_*` ni equivalentes.
+  - dran_services
+  - dran_services_connect
+  - dran_services_tools
+  - dran_services_run
+  - dran_services_wait
 # Credential for BOTH surfaces — one token, one attribution: the account token
 # (Dran → Settings → Account → API token). The runtime reads it from the
 # profile .env; the panel's `api_key` field resolves to it.

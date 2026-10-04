@@ -217,8 +217,8 @@ mail, calendar, issues and pull requests, chat messages, files.
 
 ## What an agent can do
 
-The agent surface is the Hermes plugin (`dran_*`): 37 tools for knowledge and
-work, plus 4 memory tools. Every one is a thin client over the REST API
+The agent surface is the Hermes plugin (`dran_*`): 42 tools for knowledge, work
+and services, plus 4 memory tools. Every one is a thin client over the REST API
 ([docs/api.md](api.md)), so any agent with an API key has the same reach.
 
 The rules the tools obey:

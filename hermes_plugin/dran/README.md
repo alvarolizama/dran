@@ -215,6 +215,26 @@ El plan es una **entidad** (tabla `plans`, dueño + visibilidad), no un tipo de
 página: sus pasos son el mismo checklist jsonb `[%{text, done}]` de la task, y
 `plan` no se declara como tipo de página custom (el vocabulario es uno solo).
 
+### Servicios (las apps del usuario)
+
+Cada persona conecta SUS apps (Gmail, calendario, GitHub, Slack…) y su agente las
+usa. Cinco tools fijas, thin clients de `/api/services` — **el catálogo viaja como
+DATO**, así que el número de tools no crece con los toolkits conectados (no hay
+`dran_gmail_*` ni equivalentes).
+
+| Tool | Ruta que golpea |
+|---|---|
+| `dran_services` | `GET /api/services` — qué expone la instancia y qué tiene conectado ESTE lector, con el estado del ciclo de vida y la identidad del proveedor |
+| `dran_services_connect` | `POST /api/services/:toolkit/connect` — el link hospedado que el agente le pega al usuario (vive 10 minutos: vencido se pide uno NUEVO) |
+| `dran_services_tools` | `GET /api/services/:toolkit/tools[?slug=]` o `GET /api/services/search?q=` — descubrir por toolkit, por tool concreta o por caso de uso |
+| `dran_services_run` | `POST /api/services/execute` — ejecutar; sin conexión `ACTIVE` el 409 llega con su `connect_url` (fail-closed, nunca un éxito falso) |
+| `dran_services_wait` | `GET /api/services` en bucle corto (tope 30 s) hasta `ACTIVE`, para no ejecutar antes de tiempo |
+
+El inventario entra en el prefetch (misma pasada y misma cadencia que el recall:
+a lo sumo un `GET /api/services` por ventana) y la línea estática del provider
+nombra los disparadores, así que el agente sabe que la capacidad existe sin
+pedir la lista.
+
 Cada tool escribe por `_DranClient`, así que **todo write lleva
 `X-Hermes-Agent`** con el nombre del perfil. El handler recibe `(args, **kw)`
 — Hermes no pasa el nombre de la tool — así que `register()` ata el nombre

@@ -350,7 +350,7 @@ DATABASE_URL=ecto://nope:nope@127.0.0.1:1/nope SECRET_KEY_BASE=test \
 ## Architecture
 
 ```
-┌──────────────┐   plugin tools (37)   ┌──────────────────┐
+┌──────────────┐   plugin tools (42)   ┌──────────────────┐
 │ Hermes agent │ ────────────────────► │                  │
 └──────────────┘                       │   Dran server    │
 ┌──────────────┐   REST /api/*         │   (Phoenix)      │
