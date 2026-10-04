@@ -300,4 +300,124 @@ defmodule DranWeb.MemoryLiveTest do
     # Still on semantic: the active classes survive the bogus event.
     assert html =~ ~s(bg-base-100 shadow-sm font-medium)
   end
+
+  describe "el destino del hecho (W2)" do
+    # Memory era la única superficie con destino y sin píldora, sin control y
+    # sin diálogo de grants: el vocabulario y la puerta son los MISMOS que en
+    # pages, goals y plans.
+    setup %{context: context} do
+      owner = create_user!("mem-owner")
+      guest = create_user!("mem-guest")
+
+      {:ok, memory, :created} =
+        Memory.add(%{
+          "workspace_id" => context.id,
+          "content" => "Hecho propio del dueño",
+          "created_by" => "agent-owner",
+          "owner_user_id" => owner.id
+        })
+
+      {:ok, owner: owner, guest: guest, memory: memory, context: context}
+    end
+
+    test "un hecho privado no anuncia su nivel y uno público usa la píldora compartida", ctx do
+      {:ok, view, _html} = live(login(ctx.conn, ctx.owner), ~p"/memory")
+
+      # `private` es el default: la píldora NO se dibuja (nada que anunciar).
+      refute has_element?(view, "#memory-visibility-#{ctx.memory.id}")
+
+      {:ok, public_memory} = Memory.set_scope(ctx.memory, "public")
+      {:ok, view, _html} = live(login(ctx.conn, ctx.owner), ~p"/memory")
+
+      assert has_element?(
+               view,
+               "#memory-visibility-#{public_memory.id}",
+               t("Public")
+             )
+
+      # El valor CRUDO de la columna no se imprime en la tarjeta.
+      card_html = view |> element("#memory-#{public_memory.id}") |> render()
+      refute card_html =~ ~r/>\s*public\s*</
+    end
+
+    test "el dueño mueve el destino por la puerta del contexto y persiste", ctx do
+      {:ok, view, _html} = live(login(ctx.conn, ctx.owner), ~p"/memory")
+
+      view
+      |> form("#memory-scope-form-#{ctx.memory.id}",
+        memory_scope: %{visibility: "shared"}
+      )
+      |> render_change()
+
+      # La fila cambió por `Memory.set_scope/2` (no por un Repo.update de la vista).
+      assert Memory.get_memory!(ctx.memory.id).visibility == "shared"
+      assert has_element?(view, "#memory-share-#{ctx.memory.id}")
+      assert has_element?(view, "#memory-visibility-#{ctx.memory.id}", t("Shared"))
+      refute Memory.get_memory!(ctx.memory.id).visibility == "private"
+    end
+
+    test "un lector que no es el dueño no ve el control ni puede moverlo", ctx do
+      # Un hecho público: el invitado lo LEE, pero no lo gobierna.
+      {:ok, memory} = Memory.set_scope(ctx.memory, "public")
+
+      {:ok, view, _html} = live(login(ctx.conn, ctx.guest), ~p"/memory")
+
+      assert has_element?(view, "#memory-#{memory.id}")
+      refute has_element?(view, "#memory-scope-form-#{memory.id}")
+      refute has_element?(view, "#memory-share-#{memory.id}")
+
+      # Un evento forjado tampoco: el dueño es el único que mueve el destino.
+      render_change(view, "set_scope", %{
+        "memory_id" => memory.id,
+        "memory_scope" => %{"visibility" => "private"}
+      })
+
+      assert Memory.get_memory!(memory.id).visibility == "public"
+    end
+
+    test "compartir con el diálogo es real: el invitado LEE el hecho", ctx do
+      {:ok, view, _html} = live(login(ctx.conn, ctx.owner), ~p"/memory")
+
+      # Se abre el MISMO diálogo, con `resource_type="memory"`.
+      view |> element("#memory-share-#{ctx.memory.id}") |> render_click()
+      assert has_element?(view, "#memory-share-dialog")
+
+      view
+      |> form("#share-user-form", user_id: ctx.guest.id)
+      |> render_submit()
+
+      # El grant marcó `shared` en la misma transacción (no es un no-op)…
+      updated = Memory.get_memory!(ctx.memory.id)
+      assert updated.visibility == "shared"
+
+      # …y el invitado lo lee, en el contexto y en la superficie.
+      ids =
+        Memory.list_memories(ctx.context.id, scope: {:reader, ctx.guest.id})
+        |> Enum.map(& &1.id)
+
+      assert ctx.memory.id in ids
+
+      {:ok, guest_view, _html} = live(login(ctx.conn, ctx.guest), ~p"/memory")
+      assert has_element?(guest_view, "#memory-#{ctx.memory.id}")
+    end
+  end
+
+  defp create_user!(unique) do
+    {:ok, user} =
+      %Dran.Accounts.User{}
+      |> Dran.Accounts.User.changeset(%{
+        email: "mem-#{unique}@dran.test",
+        api_token: "mem-#{unique}"
+      })
+      |> Repo.insert()
+
+    user
+  end
+
+  defp login(conn, %Dran.Accounts.User{} = user) do
+    conn
+    |> Plug.Test.init_test_session(%{})
+    |> Plug.Conn.put_session(:user, user.email)
+    |> Plug.Conn.put_session(:workspace_slug, "personal")
+  end
 end

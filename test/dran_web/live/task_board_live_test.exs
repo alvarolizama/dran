@@ -469,4 +469,65 @@ defmodule DranWeb.TaskBoardLiveTest do
       refute has_element?(view, "#task-edit-modal")
     end
   end
+
+  describe "el destino del board (W3)" do
+    # Una task NO tiene destino propio: hereda el de su goal. El board lo pinta
+    # marcado como heredado, y sólo de los goals que el lector ya puede leer.
+
+    test "la tarjeta pinta el destino de su goal, marcado como heredado" do
+      author = editor!("vis-author")
+      goal = goal!(author, %{"title" => "Meta pública", "visibility" => "public"})
+      {:ok, task} = Tasks.create_task(%{"goal_id" => goal.id, "title" => "Tarea visible"})
+
+      {:ok, view, _html} = live(login(build_conn(), author), ~p"/tasks")
+
+      assert has_element?(view, "#task-visibility-#{task.id}", t("Public"))
+      assert has_element?(view, "#task-visibility-#{task.id}", t("inherited"))
+      assert has_element?(view, "#task-visibility-#{task.id}[data-inherited='true']")
+    end
+
+    test "un goal privado no anuncia destino en la tarjeta" do
+      author = editor!("vis-private")
+      goal = goal!(author, %{"title" => "Meta privada"})
+      {:ok, task} = Tasks.create_task(%{"goal_id" => goal.id, "title" => "Tarea"})
+
+      {:ok, view, _html} = live(login(build_conn(), author), ~p"/tasks")
+
+      assert has_element?(view, "#task-card-#{task.id}")
+      refute has_element?(view, "#task-visibility-#{task.id}")
+    end
+
+    test "una task cuyo goal NO es legible no entra al board ni a la píldora" do
+      author = editor!("vis-mine")
+      stranger = editor!("vis-stranger")
+
+      mine = goal!(author, %{"title" => "Mía"})
+      {:ok, mine_task} = Tasks.create_task(%{"goal_id" => mine.id, "title" => "Mía tarea"})
+
+      theirs = goal!(stranger, %{"title" => "Ajena", "visibility" => "public"})
+      {:ok, their_task} = Tasks.create_task(%{"goal_id" => theirs.id, "title" => "Ajena tarea"})
+
+      {:ok, view, _html} = live(login(build_conn(), author), ~p"/tasks")
+
+      # El goal público ajeno SÍ se lee (y su task también): la píldora es la
+      # del goal, no una columna inventada en la task.
+      assert has_element?(view, "#task-card-#{mine_task.id}")
+      assert has_element?(view, "#task-card-#{their_task.id}")
+      assert has_element?(view, "#task-visibility-#{their_task.id}", t("Public"))
+    end
+
+    test "el tablero de un goal muestra su propio destino, sin marca de heredado" do
+      author = editor!("vis-board")
+      goal = goal!(author, %{"title" => "Meta compartida", "visibility" => "public"})
+
+      {:ok, view, _html} = live(login(build_conn(), author), ~p"/tasks/#{goal.id}")
+
+      assert has_element?(view, "#board-goal-visibility", t("Public"))
+      refute has_element?(view, "#board-goal-visibility[data-inherited='true']")
+    end
+  end
+
+  # Gettext wrapper. English is the app default locale, so the msgid is what
+  # the app renders unless a test pins another locale.
+  defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 end

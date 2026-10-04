@@ -37,6 +37,7 @@ defmodule DranWeb.PlanLive do
       resource_filters: 1,
       resource_scope_field: 1,
       resource_visibility_pill: 1,
+      related_panel: 1,
       form_actions: 1,
       markdown_body_field: 1,
       order_options: 0,
@@ -248,6 +249,16 @@ defmodule DranWeb.PlanLive do
               </div>
             </form>
           </div>
+
+          <%!-- Páginas relacionadas: relaciones reales primero y, si no hay
+          ninguna, el fallback semántico — con la FUENTE declarada y el alta
+          EXPLÍCITA (el picker). --%>
+          <.related_panel
+            id="plan-related"
+            related={@related}
+            candidates={@related_candidates}
+            workspace={@context}
+          />
         </div>
       </div>
 
@@ -400,6 +411,10 @@ defmodule DranWeb.PlanLive do
        editing: false,
        plan_count: 0,
        filters: default_filters(),
+       # Páginas relacionadas: la fuente y sus opciones. Sólo las llena el
+       # detalle (`assign_related/2`).
+       related: %{source: :none, pages: []},
+       related_candidates: [],
        workspace_id: context && context.id
      )}
   end
@@ -472,6 +487,7 @@ defmodule DranWeb.PlanLive do
                   else: socket.assigns[:form]
                 )
             )
+            |> assign_related(plan)
         end
     end
   end
@@ -576,6 +592,33 @@ defmodule DranWeb.PlanLive do
 
   def handle_event("noop", _params, socket), do: {:noreply, socket}
 
+  # El alta de una relación desde el sidebar: EXPLÍCITA (el picker), atribuida a
+  # quien la crea y sólo sobre una página que el lector puede leer.
+  def handle_event(
+        "link_related",
+        %{"page_id" => page_id},
+        %{assigns: %{plan: %Plan{} = plan}} = socket
+      )
+      when page_id != "" do
+    scope = Dran.ContentVisibility.personal_scope(socket.assigns[:user])
+
+    case Dran.Related.link("plan", plan, page_id, socket.assigns[:user],
+           scope: scope,
+           workspace_id: workspace_id(socket)
+         ) do
+      {:ok, _relation} ->
+        {:noreply,
+         socket
+         |> assign_related(plan)
+         |> put_flash(:info, gettext("Page linked."))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not link that page."))}
+    end
+  end
+
+  def handle_event("link_related", _params, socket), do: {:noreply, socket}
+
   def handle_event("share_with_user", %{"user_id" => user_id}, %{assigns: %{plan: plan}} = socket)
       when user_id != "" and not is_nil(plan) do
     case Dran.Sharing.grant(plan, :plan, {:user, String.to_integer(user_id)}) do
@@ -623,6 +666,19 @@ defmodule DranWeb.PlanLive do
   # ──────────────────────────────────────────────────────────────────────────
   # Helpers
   # ──────────────────────────────────────────────────────────────────────────
+
+  # Las páginas relacionadas del plan: las relaciones REALES del grafo primero
+  # y, SÓLO si no hay ninguna, el fallback semántico (`Dran.Related`). Lee con
+  # la puerta PERSONAL (un owner/admin no ensancha acá) y el alta es el picker.
+  defp assign_related(socket, plan) do
+    scope = Dran.ContentVisibility.personal_scope(socket.assigns[:user])
+    opts = [scope: scope, workspace_id: workspace_id(socket)]
+
+    assign(socket,
+      related: Dran.Related.for_entity("plan", plan, opts),
+      related_candidates: Dran.Related.linkable_pages("plan", plan, opts)
+    )
+  end
 
   defp new_plan_form do
     to_form(Plans.change_plan(%Plan{}, %{"status" => "draft", "visibility" => "private"}))

@@ -41,14 +41,16 @@ defmodule Dran.GraphCache do
   @doc """
   Get the cached global graph JSON for a context, building if missing.
   Returns `%{json: binary(), cached: boolean()}`.
-  Reads from ETS directly; on miss, calls the GenServer to build + cache.
+  Reads from ETS directly; on miss, builds in the caller's process.
 
-  The cache key includes the reader's scope: the graph is now visibility-
-  filtered, so one payload per workspace would leak the first reader's view
-  to everyone else.
+  The cache key includes BOTH scopes: the reader's page scope and the PERSONAL
+  scope of the work entities. One payload per workspace would leak the first
+  reader's view to everyone else, and the entity scope is not derivable from
+  the page scope (an owner/admin reads pages as `:all` but goals/plans as
+  `{:reader, id}`).
   """
-  def get(workspace_id, scope \\ :all) do
-    key = {workspace_id, scope}
+  def get(workspace_id, scope \\ :all, entity_scope \\ :all) do
+    key = {workspace_id, scope, entity_scope}
 
     case :ets.lookup(@graph_table, key) do
       [{^key, json}] ->
@@ -59,7 +61,7 @@ defmodule Dran.GraphCache do
         # run under the caller's transaction — a global cache process cannot
         # see sandboxed data (tests) and would poison the cache with an empty
         # build. The GenServer stays as the ETS owner/serializer only.
-        json = build_graph_json(workspace_id, scope)
+        json = build_graph_json(workspace_id, scope, entity_scope)
         :ets.insert(@graph_table, {key, json})
         %{json: json, cached: false}
     end
@@ -101,17 +103,31 @@ defmodule Dran.GraphCache do
   @doc """
   Invalidate the global graph cache for a context.
 
-  Entries are keyed by `{workspace_id, scope}`, so a write invalidates every
-  scope variant of the workspace (a match_delete on the workspace id).
+  Entries are keyed by `{workspace_id, scope, entity_scope}`, so a write
+  invalidates every scope variant of the workspace (a match_delete on the
+  workspace id).
   """
   def invalidate_context(workspace_id) do
-    :ets.match_delete(@graph_table, {{workspace_id, :_}, :_})
+    :ets.match_delete(@graph_table, {{workspace_id, :_, :_}, :_})
+    :ok
+  end
+
+  @doc """
+  Invalidate EVERY cached graph payload, keeping the page cache.
+
+  Una escritura de goal/plan no puede invalidar por workspace: la entidad no
+  tiene columna `workspace_id` (vive en su propia tabla). Vaciar sólo la tabla
+  del grafo es lo correcto — el grafo se reconstruye en el próximo request y la
+  caché de páginas por slug sigue válida.
+  """
+  def invalidate_all do
+    :ets.delete_all_objects(@graph_table)
     :ok
   end
 
   @doc "Invalidate the cached graph for a specific page."
   def invalidate_page(_page_id, workspace_id) do
-    :ets.match_delete(@graph_table, {{workspace_id, :_}, :_})
+    :ets.match_delete(@graph_table, {{workspace_id, :_, :_}, :_})
     :ok
   end
 
@@ -136,7 +152,7 @@ defmodule Dran.GraphCache do
 
   @impl true
   def handle_call({:build_graph, workspace_id, scope}, _from, state) do
-    key = {workspace_id, scope}
+    key = {workspace_id, scope, :all}
 
     # Double-check after GenServer call (another process may have built it)
     case :ets.lookup(@graph_table, key) do
@@ -144,7 +160,7 @@ defmodule Dran.GraphCache do
         {:reply, %{json: json, cached: true}, state}
 
       [] ->
-        json = build_graph_json(workspace_id, scope)
+        json = build_graph_json(workspace_id, scope, :all)
         :ets.insert(@graph_table, {key, json})
         {:reply, %{json: json, cached: false}, state}
     end
@@ -173,13 +189,16 @@ defmodule Dran.GraphCache do
 
   # ── Payload building ───────────────────────────────────────────────────
 
-  defp build_graph_json(workspace_id, scope) do
+  defp build_graph_json(workspace_id, scope, entity_scope) do
     %{nodes: raw_nodes, edges: raw_edges, total_nodes: total_nodes, total_edges: total_edges} =
       Knowledge.graph_data(workspace_id,
         exclude_types: @hidden_by_default,
         max_nodes: @max_graph_nodes,
         scope_pages: scope,
-        scope_memory: scope
+        scope_memory: scope,
+        # Las entidades de trabajo (goals/plans) leen con la puerta PERSONAL:
+        # un goal ajeno privado no es nodo — y sin nodo, su arista no se pinta.
+        scope_entities: entity_scope
       )
 
     nodes =
@@ -202,7 +221,8 @@ defmodule Dran.GraphCache do
         }
       end)
 
-    type_counts = Knowledge.graph_type_counts(workspace_id, @hidden_by_default, scope)
+    type_counts =
+      Knowledge.graph_type_counts(workspace_id, @hidden_by_default, scope, entity_scope)
 
     Jason.encode!(%{
       nodes: nodes,

@@ -66,6 +66,40 @@ defmodule Dran.Goals do
   end
 
   @doc """
+  Conteo de goals legibles agrupado por estado — UNA query agregada.
+
+  Existe para el estado personal del home: un contador no trae filas para
+  contarlas en memoria, y los cinco números (un estado cada uno) salen de este
+  único `Repo` con `group_by`. El scope es el del lector (la puerta personal,
+  cuando la superficie es personal).
+
+  Opts: `:scope` (default `:all` para callers internos), `:archived`,
+  `:owner_user_id`.
+  """
+  def status_counts(opts \\ []) do
+    scope = Keyword.get(opts, :scope, :all)
+    archived = Keyword.get(opts, :archived, false)
+    owner_user_id = Keyword.get(opts, :owner_user_id)
+
+    query =
+      from(g in Goal,
+        where: g.archived == ^archived,
+        group_by: g.status,
+        select: {g.status, count(g.id)}
+      )
+
+    query =
+      if is_integer(owner_user_id),
+        do: where(query, [g], g.owner_user_id == ^owner_user_id),
+        else: query
+
+    query
+    |> Dran.ContentVisibility.filter(scope, :goal)
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
   Trae un goal por id con scope de lectura.
 
   Un goal fuera del scope del lector se lee como inexistente (sin fuga de
@@ -150,17 +184,22 @@ defmodule Dran.Goals do
       taken?: fn candidate -> slug_taken?(attrs, candidate) end
     )
     |> then(&(%Goal{} |> Goal.changeset(&1) |> Repo.insert()))
+    |> tap(fn _ -> Dran.GraphCache.invalidate_all() end)
   end
 
   @doc "Actualiza un goal (slug auto-administrado cuando cambia el título)."
   def update_goal(%Goal{} = goal, attrs) do
-    attrs
-    |> Dran.Slug.inject_update(goal,
-      field: "title",
-      fallback: "goal",
-      lookup: &get_goal_by_slug(&1, goal.owner_user_id)
+    goal
+    |> Goal.changeset(
+      attrs
+      |> Dran.Slug.inject_update(goal,
+        field: "title",
+        fallback: "goal",
+        lookup: &get_goal_by_slug(&1, goal.owner_user_id)
+      )
     )
-    |> then(&(goal |> Goal.changeset(&1) |> Repo.update()))
+    |> Repo.update()
+    |> tap(fn _ -> Dran.GraphCache.invalidate_all() end)
   end
 
   @doc """
@@ -171,14 +210,16 @@ defmodule Dran.Goals do
     task_ids =
       Repo.all(from t in Task, where: t.goal_id == ^goal.id, select: t.id)
 
-    {:ok, deleted} =
+    result =
+      {:ok, _deleted} =
       Repo.transaction(fn ->
         Dran.Relation.delete_edges("goal", goal.id)
         Enum.each(task_ids, &Dran.Relation.delete_edges("task", &1))
         Repo.delete!(goal)
       end)
 
-    {:ok, deleted}
+    Dran.GraphCache.invalidate_all()
+    result
   end
 
   # ──────────────────────────────────────────────────────────────────────────

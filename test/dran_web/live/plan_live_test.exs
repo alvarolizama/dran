@@ -15,7 +15,9 @@ defmodule DranWeb.PlanLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dran.{Accounts, Plans, Tasks}
+  alias Dran.{Accounts, Knowledge, Plans, Related, Tasks}
+
+  import Ecto.Query, only: [from: 2]
 
   setup do
     Dran.DataCase.ensure_workspace!()
@@ -513,6 +515,80 @@ defmodule DranWeb.PlanLiveTest do
   end
 
   # ── Helpers ───────────────────────────────────────────────────────────────
+
+  # El sidebar de un PLAN: la misma puerta que el de un goal, con su extremo.
+  describe "páginas relacionadas (W5)" do
+    setup do
+      original = Application.get_env(:dran, :inference)
+
+      Application.put_env(:dran, :inference,
+        base_url: nil,
+        api_key: nil,
+        embedding_model: nil,
+        timeout: 100,
+        schedule_async: false
+      )
+
+      on_exit(fn ->
+        if is_nil(original) do
+          Application.delete_env(:dran, :inference)
+        else
+          Application.put_env(:dran, :inference, original)
+        end
+      end)
+
+      :ok
+    end
+
+    test "lista la relación real del plan y declara su fuente", %{author: author, conn: conn} do
+      plan = plan!(author, %{"title" => "Con vecinos"})
+      page = page!(author, "Página del plan", "public")
+      {:ok, _} = Related.link("plan", plan, page.id, author, scope: {:reader, author.id})
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/plans/#{plan.id}")
+
+      assert has_element?(view, "#plan-related")
+      assert has_element?(view, "#plan-related-source", t("From the graph"))
+      assert has_element?(view, "#plan-related-page-#{page.id}", "Página del plan")
+    end
+
+    test "el picker del plan da de alta la relación, atribuida", %{author: author, conn: conn} do
+      plan = plan!(author, %{"title" => "Con picker"})
+      page = page!(author, "Página elegida", "public")
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/plans/#{plan.id}")
+
+      view
+      |> form("#plan-related-link-form", page_id: page.id)
+      |> render_submit()
+
+      relation =
+        Dran.Repo.one(
+          from r in Dran.Relation,
+            where: r.source_id == ^plan.id and r.source_type == "plan"
+        )
+
+      assert relation.target_id == page.id
+      assert relation.meta["created_by_user_id"] == author.id
+      assert has_element?(view, "#plan-related-source", t("From the graph"))
+    end
+  end
+
+  defp page!(owner, title, visibility) do
+    workspace = Dran.DataCase.ensure_workspace!()
+
+    {:ok, page} =
+      Knowledge.create_page(%{
+        workspace_id: workspace.id,
+        title: title,
+        body: "cuerpo de #{title}",
+        page_type: "note",
+        visibility: visibility,
+        owner_user_id: owner.id
+      })
+
+    page
+  end
 
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 

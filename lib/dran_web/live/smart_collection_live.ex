@@ -79,6 +79,11 @@ defmodule DranWeb.SmartCollectionLive do
                 <span :if={format_filters(collection) == []} class="text-xs text-base-content/40">{gettext(
                   "All pages"
                 )}</span>
+                <%!-- El destino de la colección, con la píldora COMPARTIDA. --%>
+                <.resource_visibility_pill
+                  visibility={collection.visibility}
+                  id={"collection-visibility-#{collection.id}"}
+                />
               </div>
             </div>
           </.link>
@@ -93,6 +98,13 @@ defmodule DranWeb.SmartCollectionLive do
               <h1 class="text-title">{@collection.name}</h1>
             </div>
             <p :if={@collection.summary} class="text-caption">{@collection.summary}</p>
+            <%!-- El destino de la colección en el detalle, con la MISMA píldora. --%>
+            <div class="mt-1.5">
+              <.resource_visibility_pill
+                visibility={@collection.visibility}
+                id="collection-visibility-badge"
+              />
+            </div>
           </div>
           <div class="flex gap-2">
             <.link navigate={~p"/collections"} class="btn btn-ghost btn-sm">

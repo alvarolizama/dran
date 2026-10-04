@@ -65,4 +65,34 @@ defmodule DranWeb.ReportLiveTest do
       assert {:error, {:live_redirect, %{to: "/activity"}}} = result
     end
   end
+
+  describe "el destino del reporte (W3)" do
+    test "la píldora traduce el destino y se oculta en privado", %{conn: conn, report: report} do
+      # El default (`private`) no se anuncia y el valor crudo nunca se imprime.
+      {:ok, view, _html} = live(conn, ~p"/reports/#{report.slug}")
+
+      refute has_element?(view, "#report-visibility-badge")
+      refute render(view) =~ ">private<"
+    end
+
+    test "un reporte público usa la píldora compartida", %{conn: conn} do
+      context = Knowledge.get_workspace_by_slug("personal")
+
+      {:ok, public_report} =
+        Reports.create_report(%{
+          workspace_id: context.id,
+          title: "Public job report",
+          slug: "public-job-report",
+          body: "Shared with the instance.",
+          report_type: "log",
+          visibility: "public"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/reports/#{public_report.slug}")
+
+      assert has_element?(view, "#report-visibility-badge", t("Public"))
+      refute has_element?(view, "#report-visibility-badge[data-inherited='true']")
+      refute render(view) =~ ">public<"
+    end
+  end
 end

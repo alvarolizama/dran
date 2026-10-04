@@ -143,8 +143,8 @@ defmodule Dran.PageRegistry do
   end
 
   @doc """
-  Node color per page type (graph views), plus the non-page `"memory"`
-  pseudo-type. Map form — for lookups.
+  Node color per page type (graph views), plus the non-page `"memory"`,
+  `"goal"` and `"plan"` pseudo-types. Map form — for lookups.
   """
   def type_colors do
     Map.new(ordered_type_colors())
@@ -152,8 +152,12 @@ defmodule Dran.PageRegistry do
 
   @doc """
   Same colors as `type_colors/0` but as an ordered keyword list: registry
-  canonical order with `"memory"` last — graph legends use this so their
-  order matches the sidebar.
+  canonical order with the non-page types last — graph legends use this so
+  their order matches the sidebar.
+
+  Los pseudo-tipos no son tipos de página: `memory` es una tabla propia y
+  `goal`/`plan` son entidades con la suya. Pintan nodo igual, y su color vive
+  acá con los demás — nunca en una tabla de casos por superficie.
   """
   def ordered_type_colors do
     colors =
@@ -162,7 +166,7 @@ defmodule Dran.PageRegistry do
         {type, c}
       end
 
-    colors ++ [{"memory", "#A78BFA"}]
+    colors ++ [{"memory", "#A78BFA"}, {"goal", "#22C55E"}, {"plan", "#38BDF8"}]
   end
 
   @doc "Node color for a single type (or nil for unknown types)."

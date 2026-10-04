@@ -32,6 +32,7 @@ defmodule DranWeb.GoalLive do
       resource_filters: 1,
       resource_scope_field: 1,
       resource_visibility_pill: 1,
+      related_panel: 1,
       form_actions: 1,
       markdown_body_field: 1,
       order_options: 0,
@@ -327,6 +328,16 @@ defmodule DranWeb.GoalLive do
                 </div>
               </div>
             </div>
+
+            <%!-- Páginas relacionadas: relaciones reales primero y, si no hay
+            ninguna, el fallback semántico — con la FUENTE declarada y el alta
+            EXPLÍCITA (el picker). --%>
+            <.related_panel
+              id="goal-related"
+              related={@related}
+              candidates={@related_candidates}
+              workspace={@context}
+            />
           </div>
         <% end %>
       </div>
@@ -522,6 +533,10 @@ defmodule DranWeb.GoalLive do
        children: [],
        task_count: 0,
        task_groups: [],
+       # Páginas relacionadas: la fuente y sus opciones. Sólo las llena el
+       # detalle (`assign_related/2`).
+       related: %{source: :none, pages: []},
+       related_candidates: [],
        task_modal_open: false,
        editing_task: nil,
        task_edit_form: new_task_form(),
@@ -608,6 +623,7 @@ defmodule DranWeb.GoalLive do
               editing_task: nil,
               task_form: new_task_form()
             )
+            |> assign_related(goal)
             |> reload_tasks(scope)
         end
     end
@@ -831,6 +847,33 @@ defmodule DranWeb.GoalLive do
 
   def handle_event("noop", _params, socket), do: {:noreply, socket}
 
+  # El alta de una relación desde el sidebar: EXPLÍCITA (el picker), atribuida a
+  # quien la crea y sólo sobre una página que el lector puede leer.
+  def handle_event(
+        "link_related",
+        %{"page_id" => page_id},
+        %{assigns: %{goal: %Goal{} = goal}} = socket
+      )
+      when page_id != "" do
+    scope = Dran.ContentVisibility.personal_scope(socket.assigns[:user])
+
+    case Dran.Related.link("goal", goal, page_id, socket.assigns[:user],
+           scope: scope,
+           workspace_id: workspace_id(socket)
+         ) do
+      {:ok, _relation} ->
+        {:noreply,
+         socket
+         |> assign_related(goal)
+         |> put_flash(:info, gettext("Page linked."))}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, gettext("Could not link that page."))}
+    end
+  end
+
+  def handle_event("link_related", _params, socket), do: {:noreply, socket}
+
   def handle_event("share_with_user", %{"user_id" => user_id}, %{assigns: %{goal: goal}} = socket)
       when user_id != "" and not is_nil(goal) do
     case Sharing.grant(goal, :goal, {:user, String.to_integer(user_id)}) do
@@ -878,6 +921,19 @@ defmodule DranWeb.GoalLive do
   # ──────────────────────────────────────────────────────────────────────────
   # Helpers
   # ──────────────────────────────────────────────────────────────────────────
+
+  # Las páginas relacionadas del goal: las relaciones REALES del grafo primero
+  # y, SÓLO si no hay ninguna, el fallback semántico (`Dran.Related`). Lee con
+  # la puerta PERSONAL (un owner/admin no ensancha acá) y el alta es el picker.
+  defp assign_related(socket, goal) do
+    scope = Dran.ContentVisibility.personal_scope(socket.assigns[:user])
+    opts = [scope: scope, workspace_id: workspace_id(socket)]
+
+    assign(socket,
+      related: Dran.Related.for_entity("goal", goal, opts),
+      related_candidates: Dran.Related.linkable_pages("goal", goal, opts)
+    )
+  end
 
   defp new_goal_form do
     to_form(Goals.change_goal(%Goal{}, %{"status" => "active", "visibility" => "private"}))

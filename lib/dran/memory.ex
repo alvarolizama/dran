@@ -624,16 +624,25 @@ defmodule Dran.Memory do
   end
 
   # Scope filtering for the related-facts query, whose bindings are
-  # positional: [relation, memory]. The neighbour side is index 1.
+  # positional: [relation, memory]. El vecino se scopea con la MISMA política
+  # que el resto de la lectura (`Dran.ContentVisibility`), que es la única que
+  # decide quién lee qué.
+  #
+  # v2: el vocabulario v1 `{:own, id}` murió con el modelo por ítem, y estas
+  # cláusulas no cubrían `{:reader, id}` — un lector común (owner o admin
+  # incluidos, si su rol no es de instancia) reventaba al montar /memory apenas
+  # la página tuviera un hecho con vecinos semánticos. El juicio entra como
+  # SUBCONSULTA de ids visibles porque `filter/3` asume un solo binding: así la
+  # política sigue viviendo en un módulo y acá no se re-escribe el SQL.
   defp maybe_filter_memory_scope(query, nil, _pos), do: query
   defp maybe_filter_memory_scope(query, :all, _pos), do: query
 
-  defp maybe_filter_memory_scope(query, {:own, nil}, _pos) do
-    where(query, [_r, m], is_nil(m.owner_user_id))
-  end
+  defp maybe_filter_memory_scope(query, {:reader, _reader_id} = scope, _pos) do
+    visible_ids =
+      from(m in __MODULE__, select: m.id)
+      |> Dran.ContentVisibility.filter(scope, :memory)
 
-  defp maybe_filter_memory_scope(query, {:own, owner_id}, _pos) do
-    where(query, [_r, m], m.owner_user_id == ^owner_id)
+    where(query, [_r, m], m.id in subquery(visible_ids))
   end
 
   defp maybe_put_neighbor(acc, endpoint, batch_ids, neighbor_id, content) do
@@ -711,6 +720,30 @@ defmodule Dran.Memory do
     else
       {:error, _} -> {:error, :not_deleted}
     end
+  end
+
+  @doc """
+  Cambia el DESTINO (quién puede leer) de un hecho ya guardado.
+
+  Las tres alturas del control (`private | public | shared`) viajan a la puerta
+  ÚNICA que traduce la intención a la fila (`Dran.Sharing.apply_scope/3` con
+  `:memory`): la superficie no escribe la columna por su cuenta ni elige la
+  fila de `content_shares` — los grants de un hecho `shared` se agregan con el
+  diálogo de compartir (`Dran.Sharing.grant/3`), que marca `shared` en la misma
+  transacción.
+
+  Devuelve `{:ok, memory}` o `{:error, message}`; nunca degrada en silencio.
+  """
+  @spec set_scope(%__MODULE__{}, term()) :: {:ok, %__MODULE__{}} | {:error, term()}
+  def set_scope(%__MODULE__{} = memory, "shared") do
+    # El nivel `shared` del CONTROL no es el `scope` de la API (ese nombra el
+    # grupo y crea su share): se fija la visibilidad y los grants llegan por el
+    # diálogo de compartir.
+    Dran.Sharing.mark_shared(memory)
+  end
+
+  def set_scope(%__MODULE__{} = memory, scope) do
+    Dran.Sharing.apply_scope(memory, scope, :memory)
   end
 
   @doc """

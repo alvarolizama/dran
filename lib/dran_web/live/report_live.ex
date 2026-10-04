@@ -38,6 +38,12 @@ defmodule DranWeb.ReportLive do
                 >
                   {String.capitalize(@report.report_type)}
                 </span>
+                <%!-- El destino del reporte, con la píldora COMPARTIDA: nunca el
+                valor crudo de la columna, y nada cuando el nivel es `private`. --%>
+                <.resource_visibility_pill
+                  visibility={@report.visibility}
+                  id="report-visibility-badge"
+                />
               </div>
               <h1 class="text-title break-words">{@report.title}</h1>
             </div>

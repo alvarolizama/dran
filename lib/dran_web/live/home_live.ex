@@ -22,6 +22,11 @@ defmodule DranWeb.HomeLive do
   alias Dran.Knowledge
 
   alias Dran.Collections
+  alias Dran.Goals
+  alias Dran.Goals.Goal
+  alias Dran.Memory
+  alias Dran.Plans
+  alias Dran.Plans.Plan
   alias Dran.Workspace
 
   alias DranWeb.GraphHelpers
@@ -30,6 +35,10 @@ defmodule DranWeb.HomeLive do
   # Types hidden from the global 3D graph — same list the panel uses via
   # GraphCache. The wiki graph must match so both views render the same set.
   @graph_hidden_types Dran.PageTypes.hidden_from_graph()
+
+  # Cuántos planes activos muestra el estado del home — la lista es un vistazo
+  # acotado; el número del contador es el que cuenta.
+  @status_plan_limit 3
 
   # ── Mount ─────────────────────────────────────────────────────────────────
 
@@ -63,6 +72,8 @@ defmodule DranWeb.HomeLive do
        pinned_pages: [],
        alphabet: [],
        collection: nil,
+       # El estado personal del home: sólo lo llena `:workspace_home`.
+       status: nil,
        # Progressive graph (mirrors GraphLive panel)
        nodes: [],
        edges: [],
@@ -131,6 +142,7 @@ defmodule DranWeb.HomeLive do
           pinned_pages: pinned,
           type_index: type_index,
           alphabet: alphabet,
+          status: personal_status(socket, workspace),
           page_title: workspace.name,
           search_results: nil
         )
@@ -405,6 +417,7 @@ defmodule DranWeb.HomeLive do
               pinned_pages={@pinned_pages}
               type_index={@type_index}
               alphabet={@alphabet}
+              status={@status}
               workspace_role={@workspace_role}
               is_owner={@is_owner}
               active_nav={@active_nav}
@@ -548,6 +561,7 @@ defmodule DranWeb.HomeLive do
   attr :pinned_pages, :list, default: []
   attr :type_index, :list, default: []
   attr :alphabet, :list, default: []
+  attr :status, :map, default: nil
   attr :workspace_role, :string, default: nil
   attr :is_owner, :boolean, default: false
   attr :active_nav, :string, default: nil
@@ -558,6 +572,145 @@ defmodule DranWeb.HomeLive do
       <%!-- Context header --%>
       <div>
         <h1 class="text-display">{@workspace.name}</h1>
+      </div>
+
+      <%!-- Estado PERSONAL: cuenta sólo lo que ESTE lector puede leer. El scope
+      sale de `ContentVisibility.personal_scope/1`, así que un owner o un admin
+      ven exactamente lo mismo que cualquier otro lector — esta sección no
+      ensancha por rol. --%>
+      <div :if={@status} id="home-status">
+        <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+          <.icon name="hero-chart-bar" class="size-5 text-primary/70" />
+          {gettext("Your status")}
+        </h2>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <%!-- Goals: el total y los estados con contenido --%>
+          <div id="home-status-goals" class="card bg-base-100 border border-base-300">
+            <div class="card-body p-5 gap-3">
+              <div class="flex items-center justify-between gap-2">
+                <.link
+                  navigate={~p"/goals"}
+                  class="flex items-center gap-2 font-medium hover:text-primary transition-colors"
+                >
+                  <.icon name="hero-flag" class="size-4 text-green-600" />
+                  {gettext("Goals")}
+                </.link>
+                <span id="home-status-goals-total" class="text-2xl font-semibold tabular-nums">
+                  {@status.goals_total}
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                <.link
+                  :for={{status, count} <- @status.goals}
+                  id={"home-status-goals-#{status}"}
+                  navigate={~p"/goals?#{%{status: status}}"}
+                  class={[
+                    "text-[11px] font-medium px-2 py-0.5 rounded-full hover:opacity-80 transition-opacity",
+                    status_class(status)
+                  ]}
+                >
+                  {status_label(status)} · {count}
+                </.link>
+              </div>
+              <p :if={@status.goals == []} class="text-xs text-base-content/50">
+                {gettext("No goals yet")}
+              </p>
+            </div>
+          </div>
+
+          <%!-- Plans: el total, los estados con contenido y los activos con su
+          progreso (derivado del checklist, nunca guardado). --%>
+          <div id="home-status-plans" class="card bg-base-100 border border-base-300">
+            <div class="card-body p-5 gap-3">
+              <div class="flex items-center justify-between gap-2">
+                <.link
+                  navigate={~p"/plans"}
+                  class="flex items-center gap-2 font-medium hover:text-primary transition-colors"
+                >
+                  <.icon name="hero-map" class="size-4 text-primary/70" />
+                  {gettext("Plans")}
+                </.link>
+                <span id="home-status-plans-total" class="text-2xl font-semibold tabular-nums">
+                  {@status.plans_total}
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                <.link
+                  :for={{status, count} <- @status.plans}
+                  id={"home-status-plans-#{status}"}
+                  navigate={~p"/plans?#{%{status: status}}"}
+                  class={[
+                    "text-[11px] font-medium px-2 py-0.5 rounded-full hover:opacity-80 transition-opacity",
+                    status_class(status)
+                  ]}
+                >
+                  {status_label(status)} · {count}
+                </.link>
+              </div>
+              <div :if={@status.active_plans != []} class="space-y-2 pt-0.5">
+                <div
+                  :for={plan <- @status.active_plans}
+                  id={"home-status-plan-#{plan.id}"}
+                  class="space-y-1"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <.link
+                      navigate={~p"/plans/#{plan.id}"}
+                      class="text-sm truncate hover:text-primary transition-colors"
+                    >
+                      {plan.title}
+                    </.link>
+                    <span class="text-[11px] text-base-content/50 tabular-nums shrink-0">
+                      {plan.progress.done}/{plan.progress.total}
+                    </span>
+                  </div>
+                  <div class="h-1.5 rounded-full bg-base-200 overflow-hidden">
+                    <div class="h-full bg-primary/70" style={"width: #{plan.progress.percent}%"} />
+                  </div>
+                </div>
+              </div>
+              <p :if={@status.active_plans == []} class="text-xs text-base-content/50">
+                {gettext("No active plans")}
+              </p>
+            </div>
+          </div>
+
+          <%!-- Memory --%>
+          <div id="home-status-memory" class="card bg-base-100 border border-base-300">
+            <div class="card-body p-5 gap-1">
+              <.link
+                navigate={~p"/memory"}
+                class="flex items-center gap-2 font-medium hover:text-primary transition-colors"
+              >
+                <.icon name="hero-sparkles" class="size-4 text-amber-500" />
+                {gettext("Memory")}
+              </.link>
+              <span id="home-status-memory-total" class="text-2xl font-semibold tabular-nums">
+                {@status.memory}
+              </span>
+              <p class="text-xs text-base-content/50">{gettext("facts you can read")}</p>
+            </div>
+          </div>
+
+          <%!-- Pages: el contador personal; el índice por tipo ya vive más abajo
+          en esta misma página (este número no lo duplica, lo scopea). --%>
+          <div id="home-status-pages" class="card bg-base-100 border border-base-300">
+            <div class="card-body p-5 gap-1">
+              <a
+                href="#home-index"
+                class="flex items-center gap-2 font-medium hover:text-primary transition-colors"
+              >
+                <.icon name="hero-document-text" class="size-4 text-primary/70" />
+                {gettext("Pages")}
+              </a>
+              <span id="home-status-pages-total" class="text-2xl font-semibold tabular-nums">
+                {@status.pages}
+              </span>
+              <p class="text-xs text-base-content/50">{gettext("pages you can read")}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <%!-- Pinned pages --%>
@@ -610,7 +763,7 @@ defmodule DranWeb.HomeLive do
       </div>
 
       <%!-- Type cards (Notes, Concepts, Entities, References) + A-Z index --%>
-      <div>
+      <div id="home-index">
         <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
           <.icon name="hero-square-3-stack-3d" class="size-5 text-primary/70" />
           {gettext("Index")}
@@ -1102,15 +1255,25 @@ defmodule DranWeb.HomeLive do
   def handle_event("node_click", %{"slug" => slug} = params, socket) do
     workspace = socket.assigns[:workspace]
 
-    if workspace do
-      # Graph nodes carry the singular page_type ("note"); routes are
-      # workspace-scoped with the type's own path segment. A custom type
-      # declares its `path`, so resolve through the workspace (the server
-      # hands the hook a type_paths map for the same reason).
-      type_path = Workspace.page_type_path(workspace, params["type"] || "note")
-      {:noreply, push_navigate(socket, to: ~p"/#{type_path}/#{slug}")}
-    else
-      {:noreply, socket}
+    cond do
+      is_nil(workspace) ->
+        {:noreply, socket}
+
+      # Las entidades de trabajo no son páginas: su ruta canónica es la de su
+      # superficie (`/goals/:id`, `/plans/:id`) y el nodo lleva el id como slug.
+      params["type"] == "goal" ->
+        {:noreply, push_navigate(socket, to: ~p"/goals/#{slug}")}
+
+      params["type"] == "plan" ->
+        {:noreply, push_navigate(socket, to: ~p"/plans/#{slug}")}
+
+      true ->
+        # Graph nodes carry the singular page_type ("note"); routes are
+        # workspace-scoped with the type's own path segment. A custom type
+        # declares its `path`, so resolve through the workspace (the server
+        # hands the hook a type_paths map for the same reason).
+        type_path = Workspace.page_type_path(workspace, params["type"] || "note")
+        {:noreply, push_navigate(socket, to: ~p"/#{type_path}/#{slug}")}
     end
   end
 
@@ -1350,6 +1513,56 @@ defmodule DranWeb.HomeLive do
     # The type's path comes from the workspace's declaration (custom types
     # declare their own), not from the type name.
     ~p"/#{workspace.slug}/#{Workspace.page_type_path(workspace, page_type)}/#{slug}"
+  end
+
+  # El estado PERSONAL del home. Lee con `ContentVisibility.personal_scope/1`
+  # —no con `page_scope/1`— porque acá un owner o un admin NO ven nada que no
+  # sea suyo: es el pedido explícito («nunca se lista lo que no es de él … aun
+  # que sea admin»). Cada número sale de UNA query agregada (o de un lector
+  # acotado), nunca de listar filas para contarlas.
+  defp personal_status(socket, workspace) do
+    case socket.assigns[:user] do
+      nil ->
+        # Una sesión sin fila en `users` no tiene lector: el estado no se
+        # dibuja. La política responde `:all` para identidad nil (fail-open
+        # documentado) y entregarle ese caso contaría material ajeno — el
+        # contador ES una vía de fuga.
+        nil
+
+      user ->
+        scope = Dran.ContentVisibility.personal_scope(user)
+
+        goal_counts = Goals.status_counts(scope: scope)
+        plan_counts = Plans.status_counts(scope: scope)
+
+        active_plans = Plans.list_plans(scope: scope, status: "active", limit: @status_plan_limit)
+
+        %{
+          goals: nonzero_status_counts(Goal.statuses(), goal_counts),
+          goals_total: goal_counts |> Map.values() |> Enum.sum(),
+          plans: nonzero_status_counts(Plan.statuses(), plan_counts),
+          plans_total: plan_counts |> Map.values() |> Enum.sum(),
+          active_plans:
+            Enum.map(active_plans, fn plan ->
+              %{id: plan.id, title: plan.title, progress: Plans.progress(plan)}
+            end),
+          memory: Memory.count_memories(workspace.id, scope: scope),
+          pages:
+            Knowledge.count_pages(
+              workspace_id: workspace.id,
+              workspace: workspace,
+              scope: scope
+            )
+        }
+    end
+  end
+
+  # Un estado sin recursos no dibuja un chip «0»: un contador en cero de un
+  # estado que existe no informa nada y ensucia la sección.
+  defp nonzero_status_counts(statuses, counts) do
+    statuses
+    |> Enum.map(&{&1, Map.get(counts, &1, 0)})
+    |> Enum.reject(fn {_status, count} -> count == 0 end)
   end
 
   # El scope de lectura sale del módulo único de política.

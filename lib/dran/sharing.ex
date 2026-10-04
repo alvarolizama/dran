@@ -307,6 +307,20 @@ defmodule Dran.Sharing do
      "invalid scope #{inspect(scope)}: expected \"private\", \"public\" or %{\"group\" => \"<slug>\"}"}
   end
 
+  @doc """
+  Marca un recurso como `shared` SIN grants — el nivel del CONTROL de la UI
+  (`private | public | shared`).
+
+  No es un `scope` de la API: `apply_scope/3` exige que un `shared` de API
+  NOMBRE su grupo y falle cerrado con cualquier otra cosa (un `"shared"` suelto
+  es un 422, nunca un `private` en silencio). Acá la intención es otra: el dueño
+  eligió «sólo la gente que invite», y los grants los agrega después el diálogo
+  de compartir (`grant/3`, que vuelve a fijar `shared` en su transacción). Un
+  `shared` todavía sin grants lo lee sólo su dueño.
+  """
+  @spec mark_shared(struct()) :: {:ok, struct()}
+  def mark_shared(%_{} = resource), do: {:ok, put_visibility(resource, "shared")}
+
   defp apply_group_scope(resource, slug, resource_type) do
     owner_id = Map.get(resource, :owner_user_id)
 

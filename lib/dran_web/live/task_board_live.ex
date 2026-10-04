@@ -79,6 +79,14 @@ defmodule DranWeb.TaskBoardLive do
               {if @goal, do: @goal.title, else: gettext("Tasks")}
             </h1>
             <p :if={@goal && @goal.summary} class="text-caption mt-1">{@goal.summary}</p>
+            <%!-- El destino del tablero de un goal: el suyo, no heredado. --%>
+            <div class="mt-1.5">
+              <.resource_visibility_pill
+                :if={@goal}
+                visibility={@goal.visibility}
+                id="board-goal-visibility"
+              />
+            </div>
           </div>
           <div class="flex items-center gap-3 flex-wrap">
             <button type="button" id="task-new" phx-click="new_task" class="btn btn-primary btn-sm">
@@ -179,6 +187,17 @@ defmodule DranWeb.TaskBoardLive do
                   <div class="flex-1 min-w-0 font-medium text-sm break-words">{task.title}</div>
                   <%!-- El asa es la pista; el drag lo lleva la tarjeta entera. --%>
                   <.icon name="hero-bars-2" class="size-4 shrink-0 text-base-content/25" />
+                </div>
+
+                <%!-- El destino NO es de la task: lo HEREDA de su goal (la task no
+                tiene columna propia), y se marca como heredado para que nadie lo
+                lea como un destino propio. --%>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <.resource_visibility_pill
+                    visibility={Map.get(@goal_visibilities, task.goal_id)}
+                    id={"task-visibility-#{task.id}"}
+                    inherited={true}
+                  />
                 </div>
 
                 <div
@@ -359,6 +378,7 @@ defmodule DranWeb.TaskBoardLive do
        active_nav: "board",
        goals: [],
        goal_titles: %{},
+       goal_visibilities: %{},
        goal: nil,
        filters: empty_filters(),
        assignees: assignees(socket),
@@ -689,6 +709,10 @@ defmodule DranWeb.TaskBoardLive do
       scope: scope,
       goals: goals,
       goal_titles: Map.new(goals, &{&1.id, &1.title}),
+      # El destino de una task es el de su GOAL (la task no tiene columna
+      # propia): el board lo PINTA heredado, y sólo para los goals que el
+      # lector ya puede leer — un goal fuera del mapa no dibuja nada.
+      goal_visibilities: Map.new(goals, &{&1.id, &1.visibility}),
       filter_goal_id: goal_id,
       board: board,
       counts: Map.new(board, fn {status, ts} -> {status, length(ts)} end),

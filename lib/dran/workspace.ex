@@ -546,11 +546,16 @@ defmodule Dran.Workspace do
     Map.new(Dran.Knowledge.effective_page_types(ws), fn type ->
       {type, page_type_path(ws, type)}
     end)
+    # Las entidades de trabajo no son tipos de página y sus rutas NO son
+    # `/:type/:slug`: el hook navega con este mapa, así que su segmento se
+    # declara acá (y el nodo lleva su id como slug).
+    |> Map.merge(%{"goal" => "goals", "plan" => "plans"})
   end
 
   @doc """
   Ordered `{type, color}` pairs for every effective type (custom types use
-  their declared color), with the non-page `"memory"` pseudo-type last.
+  their declared color), with the non-page pseudo-types last (`memory`,
+  `goal`, `plan`).
   """
   def ordered_type_colors(ws) do
     colors =
@@ -558,7 +563,7 @@ defmodule Dran.Workspace do
         {type, page_type_color(ws, type)}
       end
 
-    colors ++ [{"memory", "#A78BFA"}]
+    colors ++ [{"memory", "#A78BFA"}, {"goal", "#22C55E"}, {"plan", "#38BDF8"}]
   end
 
   @doc "Metadata field tuples for a custom type (built-ins fall back to the registry)."

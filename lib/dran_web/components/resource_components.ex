@@ -590,6 +590,11 @@ defmodule DranWeb.ResourceComponents do
   attr :id, :string, default: nil
   attr :label, :string, default: nil
 
+  attr :field_id, :string,
+    default: nil,
+    doc:
+      "id DOM base del control cuando la MISMA página monta varios (una tarjeta por recurso): los radios y el wrapper lo heredan en vez de repetir el id derivado del form"
+
   attr :form_id, :string,
     default: nil,
     doc: "id del `<form>` cuando el control vive FUERA de él (el header del modal)"
@@ -606,7 +611,7 @@ defmodule DranWeb.ResourceComponents do
       </span>
       <div
         class="flex flex-wrap gap-2"
-        id={@id || "#{@form[:visibility].id}-picker"}
+        id={@id || "#{@field_id || @form[:visibility].id}-picker"}
         phx-update="ignore"
         title={if @compact, do: gettext("Who can read it"), else: nil}
       >
@@ -621,7 +626,7 @@ defmodule DranWeb.ResourceComponents do
         >
           <input
             type="radio"
-            id={"#{@form[:visibility].id}-#{level}"}
+            id={"#{@field_id || @form[:visibility].id}-#{level}"}
             name={@form[:visibility].name}
             value={level}
             checked={Phoenix.HTML.Form.input_value(@form, :visibility) == level}
@@ -650,18 +655,111 @@ defmodule DranWeb.ResourceComponents do
   attr :id, :string, default: nil
   attr :testid, :string, default: nil
 
+  attr :inherited, :boolean,
+    default: false,
+    doc:
+      "el destino no es de ESTE recurso sino el que hereda de su contenedor (una task, del goal): se marca para que nadie lo lea como propio"
+
   def resource_visibility_pill(assigns) do
     ~H"""
     <span
       :if={@visibility && @visibility != "private"}
       id={@id}
       data-testid={@testid}
+      data-inherited={to_string(@inherited)}
       class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300/60 text-base-content/60"
-      title={gettext("Item visibility")}
+      title={if(@inherited, do: gettext("Inherited from its goal"), else: gettext("Item visibility"))}
     >
       <.icon name={scope_icon(@visibility)} class="size-3" />
       {visibility_label(@visibility)}
+      <span :if={@inherited} class="text-[10px] text-base-content/45">
+        · {gettext("inherited")}
+      </span>
     </span>
     """
   end
+
+  @doc """
+  El panel de PÁGINAS RELACIONADAS de un contenedor de trabajo (goal o plan).
+
+  Dos fuentes, nunca mezcladas: las relaciones reales del grafo y —sólo si no
+  hay ninguna— el fallback semántico (`Dran.Related`). La FUENTE se declara en
+  el panel: la lectura no es una caja negra. El alta es EXPLÍCITA (el picker de
+  abajo) y nunca automática.
+  """
+  attr :id, :string, required: true
+  attr :related, :map, required: true
+  attr :candidates, :list, default: []
+  attr :workspace, :map, default: nil
+  attr :picker_event, :string, default: "link_related"
+
+  def related_panel(assigns) do
+    ~H"""
+    <div id={@id} class="surface-2 rounded-xl p-4">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <h3 class="text-sm font-semibold flex items-center gap-2">
+          <.icon name="hero-link" class="size-4 text-primary" /> {gettext("Related pages")}
+        </h3>
+        <span
+          id={"#{@id}-source"}
+          class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-200 text-base-content/60"
+        >
+          {related_source_label(@related.source)}
+        </span>
+      </div>
+
+      <p :if={@related.pages == []} class="text-sm text-base-content/40 py-2">
+        {gettext("No related pages yet.")}
+      </p>
+
+      <ul class="space-y-1.5">
+        <li :for={page <- @related.pages} id={"#{@id}-page-#{page.id}"}>
+          <.link
+            navigate={page_href(@workspace, page)}
+            class="flex items-center gap-2 text-sm py-1.5 px-2 rounded-lg hover:bg-base-200/60 transition"
+          >
+            <.icon name="hero-document-text" class="size-4 shrink-0 text-base-content/40" />
+            <span class="flex-1 min-w-0 truncate">{page.title}</span>
+            <span class="text-[11px] text-base-content/40 shrink-0">{page.page_type}</span>
+          </.link>
+        </li>
+      </ul>
+
+      <%!-- El alta es EXPLÍCITA: un picker con las páginas legibles que todavía
+      no están vinculadas. El sidebar nunca crea una relación solo. --%>
+      <form
+        :if={@candidates != []}
+        id={"#{@id}-link-form"}
+        phx-submit={@picker_event}
+        class="flex gap-2 mt-3"
+      >
+        <select
+          name="page_id"
+          id={"#{@id}-link-select"}
+          class="select select-sm flex-1 rounded-lg border-base-300 bg-base-100"
+          aria-label={gettext("Page")}
+        >
+          <option value="">{gettext("Link a page…")}</option>
+          <option :for={page <- @candidates} value={page.id}>{page.title}</option>
+        </select>
+        <button type="submit" id={"#{@id}-link"} class="btn btn-primary btn-sm">
+          <.icon name="hero-plus" class="size-4" /> {gettext("Link")}
+        </button>
+      </form>
+    </div>
+    """
+  end
+
+  @doc "La fuente de una lista de relacionadas, traducida (nunca el átomo crudo)."
+  def related_source_label(:relations), do: gettext("From the graph")
+  def related_source_label(:semantic), do: gettext("Suggested")
+  def related_source_label(_), do: gettext("None")
+
+  # La ruta de una página depende del tipo (un tipo custom declara su `path`),
+  # así que el href sale del workspace, no del nombre del tipo.
+  defp page_href(%{} = workspace, page) do
+    "/" <> Dran.Workspace.page_type_path(workspace, page.page_type) <> "/" <> page.slug
+  end
+
+  defp page_href(_workspace, page), do: "/#{page.page_type}/#{page.slug}"
 end

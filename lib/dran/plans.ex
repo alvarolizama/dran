@@ -62,6 +62,36 @@ defmodule Dran.Plans do
   end
 
   @doc """
+  Conteo de planes legibles agrupado por estado — UNA query agregada.
+
+  Mismo papel que `Dran.Goals.status_counts/1`: el estado personal del home
+  cuenta sin traer filas, y los estados no son cinco queries sino una.
+  Opts: `:scope`, `:archived`, `:owner_user_id`.
+  """
+  def status_counts(opts \\ []) do
+    scope = Keyword.get(opts, :scope, :all)
+    archived = Keyword.get(opts, :archived, false)
+    owner_user_id = Keyword.get(opts, :owner_user_id)
+
+    query =
+      from(p in Plan,
+        where: p.archived == ^archived,
+        group_by: p.status,
+        select: {p.status, count(p.id)}
+      )
+
+    query =
+      if is_integer(owner_user_id),
+        do: where(query, [p], p.owner_user_id == ^owner_user_id),
+        else: query
+
+    query
+    |> Dran.ContentVisibility.filter(scope, :plan)
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
   Trae un plan por id con scope de lectura.
 
   Un plan fuera del scope del lector se lee como inexistente (sin fuga de
@@ -141,17 +171,22 @@ defmodule Dran.Plans do
       taken?: fn candidate -> slug_taken?(attrs, candidate) end
     )
     |> then(&(%Plan{} |> Plan.changeset(&1) |> Repo.insert()))
+    |> tap(fn _ -> Dran.GraphCache.invalidate_all() end)
   end
 
   @doc "Actualiza un plan (slug auto-administrado cuando cambia el título)."
   def update_plan(%Plan{} = plan, attrs) do
-    attrs
-    |> Dran.Slug.inject_update(plan,
-      field: "title",
-      fallback: "plan",
-      lookup: &get_plan_by_slug(&1, plan.owner_user_id)
+    plan
+    |> Plan.changeset(
+      attrs
+      |> Dran.Slug.inject_update(plan,
+        field: "title",
+        fallback: "plan",
+        lookup: &get_plan_by_slug(&1, plan.owner_user_id)
+      )
     )
-    |> then(&(plan |> Plan.changeset(&1) |> Repo.update()))
+    |> Repo.update()
+    |> tap(fn _ -> Dran.GraphCache.invalidate_all() end)
   end
 
   @doc """
@@ -159,10 +194,14 @@ defmodule Dran.Plans do
   (Constraint 12): sin esto el grafo queda con un nodo muerto.
   """
   def delete_plan(%Plan{} = plan) do
-    Repo.transaction(fn ->
-      Dran.Relation.delete_edges("plan", plan.id)
-      Repo.delete!(plan)
-    end)
+    result =
+      Repo.transaction(fn ->
+        Dran.Relation.delete_edges("plan", plan.id)
+        Repo.delete!(plan)
+      end)
+
+    Dran.GraphCache.invalidate_all()
+    result
   end
 
   # ──────────────────────────────────────────────────────────────────────────

@@ -306,6 +306,30 @@ defmodule Dran.Knowledge do
     Repo.all(query)
   end
 
+  @doc """
+  Cuenta las páginas legibles y no archivadas de un workspace — UNA query.
+
+  Existe para el estado personal del home: un contador no trae filas para
+  contarlas en memoria. El scope viaja a la query por el módulo ÚNICO de
+  política (`Dran.ContentVisibility.filter/3`), igual que en `list_pages/1`.
+
+  Opts: `:workspace_id`, `:workspace` (el struct ya cargado evita el lookup
+  extra), `:type`, `:scope`, `:archived`.
+  """
+  def count_pages(opts \\ []) do
+    workspace_id = Keyword.get(opts, :workspace_id)
+    context = Keyword.get(opts, :workspace)
+    archived = Keyword.get(opts, :archived, false)
+
+    from(p in Page)
+    |> maybe_filter_context(workspace_id)
+    |> maybe_exclude_disabled_types(context, workspace_id)
+    |> maybe_filter_type(Keyword.get(opts, :type))
+    |> maybe_filter_visibility_scope(Keyword.get(opts, :scope))
+    |> where([p], p.archived == ^archived)
+    |> Repo.aggregate(:count)
+  end
+
   # P-03: when the caller already loaded the %Workspace{} struct, use it
   # directly instead of re-querying by id.
   defp maybe_exclude_disabled_types(
@@ -1381,8 +1405,17 @@ defmodule Dran.Knowledge do
     `total_edges` reports the real count when capped (otherwise it reflects
     the fetched edges, capped at 2500). The UI can show "showing X of Y".
     Keeps the 3D view fluid on large brains.
+  - `:scope_entities` — read scope for the WORK entities (goals and plans).
+    A separate option on purpose: those surfaces read with the PERSONAL scope
+    (`Dran.ContentVisibility.personal_scope/1`), not with the privileged page
+    scope. A goal/plan outside the scope never becomes a node — and with no
+    node, its edges are never painted either.
   """
   @max_graph_edges 2500
+  # Los nodos de entidad (goal/plan) son ADITIVOS como los de memoria: no
+  # compiten por el cap de páginas, pero están acotados para que un workspace
+  # con miles de goals no inunde la vista 3D.
+  @max_graph_entities 100
 
   # Room reserved inside a capped graph for the NEWEST pages (a quarter of the
   # cap, never more than this). A page added a minute ago has no relations yet,
@@ -1399,6 +1432,7 @@ defmodule Dran.Knowledge do
     # estricta entre nodos visibles.
     scope_pages = Keyword.get(opts, :scope_pages, :all)
     scope_memory = Keyword.get(opts, :scope_memory, :all)
+    scope_entities = Keyword.get(opts, :scope_entities, :all)
 
     {page_nodes, total_pages} =
       cond do
@@ -1465,11 +1499,30 @@ defmodule Dran.Knowledge do
     nodes = page_nodes ++ memory_nodes
     total_nodes = total_pages + length(memory_nodes)
 
+    # Las ENTIDADES de trabajo (goals y plans) son nodos de primera clase: tienen
+    # tabla propia y `relations` es polimórfica, así que un goal ya puede ser
+    # extremo de una arista. Leen con el scope PERSONAL (constraint 1): ser admin
+    # no convierte el grafo personal en un inventario ajeno. `slug` lleva el ID
+    # de la entidad (su ruta canónica es `/goals/:id`, no un slug de página).
+    goal_nodes =
+      Dran.Goals.list_goals(scope: scope_entities, limit: @max_graph_entities)
+      |> Enum.map(fn g -> %{id: g.id, title: g.title, slug: g.id, type: "goal"} end)
+
+    plan_nodes =
+      Dran.Plans.list_plans(scope: scope_entities, limit: @max_graph_entities)
+      |> Enum.map(fn p -> %{id: p.id, title: p.title, slug: p.id, type: "plan"} end)
+
+    entity_nodes = goal_nodes ++ plan_nodes
+
+    nodes = nodes ++ entity_nodes
+    total_nodes = total_nodes + length(entity_nodes)
+
     node_ids = Enum.map(page_nodes, & &1.id)
     memory_ids = Enum.map(memory_nodes, & &1.id)
+    entity_ids = Enum.map(entity_nodes, & &1.id)
 
     edges =
-      if Enum.empty?(node_ids) and Enum.empty?(memory_ids) do
+      if Enum.empty?(node_ids) and Enum.empty?(memory_ids) and Enum.empty?(entity_ids) do
         []
       else
         # Page↔Page edges (both endpoints are pages)
@@ -1539,7 +1592,31 @@ defmodule Dran.Knowledge do
             )
           end
 
-        page_edges ++ memory_edges ++ memory_memory_edges
+        # Page↔Goal / Page↔Plan edges — `relations` es polimórfica, así que la
+        # arista cuenta sólo si AMBOS extremos están en los conjuntos visibles
+        # (la intersección estricta que el grafo de páginas ya aplica): una
+        # entidad fuera del scope no tiene nodo y por lo tanto no pinta arista.
+        entity_edges =
+          if Enum.empty?(entity_ids) do
+            []
+          else
+            Repo.all(
+              from r in Relation,
+                where:
+                  (r.source_id in ^entity_ids and r.source_type in ["goal", "plan"] and
+                     r.target_id in ^node_ids and r.target_type == "page") or
+                    (r.target_id in ^entity_ids and r.target_type in ["goal", "plan"] and
+                       r.source_id in ^node_ids and r.source_type == "page"),
+                select: %{
+                  source: r.source_id,
+                  target: r.target_id,
+                  type: r.relation_type,
+                  weight: r.weight
+                }
+            )
+          end
+
+        page_edges ++ memory_edges ++ memory_memory_edges ++ entity_edges
       end
 
     total_edges =
@@ -1680,15 +1757,30 @@ defmodule Dran.Knowledge do
   global graph). Used by the graph sidebar so totals stay truthful even when
   the rendered graph is capped.
   """
-  def graph_type_counts(workspace_id, exclude_types \\ [], scope \\ :all) do
-    Repo.all(
-      from p in graph_base(workspace_id, exclude_types, scope),
-        group_by: p.page_type,
-        select: {p.page_type, count(p.id)}
-    )
-    |> Map.new()
-    |> Map.put("memory", Dran.Memory.count_memories(workspace_id, scope: scope))
+  def graph_type_counts(workspace_id, exclude_types \\ [], scope \\ :all, scope_entities \\ nil) do
+    counts =
+      Repo.all(
+        from p in graph_base(workspace_id, exclude_types, scope),
+          group_by: p.page_type,
+          select: {p.page_type, count(p.id)}
+      )
+      |> Map.new()
+      |> Map.put("memory", Dran.Memory.count_memories(workspace_id, scope: scope))
+
+    case scope_entities do
+      nil ->
+        counts
+
+      entity_scope ->
+        # Los nodos de entidad se cuentan con SU puerta (la personal): el número
+        # de la leyenda no puede revelar un goal que el lector no lee.
+        counts
+        |> Map.put("goal", Dran.Goals.status_counts(scope: entity_scope) |> total_counts())
+        |> Map.put("plan", Dran.Plans.status_counts(scope: entity_scope) |> total_counts())
+    end
   end
+
+  defp total_counts(counts), do: counts |> Map.values() |> Enum.sum()
 
   # ──────────────────────────────────────────────────────────────────────────
   # Search

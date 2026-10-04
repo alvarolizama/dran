@@ -14,9 +14,12 @@ defmodule DranWeb.HomeGraphController do
   def show(conn, _params) do
     case Dran.Auth.instance_workspace() do
       %{id: workspace_id} = context ->
-        # El grafo se cachea POR SCOPE: el lector pide su propia vista.
+        # El grafo se cachea POR SCOPE: el lector pide su propia vista. Los
+        # nodos de goal/plan tienen su PROPIA puerta (la personal): un admin ve
+        # las páginas de la instancia pero no los goals privados ajenos.
         scope = Dran.ContentVisibility.resolve(context, conn.assigns[:user], :pages)
-        cached = GraphCache.get(workspace_id, scope)
+        entity_scope = Dran.ContentVisibility.personal_scope(conn.assigns[:user])
+        cached = GraphCache.get(workspace_id, scope, entity_scope)
 
         conn
         |> put_resp_content_type("application/json")

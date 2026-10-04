@@ -20,6 +20,8 @@ defmodule DranWeb.MemoryLive do
 
   alias Dran.Memory
   alias Dran.Actors
+  alias Dran.Sharing
+  alias DranWeb.Components.ShareDialog
   alias DranWeb.Plugs.Auth
 
   @page_size 30
@@ -50,7 +52,15 @@ defmodule DranWeb.MemoryLive do
         # toggle no tendría efecto). Se evalúa con el `context` local: dentro
         # del assign/2 el socket todavía no lleva el assign nuevo.
         content_scope: content_scope_assign(socket, context),
-        show_scope_toggle: show_scope_toggle?(context)
+        show_scope_toggle: show_scope_toggle?(context),
+        # El destino (quién puede leer el hecho) y su diálogo: los grants de
+        # `content_shares` viajan por la MISMA puerta que en goals, plans y
+        # pages — memory era la única superficie con destino y sin diálogo.
+        share_open: false,
+        share_memory: nil,
+        shares: [],
+        share_users: [],
+        share_groups: []
       )
 
     {:ok, reload_memories(socket)}
@@ -156,6 +166,101 @@ defmodule DranWeb.MemoryLive do
     end
   end
 
+  # ── El destino del hecho: cambio y grants ──────────────────────────────────
+  #
+  # El dueño es el único que mueve el destino desde la UI (Constraint 5) y el
+  # cambio viaja por la puerta del contexto (`Memory.set_scope/2`), nunca por un
+  # `Repo.update` de la vista. Los grants usan el MISMO diálogo que goals y
+  # plans, con `resource_type="memory"`.
+
+  def handle_event("set_scope", %{"memory_id" => id} = params, socket) do
+    context = socket.assigns.context
+
+    with %Memory{} = memory <- Memory.get_scoped_memory(id, context.id),
+         true <- can_manage_scope?(memory, socket.assigns[:user]),
+         visibility when visibility in ~w(private public shared) <-
+           get_in(params, ["memory_scope", "visibility"]),
+         {:ok, updated} <- Memory.set_scope(memory, visibility) do
+      {:noreply,
+       socket
+       |> replace_memory(updated)
+       |> put_flash(:info, gettext("Visibility updated"))}
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, gettext("Could not change the visibility"))}
+    end
+  end
+
+  def handle_event("open_share", %{"id" => id}, socket) do
+    context = socket.assigns.context
+
+    with %Memory{} = memory <- Memory.get_scoped_memory(id, context.id),
+         true <- can_manage_scope?(memory, socket.assigns[:user]) do
+      {:noreply,
+       socket
+       |> assign(share_open: true, share_memory: memory)
+       |> assign(shares: Sharing.list_shares("memory", memory.id))
+       |> assign(share_users: Dran.Accounts.list_users())
+       |> assign(share_groups: Sharing.list_groups())}
+    else
+      _ -> {:noreply, put_flash(socket, :error, gettext("Memory not found"))}
+    end
+  end
+
+  def handle_event("close_share", _params, socket),
+    do: {:noreply, assign(socket, :share_open, false)}
+
+  def handle_event("noop", _params, socket), do: {:noreply, socket}
+
+  def handle_event("share_with_user", %{"user_id" => user_id}, socket) when user_id != "" do
+    grant_share(socket, {:user, String.to_integer(user_id)})
+  end
+
+  def handle_event("share_with_user", _params, socket), do: {:noreply, socket}
+
+  def handle_event("share_with_group", %{"group_id" => group_id}, socket) when group_id != "" do
+    grant_share(socket, {:group, String.to_integer(group_id)})
+  end
+
+  def handle_event("share_with_group", _params, socket), do: {:noreply, socket}
+
+  def handle_event("unshare", %{"id" => share_id}, socket) do
+    case socket.assigns.share_memory do
+      %Memory{} = memory ->
+        :ok = Sharing.unshare(share_id)
+        {:noreply, assign(socket, :shares, Sharing.list_shares("memory", memory.id))}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  # Compartir fija `shared` en la MISMA transacción del grant (Sharing.grant/3):
+  # un grant que no cambia la visibilidad sería un no-op silencioso.
+  defp grant_share(socket, target) do
+    case socket.assigns.share_memory do
+      %Memory{} = memory ->
+        case Sharing.grant(memory, :memory, target) do
+          {:ok, :shared, updated} ->
+            {:noreply,
+             socket
+             |> assign(share_memory: updated, shares: Sharing.list_shares("memory", updated.id))
+             |> replace_memory(updated)
+             |> put_flash(:info, gettext("Shared."))}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not share."))}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  # El destino lo mueve el DUEÑO del hecho — la misma regla que goals y plans.
+  defp can_manage_scope?(%{owner_user_id: owner_id}, %{id: id}), do: owner_id == id
+  defp can_manage_scope?(_memory, _user), do: false
+
   @impl true
   def handle_info({:memory_changed, _action, _memory}, socket) do
     # A fact was created/deleted (by a worker via the REST API, or by this
@@ -180,6 +285,19 @@ defmodule DranWeb.MemoryLive do
       workspace_slug={@workspace_slug}
       active_nav={@active_nav}
     >
+      <%!-- El destino de un HECHO: el mismo diálogo de grants que goals y plans
+      (`resource_type="memory"`), con `Dran.Sharing.grant/3` marcando `shared`
+      en la misma transacción — compartir no puede ser un no-op. --%>
+      <ShareDialog.share_dialog
+        id="memory-share-dialog"
+        open={@share_open || false}
+        resource_type="memory"
+        resource_id={@share_memory && @share_memory.id}
+        shares={@shares || []}
+        users={@share_users || []}
+        groups={@share_groups || []}
+      />
+
       <div class="flex-1 overflow-y-auto">
         <div class="w-full p-6 space-y-6">
           <.memory_header count={@memory_count} workspace={@workspace} />
@@ -272,6 +390,7 @@ defmodule DranWeb.MemoryLive do
               score={entry.score}
               related={Map.get(entry, :related, [])}
               labels={@creator_labels}
+              user={@user}
             />
 
             <.empty_state
@@ -563,8 +682,17 @@ defmodule DranWeb.MemoryLive do
   attr :score, :float, default: nil
   attr :related, :list, default: []
   attr :labels, :map, default: %{}
+  attr :user, :map, default: nil
 
   defp memory_card(assigns) do
+    # El destino lo mueve el DUEÑO: el control y el diálogo de grants no se
+    # dibujan para quien no puede cambiarlo (misma regla que goals y plans).
+    assigns =
+      assign(assigns,
+        can_manage: can_manage_scope?(assigns.memory, assigns.user),
+        scope_form: to_form(%{"visibility" => assigns.memory.visibility}, as: :memory_scope)
+      )
+
     ~H"""
     <div
       id={@id}
@@ -604,6 +732,14 @@ defmodule DranWeb.MemoryLive do
 
         <span title={absolute_timestamp(@memory.inserted_at)}>{relative_time(@memory.inserted_at)}</span>
 
+        <%!-- El destino del hecho, con la píldora COMPARTIDA: nunca el valor
+        crudo de la columna, y nada cuando el nivel es `private` (el default no
+        se anuncia). --%>
+        <.resource_visibility_pill
+          visibility={@memory.visibility}
+          id={"memory-visibility-#{@memory.id}"}
+        />
+
         <span
           :if={@memory.source_session}
           class="font-mono text-[10px] truncate max-w-40"
@@ -638,6 +774,16 @@ defmodule DranWeb.MemoryLive do
         </span>
 
         <span class="ml-auto flex items-center gap-1">
+          <button
+            :if={@can_manage}
+            id={"memory-share-#{@memory.id}"}
+            phx-click="open_share"
+            phx-value-id={@memory.id}
+            class="btn btn-ghost btn-xs"
+            title={gettext("Share")}
+          >
+            <.icon name="hero-share" class="size-3.5" />
+          </button>
           <button
             id={"memory-helpful-#{@memory.id}"}
             phx-click="feedback"
@@ -679,6 +825,21 @@ defmodule DranWeb.MemoryLive do
             <.icon name="hero-x-mark" class="size-3.5" />
           </button>
         </span>
+      </div>
+
+      <%!-- El destino de ESTE hecho, con EL control (`resource_scope_field/1`) y
+      el cambio por la puerta del contexto (`set_scope` → `Memory.set_scope/2`):
+      la LiveView no escribe la columna por su cuenta (Constraint 5). --%>
+      <div :if={@can_manage} class="mt-3 pt-3 border-t border-base-content/10">
+        <.form for={@scope_form} id={"memory-scope-form-#{@memory.id}"} phx-change="set_scope">
+          <input type="hidden" name="memory_id" value={@memory.id} />
+          <.resource_scope_field
+            form={@scope_form}
+            id={"memory-scope-#{@memory.id}"}
+            field_id={"memory-scope-#{@memory.id}"}
+            compact={true}
+          />
+        </.form>
       </div>
     </div>
     """

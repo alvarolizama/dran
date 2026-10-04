@@ -13,7 +13,9 @@ defmodule DranWeb.GoalLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Dran.{Accounts, Goals, Tasks}
+  alias Dran.{Accounts, Goals, Knowledge, Related, Tasks}
+
+  import Ecto.Query, only: [from: 2]
 
   setup do
     Dran.DataCase.ensure_workspace!()
@@ -654,7 +656,143 @@ defmodule DranWeb.GoalLiveTest do
     end
   end
 
+  describe "páginas relacionadas (W5)" do
+    # El sidebar lee con la puerta PERSONAL y declara CUÁL fuente está
+    # mostrando: relaciones del grafo o fallback semántico. Sin inferencia real
+    # (el fallback no puede llamar a la red en tests).
+    setup do
+      original = Application.get_env(:dran, :inference)
+
+      Application.put_env(:dran, :inference,
+        base_url: nil,
+        api_key: nil,
+        embedding_model: nil,
+        timeout: 100,
+        schedule_async: false
+      )
+
+      on_exit(fn ->
+        if is_nil(original) do
+          Application.delete_env(:dran, :inference)
+        else
+          Application.put_env(:dran, :inference, original)
+        end
+      end)
+
+      :ok
+    end
+
+    test "lista la relación real y declara su fuente", %{author: author, conn: conn} do
+      goal = goal!(author, %{"title" => "Con vecinos"})
+      page = page!(author, "Página vinculada", "public")
+      {:ok, _} = Related.link("goal", goal, page.id, author, scope: {:reader, author.id})
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/goals/#{goal.id}")
+
+      assert has_element?(view, "#goal-related")
+      assert has_element?(view, "#goal-related-source", t("From the graph"))
+      assert has_element?(view, "#goal-related-page-#{page.id}", "Página vinculada")
+    end
+
+    test "sin relaciones ni vecinos declara que no hay ninguna fuente", %{
+      author: author,
+      conn: conn
+    } do
+      goal = goal!(author, %{"title" => "Solo"})
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/goals/#{goal.id}")
+
+      assert has_element?(view, "#goal-related-source", t("None"))
+      assert has_element?(view, "#goal-related", t("No related pages yet."))
+    end
+
+    test "el picker da de alta la relación y el sidebar la muestra como relación", %{
+      author: author,
+      conn: conn
+    } do
+      goal = goal!(author, %{"title" => "Con picker"})
+      page = page!(author, "Página elegida", "public")
+
+      {:ok, view, _html} = live(login(conn, author), ~p"/goals/#{goal.id}")
+
+      assert has_element?(view, "#goal-related-link-form")
+
+      view
+      |> form("#goal-related-link-form", page_id: page.id)
+      |> render_submit()
+
+      # La arista existe y queda ATRIBUIDA a quien la creó…
+      relation =
+        Dran.Repo.one(
+          from r in Dran.Relation,
+            where: r.source_id == ^goal.id and r.target_type == "page"
+        )
+
+      assert relation.target_id == page.id
+      assert relation.relation_type == "related"
+      assert relation.meta["created_by_user_id"] == author.id
+
+      # …y el sidebar ya la declara como relación real, no como sugerencia.
+      assert has_element?(view, "#goal-related-source", t("From the graph"))
+      assert has_element?(view, "#goal-related-page-#{page.id}", "Página elegida")
+    end
+
+    test "no lista la página que el lector NO puede leer", %{
+      author: author,
+      stranger: stranger,
+      conn: conn
+    } do
+      # Goal público (el tercero lo abre), página privada del autor: la relación
+      # existe pero el lector ajeno no la ve — ni por el sidebar ni por el
+      # fallback.
+      goal = goal!(author, %{"title" => "Público con privada", "visibility" => "public"})
+      hidden = page!(author, "Privada del autor", "private")
+      {:ok, _} = Related.link("goal", goal, hidden.id, author, scope: {:reader, author.id})
+
+      {:ok, view, _html} = live(login(conn, stranger), ~p"/goals/#{goal.id}")
+
+      assert has_element?(view, "#goal-related")
+      refute has_element?(view, "#goal-related-page-#{hidden.id}")
+    end
+
+    test "el picker no ofrece la página que el lector no puede leer", %{
+      author: author,
+      stranger: stranger,
+      conn: conn
+    } do
+      goal = goal!(author, %{"title" => "Público sin opciones", "visibility" => "public"})
+      _hidden = page!(author, "Privada del autor", "private")
+      _visible = page!(author, "Pública del autor", "public")
+
+      {:ok, view, _html} = live(login(conn, stranger), ~p"/goals/#{goal.id}")
+
+      assert has_element?(view, "#goal-related-link-form")
+
+      html = render(view)
+
+      # El picker ofrece lo legible y NUNCA lo que el lector no puede leer.
+      assert html =~ "Pública del autor"
+      refute html =~ "Privada del autor"
+    end
+  end
+
   # ── Helpers ───────────────────────────────────────────────────────────────
+
+  defp page!(owner, title, visibility) do
+    workspace = Dran.DataCase.ensure_workspace!()
+
+    {:ok, page} =
+      Knowledge.create_page(%{
+        workspace_id: workspace.id,
+        title: title,
+        body: "cuerpo de #{title}",
+        page_type: "note",
+        visibility: visibility,
+        owner_user_id: owner.id
+      })
+
+    page
+  end
 
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 

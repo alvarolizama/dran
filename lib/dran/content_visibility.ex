@@ -88,6 +88,33 @@ defmodule Dran.ContentVisibility do
   @spec resolve(binary() | map() | struct() | nil, identity(), kind()) :: scope()
   def resolve(_workspace, identity, kind), do: scope(nil, identity, kind)
 
+  # ── The personal gate ─────────────────────────────────────────────────────
+
+  @doc """
+  The PERSONAL read scope of `identity`: the reader's own reach, with NO
+  privilege widening.
+
+  `{:reader, id}` for every identity that resolves to a user id — an instance
+  owner and an instance admin included. `:all` comes back ONLY when there is no
+  identity at all (the nil-identity fail-open this module documents).
+
+  `scope/3` answers *what may this reader read* and keeps the privileged view;
+  this one answers *what is this reader's own*. It is the gate for the surfaces
+  that must never list what the reader cannot read — the home status block, the
+  goal/plan nodes of the graph and the related-pages sidebar. Being an admin is
+  not a reason for a personal surface to reveal a foreign private item.
+  """
+  @spec personal_scope(identity()) :: scope()
+  def personal_scope(nil), do: :all
+  def personal_scope(%User{id: id}) when is_integer(id), do: {:reader, id}
+  def personal_scope(%{is_owner: true, id: id}) when is_integer(id), do: {:reader, id}
+
+  def personal_scope(%{owner_user_id: owner_id}) when is_integer(owner_id),
+    do: {:reader, owner_id}
+
+  def personal_scope(%{id: id}) when is_integer(id), do: {:reader, id}
+  def personal_scope(_identity), do: :all
+
   # ── Query helpers ─────────────────────────────────────────────────────────
 
   @doc """

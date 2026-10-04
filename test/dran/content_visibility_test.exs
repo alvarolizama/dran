@@ -76,6 +76,43 @@ defmodule Dran.ContentVisibilityTest do
     end
   end
 
+  describe "personal_scope/1 — la puerta personal (el lector, sin privilegio)" do
+    # `scope/3` responde «qué puede leer este lector» y mantiene la vista
+    # privilegiada; `personal_scope/1` responde «qué es SUYO» y es la puerta de
+    # las superficies que no deben listar lo que el lector no puede leer. Un rol
+    # de instancia NO ensancha acá.
+    test "un usuario común lee como {:reader, id}", %{owner: owner} do
+      expected = {:reader, owner.id}
+      assert ^expected = ContentVisibility.personal_scope(owner)
+    end
+
+    test "el OWNER de la instancia NO ensancha: {:reader, id}", %{owner: owner} do
+      owner_flag = owner |> Ecto.Changeset.change(is_owner: true) |> Repo.update!()
+      expected = {:reader, owner_flag.id}
+
+      assert ^expected = ContentVisibility.personal_scope(owner_flag)
+      assert :all = ContentVisibility.scope(nil, owner_flag, :pages)
+    end
+
+    test "el ADMIN de la instancia NO ensancha: {:reader, id}", %{admin: admin} do
+      expected = {:reader, admin.id}
+
+      assert ^expected = ContentVisibility.personal_scope(admin)
+      assert :all = ContentVisibility.scope(nil, admin, :pages)
+    end
+
+    test "una identidad de API lee como su dueño", %{owner: owner} do
+      expected = {:reader, owner.id}
+      assert ^expected = ContentVisibility.personal_scope(%{owner_user_id: owner.id})
+      assert ^expected = ContentVisibility.personal_scope(%{id: owner.id, is_owner: true})
+    end
+
+    test "sin identidad la puerta deja `:all` (el fail-open documentado)" do
+      assert :all = ContentVisibility.personal_scope(nil)
+      assert :all = ContentVisibility.personal_scope(%{key_name: "legacy"})
+    end
+  end
+
   describe "the reader matrix (pages)" do
     test "owner: own + public + own shared rows; NOT other's ungranted shared", ctx do
       # shared-other belongs to `other` and has no grant for owner — invisible
