@@ -185,7 +185,7 @@ stays in `.env`. Either:
 
 ### The skills
 
-Two suites, versioned with this repo. Install the daily ones:
+One suite, versioned with this repo. Install it:
 
 ```bash
 mkdir -p ~/Workspace/Skills
@@ -202,8 +202,7 @@ skills:
     - ~/Workspace/Skills
 ```
 
-Add `skills/dev/dran-dev-*` too if you also work on this repo's code. Full
-details — the 60-char description limit, the naming convention, why
+Full details — the 60-char description limit, the naming convention, why
 `external_dirs` and not the plugin's `register_skill` — in
 [skills/README.md](skills/README.md).
 

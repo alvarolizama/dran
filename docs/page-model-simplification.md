@@ -101,9 +101,6 @@ que tenga deshabilitado `technical`/`idea` deja de validar en cuanto el tipo des
 del registry → la migración debe limpiar esas listas (o el `validate_subset` debe
 tolerar slugs desconocidos como inofensivos).
 
-El skill `skills/dev/dran-dev-page-types/SKILL.md` documenta el procedimiento y su
-auditoría obligatoria de surface (siete puntos) — es la guía que hay que reescribir.
-
 ### 2.3 El workspace hoy solo **desactiva** tipos
 
 - `workspaces.disabled_page_types` `varchar(255)[]` (`priv/repo/structure.sql:429`),

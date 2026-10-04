@@ -1,15 +1,14 @@
 # Instalar los skills de Dran (Hermes)
 
-Dran ships **two suites of skills**, both versioned with this repo:
+Dran ships **one suite of skills**, versioned with this repo:
 
 | Suite | Path | Who loads it | What it is for |
 |---|---|---|---|
 | **Agent flows** (6) | `skills/` | an agent operating a Dran instance | router + one flow per operation: knowledge, relations, workers, memory, work |
-| **Dev skills** (8) | `skills/dev/` | someone changing this repo's code | page types, auth surface, slug policy, settings, UI tweaks, inference, actor model, plugin |
 
 The agent flows are thin clients over the plugin tools (`dran_*`,
-`dran_memory_*`) — they teach the call sequences, not the internals. The dev
-skills are the opposite: they assume you are editing `lib/`.
+`dran_memory_*`) — they teach the call sequences, not the internals. Nothing
+about changing Dran's code ships here.
 
 ## How Hermes discovers a skill
 
@@ -31,16 +30,11 @@ nothing.
 ## Install
 
 ```bash
-# 1. Agent flows (6) — the everyday suite
+# The whole suite (6)
 mkdir -p ~/Workspace/Skills
 for s in dran dran-knowledge-flow dran-memory-flow \
          dran-relations-flow dran-workers-flow dran-work-flow; do
   ln -sfn /path/to/dran/skills/$s ~/Workspace/Skills/$s
-done
-
-# 2. Dev skills (8) — only when you work on this repo
-for s in /path/to/dran/skills/dev/dran-dev-*; do
-  ln -sfn "$s" ~/Workspace/Skills/$(basename "$s")
 done
 ```
 
@@ -56,7 +50,7 @@ skills:
 Restart the Hermes session. Verify:
 
 ```bash
-hermes skills list | grep dran          # should list 14
+hermes skills list | grep dran          # should list 6
 ```
 
 ## Descriptions must stay ≤ 60 characters
@@ -70,7 +64,7 @@ part that tells the agent *when* to load the skill. Keep the frontmatter
 Check the whole suite:
 
 ```bash
-for f in skills/*/SKILL.md skills/dev/*/SKILL.md; do
+for f in skills/*/SKILL.md; do
   d=$(grep -m1 '^description:' "$f" | sed 's/^description: *//; s/^"//; s/"$//')
   printf '%-34s %2d %s\n' "$f" "${#d}" "$([ ${#d} -le 60 ] && echo ok || echo TOO-LONG)"
 done
@@ -82,14 +76,16 @@ done
 |---|---|
 | `dran` | the router |
 | `dran-<flow>` | an agent operation flow (knowledge, relations, workers, memory, work) |
-| `dran-dev-<topic>` | a developer skill for this repo |
 
-The `dran-dev-` prefix matters: without it, developer notes compete with the
-operational flows in the agent's index, and the agent picks "how Dran works
-internally" when it should have picked "how to use it".
+There is no `dran-dev-*` prefix any more: the suite is for operating a Dran
+instance, so no skill about its code ships with it.
 
 ## What does NOT ship as a skill
 
+- **Developer skills**: no `dran-dev-*`. The coding skills that used to live in
+  `skills/dev/` were removed — the suite teaches how to USE Dran, never how it
+  is built, and a flow that talks about internals is a flow the agent loads for
+  the wrong job. They exist only in git history.
 - **MCP**: there is no MCP server any more. If you find a skill mentioning
   MCP tool names or `mcp_servers`, it is stale — the plugin tools and the REST
   API replaced it. MCP imports of a live server config are likewise gone.

@@ -182,8 +182,5 @@ mix gettext.extract --merge   # fill the new es translations
 mix precommit                 # test/dran/page_types_test.exs pins the list
 ```
 
-See the repo skill `dran-dev-page-types` for the full procedure including data
-migrations and the hardcoded-surface audit.
-
 Adding a **custom** type needs no code change at all: declare it in the
 workspace settings and it is immediately usable on the web and through the API.

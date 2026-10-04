@@ -42,24 +42,8 @@ flowchart TD
 Run ONLY the flow you landed on. If the diagram sends you to another skill,
 **stop here** and hand off — don't absorb that work.
 
-### Changing Dran itself
-
-The flows above are for USING Dran. To CHANGE its code, load the matching
-`dran-dev-*` skill (they ship in `skills/dev/` of this repo, versioned with it):
-
-| Skill | For |
-| --- | --- |
-| `dran-dev-actor-model` | identity/ownership: actors, keys, attribution |
-| `dran-dev-auth-surface` | REST authorization layers + audit method |
-| `dran-dev-page-types` | changing built-in page types or instance custom types |
-| `dran-dev-settings-config` | settings-backed config and admin forms |
-| `dran-dev-slug-management` | slug creation/update policy |
-| `dran-dev-ui-tweaks` | Web UI edits from inspector snippets |
-| `dran-dev-inference-providers` | embeddings/chat provider config |
-| `dran-dev-plugin` | adding/changing a tool in the Hermes plugin (schemas, manifest, gates) |
-
-These are developer skills, not agent flows: they assume you are editing this
-repo, not operating a Dran instance.
+This suite is for OPERATING Dran. Changing its code is not a flow: the suite
+ships no developer skill, so there is nothing to load — read the code.
 
 ## Connection (once per Hermes profile)
 
@@ -137,6 +121,9 @@ flowchart LR
 - **Expecting the knowledge tools to cover memory** — memory is
   `dran_memory_*` from the provider; the knowledge toolset has no memory
   operations.
+- **Looking for a developer skill** — there are none: the suite carries no
+  `dran-dev-*` (nothing about changing Dran's code). To change the code, read
+  the code.
 
 ## Cross-references
 
