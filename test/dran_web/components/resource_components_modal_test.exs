@@ -18,6 +18,7 @@ defmodule DranWeb.ResourceComponentsModalTest do
       |> Map.put_new(:submit_label, nil)
       |> Map.put_new(:with_sidebar, false)
       |> Map.put_new(:with_left, false)
+      |> Map.put_new(:height, "fill")
 
     render_component(
       fn assigns ->
@@ -29,6 +30,7 @@ defmodule DranWeb.ResourceComponentsModalTest do
           on_close="close_modal"
           form_id={@form_id}
           submit_label={@submit_label}
+          height={@height}
         >
           <:sidebar :if={@with_sidebar}>
             <select name="task[status]"><option value="todo">todo</option></select>
@@ -106,5 +108,31 @@ defmodule DranWeb.ResourceComponentsModalTest do
     html = render_modal(id: "test-modal", title: "T", with_left: true)
 
     assert html =~ "Archivar"
+  end
+
+  test "alto: el default `fill` estira el shell al viewport (§C7.2)" do
+    # Sin el attr `height`, el shell es el casi full-screen del molde: la clase
+    # que estira el card es la misma del mockup aprobado.
+    html =
+      render_component(
+        fn assigns ->
+          ~H"""
+          <ResourceComponents.resource_modal id="test-modal" title="T" on_close="close_modal">
+            <p id="modal-main-content">main</p>
+          </ResourceComponents.resource_modal>
+          """
+        end,
+        %{}
+      )
+
+    assert html =~ ~s| h-[calc(100vh-3rem)] sm:h-[calc(100vh-4rem)]|
+    refute html =~ "max-h-[calc(100vh-3rem)]"
+  end
+
+  test "alto `auto`: el shell mide su contenido y sólo se acota al viewport" do
+    html = render_modal(id: "test-modal", title: "T", height: "auto")
+
+    assert html =~ ~s| max-h-[calc(100vh-3rem)] sm:max-h-[calc(100vh-4rem)]|
+    refute html =~ ~s| h-[calc(100vh-3rem)]|
   end
 end

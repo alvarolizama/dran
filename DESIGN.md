@@ -888,7 +888,7 @@ sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
 
 | Componente | Qué es |
 |---|---|
-| `DranWeb.ResourceComponents.resource_modal/1` | modal **casi full-screen** (`h-[calc(100vh-3rem)]`, `max-w-5xl`) — implementación Dran del patrón **C7.2** (§T3.1) |
+| `DranWeb.ResourceComponents.resource_modal/1` | modal **casi full-screen** (`h-[calc(100vh-3rem)]`, `max-w-5xl`) — implementación Dran del patrón **C7.2** (§T3.1). Con `height="auto"` en cambio **mide su contenido** y sólo se acota al viewport (`max-h-[calc(100vh-3rem)]`): el molde del form corto, de un campo |
 | `DranWeb.ResourceComponents.resource_header/1` · `form_actions/1` · `markdown_body_field/1` | header con back-link, fila cancelar/guardar, campo body con editor |
 | `DranWeb.ResourceComponents.resource_list_header/1` · `resource_empty_state/1` · `resource_card/1` · `resource_filters/1` | **el estándar de la LISTA**: header (título + CTA), vacío, tarjeta y filtros. La tarjeta pinta SOLO las fichas del molde — estado (etiqueta + color), progreso, vencimiento (en rojo si pasó y no está cerrado) y destino, con `actualizado` a la derecha; los filtros (**estado** + **orden**) viven en la URL (`?status=`/`?order=`, el orden default no se escribe) como los del board. `/goals` y `/plans` son este molde; una ficha nueva se agrega UNA vez, acá (§T3.2) |
 | `DranWeb.MarkdownEditorComponents.markdown_editor/1` | editor TipTap |
@@ -919,6 +919,17 @@ sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
   y **click-away**, todos → `on_close`.
 - El botón **Guardar vive FUERA del `<form>`** (footer) y lo apunta con
   `form={@form_id}` → `form_id` debe coincidir con el `id` del `<.form>` (§C7.2).
+- **El alto se elige con el contenido, no con el gusto:** `height` (`fill` por
+  default · `auto`). `fill` es el shell casi full-screen de §C7.2 — el form
+  grande, donde el editor crece con la pantalla. `auto` mide el contenido y sólo
+  se acota al viewport (el cuerpo scrollea adentro, el header y el footer no):
+  es el molde del form de **un campo** (`/admin/groups`), donde `fill` dejaba el
+  campo flotando arriba de media pantalla vacía.
+
+```heex
+<%!-- form de un campo: alto flexible --%>
+<.resource_modal id="group-resource-modal" title="New group" height="auto" …>
+```
 
 #### T3.2 El estándar de la LISTA (`resource_list_header` · `resource_card` · `resource_empty_state` · `resource_filters`)
 

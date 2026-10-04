@@ -33,6 +33,13 @@ defmodule DranWeb.ResourceComponents do
 
   The overlay is fixed and near-full-screen (small inset) — the underlying
   page stays mounted underneath.
+
+  `height` decides what the card does with the viewport: `fill` (default, the
+  §C7.2 shell) stretches it to the viewport — the form of a big resource, where
+  the editor grows with the screen; `auto` lets it measure its content and caps
+  it at the viewport (`max-h`), so a short form — one field — is a short modal
+  instead of a full-screen box with the field floating at the top. With `auto`
+  a body taller than the viewport still scrolls inside the shell.
   """
   attr :id, :string, required: true
   attr :title, :string, required: true
@@ -44,6 +51,7 @@ defmodule DranWeb.ResourceComponents do
   attr :submit_disabled, :boolean, default: false
   attr :cancel_label, :string, default: nil
   attr :max_w, :string, default: "max-w-5xl"
+  attr :height, :string, default: "fill", values: ["fill", "auto"]
   slot :header
   slot :sidebar
   slot :left
@@ -64,7 +72,7 @@ defmodule DranWeb.ResourceComponents do
         phx-click-away={@on_close}
         class={[
           "card bg-base-100 border border-base-300 shadow-2xl w-full flex flex-col overflow-hidden",
-          "h-[calc(100vh-3rem)] sm:h-[calc(100vh-4rem)]",
+          height_class(@height),
           @max_w
         ]}
       >
@@ -138,6 +146,14 @@ defmodule DranWeb.ResourceComponents do
     </div>
     """
   end
+
+  # El alto del shell. `fill` (default, §C7.2): el modal casi full-screen de los
+  # forms grandes, donde el editor crece con la pantalla. `auto`: el modal mide
+  # lo que mide su contenido y sólo se acota al viewport (con el scroll adentro
+  # del cuerpo), que es lo que quiere un form de un campo — antes quedaba
+  # estirado a pantalla completa con el campo flotando arriba.
+  defp height_class("auto"), do: "max-h-[calc(100vh-3rem)] sm:max-h-[calc(100vh-4rem)]"
+  defp height_class(_fill), do: "h-[calc(100vh-3rem)] sm:h-[calc(100vh-4rem)]"
 
   @doc """
   Header shell for a resource page: optional back link, icon + title,

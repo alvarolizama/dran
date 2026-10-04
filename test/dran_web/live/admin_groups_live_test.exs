@@ -170,6 +170,19 @@ defmodule DranWeb.AdminGroupsLiveTest do
     assert has_element?(view, "#group-row-#{group.id}")
   end
 
+  test "el modal de un solo campo mide su contenido, no la pantalla", %{conn: conn} do
+    conn = owner_conn(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/groups?new=true")
+
+    modal = view |> element("#group-resource-modal") |> render()
+
+    # Un form de un campo no puede ser una caja casi full-screen con el campo
+    # flotando arriba: el shell va en `height="auto"` (se acota al viewport y
+    # el scroll queda adentro del cuerpo).
+    assert modal =~ ~s| max-h-[calc(100vh-3rem)] sm:max-h-[calc(100vh-4rem)]|
+    refute modal =~ ~s| h-[calc(100vh-3rem)]|
+  end
+
   test "el panel de miembros sigue abriendo en la página", %{conn: conn} do
     conn = owner_conn(conn)
     group = group_fixture("Con miembros")

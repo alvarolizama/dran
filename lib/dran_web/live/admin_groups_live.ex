@@ -641,6 +641,7 @@ defmodule DranWeb.AdminGroupsLive do
           submit_label={if @editing_group, do: gettext("Save"), else: gettext("Create")}
           cancel_label={gettext("Cancel")}
           max_w="max-w-xl"
+          height="auto"
         >
           <div class="max-w-xl">
             <.form
