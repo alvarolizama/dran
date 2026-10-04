@@ -252,9 +252,11 @@ defmodule DranWeb.SettingsLiveTest do
       assert has_element?(view, "#features-section")
       assert html =~ t("Knowledge base")
       assert html =~ t("Insights")
+      assert html =~ t("Surfaces")
 
       # Every toggle has a stable id and a caption saying what it gives you.
-      for feature <- ~w(search graph journey collections clusters reports activity) do
+      for feature <-
+            ~w(search graph journey collections clusters reports activity memory board goals plans services) do
         assert has_element?(view, "#feature-#{feature}")
         assert html =~ esc(t(feature_description(feature)))
       end
@@ -297,6 +299,40 @@ defmodule DranWeb.SettingsLiveTest do
     test "the Users tab explains what each role can do", %{conn: conn, ws: ws} do
       assert is_map(conn) and is_map(ws)
     end
+
+    test "las cinco superficies se apagan desde Features y su entrada sale del nav", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+
+      view
+      |> element("button[phx-click='select_tab'][phx-value-tab='features']")
+      |> render_click()
+
+      # Solo Memory queda encendida: las otras cuatro superficies se apagan.
+      render_submit(view, "save", %{
+        "workspace" => %{},
+        "enabled_features" => %{"memory" => "true"}
+      })
+
+      reloaded = Knowledge.get_workspace!(ws.id)
+      assert Dran.Workspace.feature_enabled?(reloaded, "memory")
+
+      for key <- ~w(board goals plans services) do
+        refute Dran.Workspace.feature_enabled?(reloaded, key)
+      end
+
+      # La entrada sale del nav de una página de conocimiento: apagar quita el
+      # punto de entrada, nunca el dato ni la ruta.
+      {:ok, nav_view, _html} = live(conn, ~p"/notes")
+
+      assert has_element?(nav_view, "aside a[href='/memory']")
+
+      for path <- ~w(/tasks /goals /plans /services) do
+        refute has_element?(nav_view, "aside a[href='#{path}']")
+      end
+    end
   end
 
   # Mirrors the private helpers in the LiveView, so the test asserts the copy
@@ -319,6 +355,16 @@ defmodule DranWeb.SettingsLiveTest do
     do: "Generated reports written from this workspace's content."
 
   defp feature_description("activity"), do: "Log of the recent changes to this workspace's pages."
+
+  defp feature_description("memory"),
+    do: "The atomic facts your workers keep — what the brain remembers between runs."
+
+  defp feature_description("board"), do: "The column view of your tasks, grouped by status."
+  defp feature_description("goals"), do: "Objectives with their progress and their subgoals."
+  defp feature_description("plans"), do: "Plans with their checklist and their steps."
+
+  defp feature_description("services"),
+    do: "The apps you connect so your agent can act on them."
 
   defp role_description("owner"), do: "Owner: settings, members and content."
   defp role_description("admin"), do: "Admin: settings and members, plus content."

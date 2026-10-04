@@ -439,4 +439,77 @@ defmodule DranWeb.SidebarNavTest do
       assert anchor =~ ~s(aria-current="page")
     end
   end
+
+  # Las superficies que el owner pidió poder apagar (2026-10-04): Board, Goals,
+  # Plans, Memory y Services. Cada una tiene su punto de entrada en el nav y su
+  # clave en el tab Features; apagarla quita ESE punto (nunca la ruta ni el
+  # dato). El nav resuelve el workspace por slug, así que el flag se prueba
+  # contra la fila.
+  describe "superficies apagables (memory, board, goals, plans, services)" do
+    @surfaces [
+      {"memory", "/memory"},
+      {"board", "/tasks"},
+      {"goals", "/goals"},
+      {"plans", "/plans"},
+      {"services", "/services"}
+    ]
+
+    defp nav_html do
+      render_component(&Layouts.sidebar_nav/1, %{
+        active: "home",
+        is_owner: true,
+        workspace_slug: "personal",
+        workspace_role: "owner"
+      })
+    end
+
+    defp set_enabled_features(map) do
+      ws = Dran.DataCase.ensure_workspace!()
+
+      ws
+      |> Ecto.Changeset.change(enabled_features: map)
+      |> Dran.Repo.update!()
+
+      :ok
+    end
+
+    test "cada superficie apagada sale del nav y las otras cuatro quedan" do
+      for {key, path} <- @surfaces do
+        set_enabled_features(%{key => false})
+        html = nav_html()
+
+        refute html =~ ~s(href="#{path}"), "#{key} apagada sigue en el nav"
+
+        for {other_key, other_path} <- @surfaces, other_key != key do
+          assert html =~ ~s(href="#{other_path}"),
+                 "#{other_key} desapareció con #{key} apagada"
+        end
+      end
+    end
+
+    test "prenderlas de nuevo las devuelve al nav" do
+      set_enabled_features(Map.new(@surfaces, fn {key, _path} -> {key, true} end))
+      html = nav_html()
+
+      for {_key, path} <- @surfaces do
+        assert html =~ ~s(href="#{path}")
+      end
+    end
+
+    # Una instancia que guardó su mapa ANTES de esta ola no tiene estas claves:
+    # `feature_enabled?/2` las lee como encendidas (nil → true), así que el nav
+    # no queda vacío ni pierde pantallas que ayer estaban.
+    test "un mapa viejo, sin las claves nuevas, no apaga ninguna superficie" do
+      set_enabled_features(%{"journey" => false, "graph" => true})
+      html = nav_html()
+
+      for {_key, path} <- @surfaces do
+        assert html =~ ~s(href="#{path}")
+      end
+
+      # Lo que SÍ estaba apagado sigue apagado, y lo prendido sigue prendido.
+      refute html =~ ~s(href="/journey")
+      assert html =~ ~s(href="/graph")
+    end
+  end
 end

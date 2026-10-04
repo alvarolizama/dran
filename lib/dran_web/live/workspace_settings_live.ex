@@ -31,9 +31,15 @@ defmodule DranWeb.WorkspaceSettingsLive do
   # "all on" (see `Workspace.feature_enabled?/2`). Only features with real entry
   # points gated in `Layouts.workspace_groups/3` (sidebar): kanban/chat were
   # removed products and "workers" was a typo for "workflows" (the gated key).
+  #
+  # "Surfaces" es el grupo que el owner pidió (2026-10-04): las cinco pantallas
+  # que hasta entonces se pintaban sin gate — Board, Goals, Plans, Memory y
+  # Services. Cada una tiene su punto de entrada en el nav y apagarla quita ESE
+  # punto: no borra páginas, relaciones ni hechos.
   @feature_groups [
     {"Knowledge base", ~w(search graph journey collections)},
-    {"Insights", ~w(clusters reports activity)}
+    {"Insights", ~w(clusters reports activity)},
+    {"Surfaces", ~w(memory board goals plans services)}
   ]
   @features Enum.flat_map(@feature_groups, fn {_group, keys} -> keys end)
 
@@ -2225,6 +2231,11 @@ defmodule DranWeb.WorkspaceSettingsLive do
   defp feature_label("activity"), do: gettext("Activity")
   defp feature_label("search"), do: gettext("Search")
   defp feature_label("reports"), do: gettext("Reports")
+  defp feature_label("memory"), do: gettext("Memory")
+  defp feature_label("board"), do: gettext("Board")
+  defp feature_label("goals"), do: gettext("Goals")
+  defp feature_label("plans"), do: gettext("Plans")
+  defp feature_label("services"), do: gettext("Services")
   defp feature_label(other), do: other
 
   # What the user loses by turning the feature off — the caption next to each
@@ -2251,10 +2262,26 @@ defmodule DranWeb.WorkspaceSettingsLive do
   defp feature_description("activity"),
     do: gettext("Log of the recent changes to this workspace's pages.")
 
+  defp feature_description("memory"),
+    do: gettext("The atomic facts your workers keep — what the brain remembers between runs.")
+
+  defp feature_description("board"),
+    do: gettext("The column view of your tasks, grouped by status.")
+
+  defp feature_description("goals"),
+    do: gettext("Objectives with their progress and their subgoals.")
+
+  defp feature_description("plans"),
+    do: gettext("Plans with their checklist and their steps.")
+
+  defp feature_description("services"),
+    do: gettext("The apps you connect so your agent can act on them.")
+
   defp feature_description(_other), do: ""
 
   defp group_label("Knowledge base"), do: gettext("Knowledge base")
   defp group_label("Insights"), do: gettext("Insights")
+  defp group_label("Surfaces"), do: gettext("Surfaces")
   defp group_label(other), do: other
 
   # Role labels come from gettext instead of `String.capitalize/1`: the raw

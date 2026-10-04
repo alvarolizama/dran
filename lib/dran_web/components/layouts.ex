@@ -480,18 +480,19 @@ defmodule DranWeb.Layouts do
                path: base <> "/clusters",
                badge: counts[:clusters] || 0
              },
-           # Memory: hechos atómicos de los workers. No lleva gate — no es un
-           # feature gestionable (no está en @features de WorkspaceSettingsLive),
-           # así que siempre está visible. Cierra el «Knowledge base» (debajo de
-           # Clusters, decisión del owner 2026-10-03): lo que los workers
-           # guardan es contenido almacenado, no trabajo.
-           %{
-             key: "memory",
-             label: gettext("Memory"),
-             icon: "hero-cpu-chip",
-             path: base <> "/memory",
-             badge: counts[:memory] || 0
-           }
+           # Memory: hechos atómicos de los workers. Cierra el «Knowledge base»
+           # (debajo de Clusters, decisión del owner 2026-10-03): lo que los
+           # workers guardan es contenido almacenado, no trabajo. Tiene gate
+           # propio (`memory` en el tab Features) como el resto de las
+           # superficies: apagarlo quita el punto de entrada, jamás el dato.
+           enabled?.("memory") &&
+             %{
+               key: "memory",
+               label: gettext("Memory"),
+               icon: "hero-cpu-chip",
+               path: base <> "/memory",
+               badge: counts[:memory] || 0
+             }
          ])
       |> Enum.reject(&(!&1))
 
@@ -512,12 +513,14 @@ defmodule DranWeb.Layouts do
             icon: "hero-clock",
             path: base <> "/journey"
           },
-        %{
-          key: "board",
-          label: gettext("Board"),
-          icon: "hero-view-columns",
-          path: base <> "/tasks"
-        }
+        # Board: la vista de columnas de las tasks. Gate propio (`board`).
+        enabled?.("board") &&
+          %{
+            key: "board",
+            label: gettext("Board"),
+            icon: "hero-view-columns",
+            path: base <> "/tasks"
+          }
       ]
       |> Enum.reject(&(!&1))
 
@@ -527,34 +530,41 @@ defmodule DranWeb.Layouts do
     # tampoco va acá: los hechos de los workers son contenido almacenado y
     # cierran «Knowledge base». El hueco del nav (los bloques se separan con el
     # `gap-4` del contenedor) queda ANTES de «Knowledge base».
-    work_items = [
-      %{
-        key: "goals",
-        label: gettext("Goals"),
-        icon: "hero-flag",
-        path: base <> "/goals"
-      },
-      %{
-        key: "plans",
-        label: gettext("Plans"),
-        icon: "hero-clipboard-document-list",
-        path: base <> "/plans"
-      }
-    ]
+    work_items =
+      [
+        enabled?.("goals") &&
+          %{
+            key: "goals",
+            label: gettext("Goals"),
+            icon: "hero-flag",
+            path: base <> "/goals"
+          },
+        enabled?.("plans") &&
+          %{
+            key: "plans",
+            label: gettext("Plans"),
+            icon: "hero-clipboard-document-list",
+            path: base <> "/plans"
+          }
+      ]
+      |> Enum.reject(&(!&1))
 
     # Sub-sección 4/4 — SERVICIOS: las apps que el lector conecta y que su agente
     # usa. Es superficie propia (como Memory), no un tipo de página, y va al
     # final: el badge cuenta los servicios EXPUESTOS por la instancia (dato
     # local) — contar conectadas costaría una llamada al vendor por render.
-    service_items = [
-      %{
-        key: "services",
-        label: gettext("Services"),
-        icon: "hero-squares-plus",
-        path: base <> "/services",
-        badge: counts[:services] || 0
-      }
-    ]
+    service_items =
+      [
+        enabled?.("services") &&
+          %{
+            key: "services",
+            label: gettext("Services"),
+            icon: "hero-squares-plus",
+            path: base <> "/services",
+            badge: counts[:services] || 0
+          }
+      ]
+      |> Enum.reject(&(!&1))
 
     # Las sub-secciones del nav, en orden: vistas → objetivos y planes →
     # knowledge base → servicios. Todas llevan rótulo: el nav se lee como
