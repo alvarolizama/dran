@@ -1,22 +1,22 @@
 ---
 name: dran
 description: "Use when operating Dran: router + shared rules."
-version: 12.0.0
+version: 13.0.0
 author: Álvaro Lizama
 license: MIT
 metadata:
   hermes:
     tags: [dran, second-brain, tools, knowledge-graph]
-    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-workers-flow, dran-memory-flow]
+    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-workers-flow, dran-memory-flow, dran-work-flow]
 ---
 
 # dran — plugin tools reference + suite router
 
 Main skill of the Dran suite. Load it first: it routes to the per-action
 flows and holds what every flow shares — connection, auth, the readback
-rule. Dran is the second brain: knowledge (pages) and memory. The agent's
-local execution discipline (ledger, briefs, delegation) is riel — this
-suite owns only the Dran call sequences.
+rule. Dran is the second brain: knowledge (pages), memory, and WORK (goals,
+tasks, plans). The agent's local execution discipline (ledger, briefs,
+delegation) is riel — this suite owns only the Dran call sequences.
 
 The agent consumes Dran through the **Hermes plugin tools** (`dran_*`); the
 The plugin registers its toolset via `register(ctx)` in
@@ -33,6 +33,8 @@ flowchart TD
   Q -->|"link pages\ntyped relations"| R[dran-relations-flow]
   Q -->|"run curator/link_gardener/\ngraph_rag"| X[dran-workers-flow]
   Q -->|"list/search/delete\nmemories"| M[dran-memory-flow]
+
+  Q -->|"goals, tasks, plans (work + checklist)"| W[dran-work-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
@@ -54,6 +56,7 @@ The flows above are for USING Dran. To CHANGE its code, load the matching
 | `dran-dev-slug-management` | slug creation/update policy |
 | `dran-dev-ui-tweaks` | Web UI edits from inspector snippets |
 | `dran-dev-inference-providers` | embeddings/chat provider config |
+| `dran-dev-plugin` | adding/changing a tool in the Hermes plugin (schemas, manifest, gates) |
 
 These are developer skills, not agent flows: they assume you are editing this
 repo, not operating a Dran instance.
@@ -122,6 +125,7 @@ flowchart LR
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (provider tools + REST) |
+| `dran-work-flow` | Goals, tasks and plans: alta, captura rápida, movimiento de columna, checklist y destino (`scope`/grupo) |
 
 ## Pitfalls
 

@@ -1,6 +1,6 @@
 ---
 name: dran-dev-plugin
-description: "Use when adding or changing a tool in the Dran Hermes plugin (hermes_plugin/dran)."
+description: "Use when adding or changing a Dran plugin tool."
 ---
 
 # Dran plugin surface — tools, manifest, gates

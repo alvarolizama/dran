@@ -4,8 +4,8 @@ Dran ships **two suites of skills**, both versioned with this repo:
 
 | Suite | Path | Who loads it | What it is for |
 |---|---|---|---|
-| **Agent flows** (5) | `skills/` | an agent operating a Dran instance | router + one flow per operation: knowledge, relations, workers, memory |
-| **Dev skills** (7) | `skills/dev/` | someone changing this repo's code | page types, auth surface, slug policy, settings, UI tweaks, inference, actor model |
+| **Agent flows** (6) | `skills/` | an agent operating a Dran instance | router + one flow per operation: knowledge, relations, workers, memory, work |
+| **Dev skills** (8) | `skills/dev/` | someone changing this repo's code | page types, auth surface, slug policy, settings, UI tweaks, inference, actor model, plugin |
 
 The agent flows are thin clients over the plugin tools (`dran_*`,
 `dran_memory_*`) — they teach the call sequences, not the internals. The dev
@@ -31,14 +31,14 @@ nothing.
 ## Install
 
 ```bash
-# 1. Agent flows (5) — the everyday suite
+# 1. Agent flows (6) — the everyday suite
 mkdir -p ~/Workspace/Skills
 for s in dran dran-knowledge-flow dran-memory-flow \
-         dran-relations-flow dran-workers-flow; do
+         dran-relations-flow dran-workers-flow dran-work-flow; do
   ln -sfn /path/to/dran/skills/$s ~/Workspace/Skills/$s
 done
 
-# 2. Dev skills (7) — only when you work on this repo
+# 2. Dev skills (8) — only when you work on this repo
 for s in /path/to/dran/skills/dev/dran-dev-*; do
   ln -sfn "$s" ~/Workspace/Skills/$(basename "$s")
 done
@@ -56,7 +56,7 @@ skills:
 Restart the Hermes session. Verify:
 
 ```bash
-hermes skills list | grep dran          # should list 12
+hermes skills list | grep dran          # should list 14
 ```
 
 ## Descriptions must stay ≤ 60 characters
@@ -81,7 +81,7 @@ done
 | Prefix | Meaning |
 |---|---|
 | `dran` | the router |
-| `dran-<flow>` | an agent operation flow (knowledge, relations, workers, memory) |
+| `dran-<flow>` | an agent operation flow (knowledge, relations, workers, memory, work) |
 | `dran-dev-<topic>` | a developer skill for this repo |
 
 The `dran-dev-` prefix matters: without it, developer notes compete with the

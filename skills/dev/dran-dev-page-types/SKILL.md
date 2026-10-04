@@ -1,6 +1,6 @@
 ---
 name: dran-dev-page-types
-description: "Use when changing Dran page types, built-in or per workspace."
+description: "Use when changing Dran page types (built-in or custom)."
 ---
 
 # dran-dev-page-types

@@ -15,11 +15,12 @@ short: it is injected every turn, and the detail lives in the skills.
   ledger and instantiate packets with `rielctl`). Riel creates no capability —
   it stops capability from being lost.
 - **Dran (second brain)** — when operating the Dran workspace (knowledge
-  pages, typed relations, memories, or its workers), load the `dran` skill
-  and whichever apply: `dran-knowledge-flow` (pages), `dran-relations-flow`
-  (typed links), `dran-memory-flow` (durable facts), `dran-workers-flow`
-  (curator / link_gardener / graph_rag). Dran stores and returns what is
-  known — it does not decide it.
+  pages, typed relations, memories, its workers, or the work surface: goals,
+  tasks and plans), load the `dran` skill and whichever apply:
+  `dran-knowledge-flow` (pages), `dran-relations-flow` (typed links),
+  `dran-memory-flow` (durable facts), `dran-workers-flow`
+  (curator / link_gardener / graph_rag), `dran-work-flow` (goals · tasks ·
+  plans). Dran stores and returns what is known — it does not decide it.
 ```
 
 ## Why this shape
