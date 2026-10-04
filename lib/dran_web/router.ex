@@ -368,6 +368,14 @@ defmodule DranWeb.Router do
     get "/tasks/:id", TaskController, :show
     get "/plans", PlanController, :index
     get "/plans/:slug", PlanController, :show
+
+    # Skills (read): el catálogo de instrucciones que un agente conectado por
+    # API descubre y carga por tool. La lectura pasa por el scope del lector en
+    # su punto único — el DETALLE incluido: un slug fuera de scope es 404, nunca
+    # 403, igual que en el resto de la casa. `:slug` es la dirección del wire y
+    # no se renombra.
+    get "/skills", SkillController, :index
+    get "/skills/:slug", SkillController, :show
   end
 
   # ── REST API — write routes (requires write access) ────────────
