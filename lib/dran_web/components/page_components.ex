@@ -614,6 +614,12 @@ defmodule DranWeb.PageComponents do
   `<video>` tags when the slug resolves to a file page in the
   given context.
 
+  The same post-process handles EXTERNAL provider embeds —
+  `![[yt:VIDEO_ID]]`, `![[vimeo:ID]]`, `![[map:query]]` — rendering them as an
+  `<iframe>` built from a validated id (`Dran.Embeds`). Raw HTML stays
+  forbidden in bodies: MDEx keeps `render: [unsafe: false]`, so an `<iframe>`
+  typed into a body is still discarded.
+
   Pass `:workspace_id` to resolve embeds; otherwise embeds render as
   literal text.
   """
@@ -625,6 +631,12 @@ defmodule DranWeb.PageComponents do
   def render_markdown(body, opts) when is_binary(body) do
     workspace_id = Keyword.get(opts, :workspace_id)
     inline_links = Keyword.get(opts, :inline_links) || []
+
+    # `![[<provider URL>]]` → `![[yt:ID]]` BEFORE MDEx runs. With
+    # `autolink: true` the URL inside the brackets would become
+    # `<a href=…>` and the embed would render as broken-link text.
+    body = Dran.Embeds.normalize_markdown(body)
+
     embeds = if workspace_id, do: Dran.Knowledge.fetch_embeds(body, workspace_id), else: %{}
 
     html =
@@ -702,27 +714,79 @@ defmodule DranWeb.PageComponents do
   end
 
   # Rewrite ![[slug|display]] embeds into media elements.
-  # MDEx leaves them as literal text in paragraphs.
-  defp rewrite_embeds(html, embeds) when embeds == %{}, do: html
-
+  #
+  # Two families land here, and the difference matters:
+  #
+  #   * an INTERNAL embed — the ref resolves to a `%Page{}` in this context,
+  #     rendered from the page's stored metadata (`render_embed/2`);
+  #   * an EXTERNAL provider embed (`yt:`, `vimeo:`, `map:`) — the iframe is
+  #     built by `render_external_embed/2` from what `Dran.Embeds.parse/1`
+  #     accepted, never from anything the author typed.
+  #
+  # Everything else is a broken embed.
   defp rewrite_embeds(html, embeds) do
     Regex.replace(
-      ~r/!\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/,
+      Dran.Embeds.embed_pattern(),
       html,
-      fn _match, slug, display ->
-        slug = String.trim(slug)
-        display = if display == "", do: slug, else: display
+      fn _match, ref, display ->
+        ref = String.trim(ref)
+        display = if display in [nil, ""], do: nil, else: String.trim(display)
 
-        case Map.get(embeds, slug) do
-          nil ->
-            # Unresolved embed — render as a broken-link placeholder.
-            ~s|<span class="embed-broken" title="embed not found: #{escape_html(slug)}">#{escape_html(display)}</span>|
-
-          page ->
-            render_embed(page, display)
+        case Map.get(embeds, ref) do
+          %Dran.Knowledge.Page{} = page -> render_embed(page, display || ref)
+          nil -> render_external_embed(ref, display)
         end
       end
     )
+  end
+
+  # ── External (third-party) embeds ──
+
+  defp render_external_embed(ref, display) do
+    case Dran.Embeds.parse(ref) do
+      {:ok, embed} ->
+        # Caption precedence: what the author wrote, then the oEmbed title if
+        # the cache has one (never a fetch — see Dran.Embeds.Cache), then the
+        # provider label.
+        render_iframe(embed, display || cached_title(embed) || embed.label)
+
+      {:error, _} ->
+        broken_embed(ref, display)
+    end
+  end
+
+  defp cached_title(embed) do
+    case Dran.Embeds.cached(embed.ref) do
+      %{title: title} when is_binary(title) -> title
+      _ -> nil
+    end
+  end
+
+  defp render_iframe(embed, caption) do
+    # src is the embed_url built by Dran.Embeds from a validated id; aspect and
+    # allow come from the provider registry — all three are HTML-escaped and
+    # none of them is author-controlled.
+    ~s|<figure class="embed embed-#{embed.provider} embed-frame">| <>
+      ~s|<div class="embed-frame-inner" style="aspect-ratio: #{embed.aspect}">| <>
+      ~s|<iframe src="#{escape_html(embed.embed_url)}"| <>
+      ~s| title="#{escape_html(caption)}"| <>
+      ~s| loading="lazy" referrerpolicy="strict-origin-when-cross-origin"| <>
+      fullscreen_attr(embed) <>
+      allow_attr(embed) <>
+      ~s|></iframe>| <>
+      ~s|</div><figcaption>#{escape_html(caption)}</figcaption></figure>|
+  end
+
+  # A map has nothing to go fullscreen; a player does.
+  defp fullscreen_attr(%{fullscreen: true}), do: " allowfullscreen"
+  defp fullscreen_attr(_embed), do: ""
+
+  defp allow_attr(%{allow: allow}) when is_binary(allow), do: ~s| allow="#{escape_html(allow)}"|
+  defp allow_attr(_embed), do: ""
+
+  defp broken_embed(ref, display) do
+    ~s|<span class="embed-broken" title="embed not found: #{escape_html(ref)}">| <>
+      ~s|#{escape_html(display || ref)}</span>|
   end
 
   defp render_embed(%Dran.Knowledge.Page{} = page, display) do
@@ -861,6 +925,7 @@ defmodule DranWeb.PageComponents do
           body={@page.body}
           workspace_id={@workspace_id}
           autosave={true}
+          resolve_embeds={true}
           save_status={@save_status}
           label={gettext("Content")}
         />
@@ -944,6 +1009,7 @@ defmodule DranWeb.PageComponents do
           body=""
           workspace_id={@workspace_id}
           autosave={false}
+          resolve_embeds={true}
           label={gettext("Content")}
         />
       </.form>

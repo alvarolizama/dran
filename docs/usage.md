@@ -57,6 +57,28 @@ The detail itself is read-only rendered markdown (mermaid included).
 The destination is chosen in the create modal's header, or in the edit form.
 An agent can set it per page (`private | public | shared`).
 
+### Body syntax
+
+Bodies are markdown (GFM: tables, tasklists, alerts, footnotes, mermaid code
+blocks). Three idioms are Dran's own:
+
+| Write | Get |
+|---|---|
+| `[[slug]]` or `[[slug\|display]]` | a link to another page |
+| `![[slug]]` | another page's media inline (image, video, audio, PDF) |
+| `![[yt:VIDEO_ID]]`, `![[vimeo:ID]]`, `![[map:query]]` | a third-party embed |
+
+External embeds: **YouTube** (`yt:` — the 11-char video id), **Vimeo**
+(`vimeo:` — the numeric id) and **Google Maps** (`map:` — a place/query, or a
+`!1m…` blob copied from Maps' *Share → Embed a map*). Paste the video or map
+URL into the editor and it becomes the canonical reference on its own; the
+title is filled in from the provider. A reference Dran cannot validate renders
+as a struck-through marker — it never becomes markup.
+
+Raw HTML in a body is **never** rendered (that is why the iframes you see are
+built by Dran from the validated id, not by the body). No key is needed for
+any of the three providers.
+
 **Tools.** `dran_create_page`, `dran_get_page`, `dran_list_pages`,
 `dran_update_page`, `dran_delete_page`, `dran_search`, `dran_get_links`,
 `dran_create_relation`, `dran_delete_relation`, `dran_rename_slug`,

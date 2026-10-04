@@ -32,6 +32,12 @@ defmodule DranWeb.MarkdownEditorComponents do
     that are not `page[...]` (e.g. `"task[body]"`).
   - `:min_height` (optional, default `nil`) — CSS min-height for the mount
     (e.g. `"220px"`). Defaults to the class-level `min-h-[300px]`.
+  - `:resolve_embeds` (optional, default `false`) — when `true`, the hook asks
+    the host LiveView for the oEmbed title of a pasted provider URL
+    (`resolve_embed` event) and fills the embed's display text with it. Opt in
+    only where the host delegates that event: elsewhere the event would go
+    unanswered. Passing `false` still inserts the embed reference on paste,
+    it just skips the title lookup.
   - `class` (optional) — extra classes for the outer container.
   """
   attr :id, :string, required: true
@@ -39,6 +45,7 @@ defmodule DranWeb.MarkdownEditorComponents do
   attr :workspace_id, :string, required: true
   attr :save_status, :string, default: "idle"
   attr :autosave, :boolean, default: true
+  attr :resolve_embeds, :boolean, default: false
   attr :toolbar, :boolean, default: true
   attr :hidden_field, :string, default: "page[body]"
   attr :min_height, :string, default: nil
@@ -62,6 +69,7 @@ defmodule DranWeb.MarkdownEditorComponents do
         data-body={@body}
         data-context-id={@workspace_id}
         data-autosave={to_string(@autosave)}
+        data-embed-resolve={to_string(@resolve_embeds)}
         data-hidden-field={@hidden_field}
       >
         <div
@@ -122,6 +130,7 @@ defmodule DranWeb.MarkdownEditorComponents do
       <.tb_btn id={@id} cmd="link" icon="hero-link" label="" testid="tb-link" />
       <.tb_btn id={@id} cmd="wikilink" icon="hero-link" label="[[]]" />
       <.tb_btn id={@id} cmd="embed" icon="hero-photo" label="![]" />
+      <.tb_btn id={@id} cmd="mediaEmbed" icon="hero-video-camera" label="" testid="tb-media-embed" />
       <.tb_btn id={@id} cmd="table" icon="hero-table-cells" label="" />
       <div class="tb-separator" aria-hidden="true"></div>
       <.tb_btn id={@id} cmd="mermaid" icon="hero-chart-bar-square" label="" />

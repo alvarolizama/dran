@@ -492,6 +492,58 @@ defmodule DranWeb.PagesLiveTest do
       updated = Knowledge.get_page_by_slug(page.slug, ws.id)
       assert updated.title == "Después del rename"
     end
+
+    test "an external embed renders as an iframe in the read view", %{conn: conn, ws: ws} do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Con video",
+          body: "Antes\n\n![[yt:dQw4w9WgXcQ]]\n\nDespués",
+          page_type: "note"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/notes/#{page.slug}")
+
+      assert html =~ ~s(src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ")
+      assert html =~ "<figcaption>YouTube</figcaption>"
+      # The surrounding body is untouched by the rewrite.
+      assert html =~ "Antes"
+      assert html =~ "Después"
+    end
+
+    test "an unresolvable embed renders as a broken marker, not as markup", %{conn: conn, ws: ws} do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Con embed roto",
+          body: "![[yt:corto]]",
+          page_type: "note"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/notes/#{page.slug}")
+
+      assert html =~ "embed-broken"
+      refute html =~ "<iframe"
+    end
+
+    test "the page editor opts in to embed resolution (the paste flow's server half)", %{
+      conn: conn,
+      ws: ws
+    } do
+      {:ok, page} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Nota editable",
+          body: "",
+          page_type: "note"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/notes/#{page.slug}?edit=true")
+
+      # The hook only asks the server for an oEmbed title where the host
+      # delegates `resolve_embed`: this attribute is that opt-in.
+      assert has_element?(view, ~s([data-embed-resolve="true"]))
+    end
   end
 
   describe "attribution — session user stamped on create/update" do

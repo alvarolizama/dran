@@ -2483,18 +2483,30 @@ defmodule Dran.Knowledge do
 
   Returns a map of `slug => %Page{}` for all embeds that resolve to a page
   in the given context. Useful for rendering embedded media in markdown.
+
+  External provider embeds (`yt:`, `vimeo:`, `map:`) are NOT looked up: they
+  are not page slugs — `DranWeb.PageComponents` renders them from
+  `Dran.Embeds` — and without this filter every video on a page would cost one
+  doomed `slug` query per render.
   """
   def fetch_embeds(body, workspace_id) when is_binary(body) and is_binary(workspace_id) do
     body
     |> extract_embeds()
     |> Enum.map(& &1.slug)
     |> Enum.uniq()
+    |> Enum.reject(&external_embed_ref?/1)
     |> Enum.reduce(%{}, fn slug, acc ->
       case get_page_by_slug(slug, workspace_id) do
         nil -> acc
         page -> Map.put(acc, slug, page)
       end
     end)
+  end
+
+  # A ref that is a third-party embed rather than a page slug. Same parser the
+  # renderer uses, so the two can never disagree about what is external.
+  defp external_embed_ref?(ref) do
+    match?({:ok, _}, Dran.Embeds.parse(ref))
   end
 
   defp replace_slug_in_body(body, old_slug, new_slug)

@@ -20,6 +20,113 @@ import { mermaidNodeView } from "./mermaid_codeblock.js"
 const WIKILINK_RE = /^\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/
 const EMBED_RE = /^!\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/
 
+// ── External embeds: URL → canonical reference ──
+//
+// The SERVER is the authority: `Dran.Embeds` validates the id again and builds
+// the iframe, and `Dran.Embeds.normalize_markdown/1` rewrites raw provider
+// URLs found in a body. This copy exists only so that a pasted URL becomes the
+// canonical reference (`![[yt:ID]]`) at the moment of insertion instead of a
+// plain link. Keep the two in sync when a provider is added.
+const YOUTUBE_HOSTS = [
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "music.youtube.com",
+  "youtube-nocookie.com",
+  "www.youtube-nocookie.com",
+]
+
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/
+const VIMEO_ID = /^[0-9]{4,12}$/
+
+const EMBED_PROVIDERS = [
+  {
+    key: "yt",
+    label: "YouTube",
+    id: YOUTUBE_ID,
+    match(url) {
+      const host = url.hostname.toLowerCase()
+      if (host === "youtu.be") return firstSegment(url.pathname)
+      if (!YOUTUBE_HOSTS.includes(host)) return null
+      const v = url.searchParams.get("v")
+      if (v) return v
+      const seg = url.pathname.match(/^\/(?:embed|shorts|live|v)\/([^/?#]+)/)
+      return seg ? seg[1] : null
+    },
+  },
+  {
+    key: "vimeo",
+    label: "Vimeo",
+    id: VIMEO_ID,
+    match(url) {
+      const host = url.hostname.toLowerCase()
+      if (!["vimeo.com", "www.vimeo.com", "player.vimeo.com"].includes(host)) return null
+      const seg = url.pathname.split("/").find((part) => VIMEO_ID.test(part))
+      return seg || null
+    },
+  },
+  {
+    // The canonical reference prefix is `map:` — `Dran.Embeds` accepts
+    // `maps:` too on input, but it always emits `map:`, and this table has to
+    // agree with it or the editor chip loses its provider.
+    key: "map",
+    label: "Google Maps",
+    // A map "id" is the search query, not a fixed-width token.
+    id: null,
+    match(url) {
+      const host = url.hostname.toLowerCase()
+      if (!["maps.google.com", "www.google.com", "google.com"].includes(host)) return null
+      // Only `/maps…` is a map: a google.com URL with a `q` elsewhere is a
+      // search (same rule as the server).
+      if (!url.pathname.startsWith("/maps")) return null
+      const query =
+        url.searchParams.get("q") ||
+        url.searchParams.get("query") ||
+        url.searchParams.get("daddr")
+      if (query) return query
+      // A `pb=` blob is deliberately NOT handled here: the `+` inside it means a
+      // space for Google's parser and the URL API would eat it. The server
+      // normalizes that form (`Dran.Embeds.normalize_markdown/1`).
+      const place = url.pathname.match(/^\/maps\/place\/([^/@?]+)/)
+      return place ? decodeURIComponent(place[1].replace(/\+/g, " ")) : null
+    },
+  },
+]
+
+function firstSegment(pathname) {
+  const seg = pathname.match(/^\/([^/?#]+)/)
+  return seg ? seg[1] : null
+}
+
+// The canonical reference for a pasted URL, or null when it is not one of the
+// supported providers.
+function embedRefFromUrl(raw) {
+  const value = (raw || "").trim()
+  if (!/^https?:\/\//i.test(value)) return null
+
+  let url
+  try {
+    url = new URL(value)
+  } catch {
+    return null
+  }
+
+  for (const provider of EMBED_PROVIDERS) {
+    const id = provider.match(url)
+    if (!id) continue
+    if (provider.id && !provider.id.test(id)) continue
+    return { ref: `${provider.key}:${id}`, label: provider.label }
+  }
+
+  return null
+}
+
+function embedProviderLabel(slug) {
+  const prefix = String(slug || "").split(":")[0]
+  const provider = EMBED_PROVIDERS.find((p) => p.key === prefix)
+  return provider ? provider.label : null
+}
+
 // ── Wikilink node: [[slug|display]] ──
 const Wikilink = Node.create({
   name: "wikilink",
@@ -144,14 +251,16 @@ const Embed = Node.create({
   renderHTML({ node }) {
     const slug = node.attrs.slug || ""
     const display = node.attrs.display || slug
+    const provider = embedProviderLabel(slug)
+    const glyph = provider ? "▶" : "📎"
     return [
       "span",
       mergeAttributes({
         class: "embed-placeholder",
         "data-embed": slug,
-        title: `embed: ${slug}`,
+        title: provider ? `${provider}: ${slug}` : `embed: ${slug}`,
       }),
-      `📎 ${display}`,
+      `${glyph} ${display}`,
     ]
   },
 
@@ -254,6 +363,8 @@ const MarkdownEditor = {
         attributes: {
           class: "tiptap prose prose-base dark:prose-invert max-w-none focus:outline-none",
         },
+        // A pasted provider URL becomes an embed reference, not a link.
+        handlePaste: (view, event) => this.handlePaste(view, event),
       },
     })
 
@@ -354,6 +465,72 @@ const MarkdownEditor = {
     }
   },
 
+  // ── External embeds ──
+
+  // Pasting a bare provider URL inserts the canonical embed reference and asks
+  // the server for the oEmbed title. Any other paste (including a URL inside a
+  // sentence, which should stay text) returns false and TipTap handles it.
+  handlePaste(view, event) {
+    const clipboard = event.clipboardData
+    if (!clipboard) return false
+
+    const text = (clipboard.getData("text/plain") || "").trim()
+    if (!/^https?:\/\/\S+$/.test(text)) return false
+
+    const embed = embedRefFromUrl(text)
+    if (!embed) return false
+
+    const { state } = view
+    const embedNode = state.schema.nodes.embed
+    if (!embedNode) return false
+
+    const { from, to } = state.selection
+    view.dispatch(
+      state.tr.replaceRangeWith(from, to, embedNode.create({ slug: embed.ref, display: "" }))
+    )
+    this.requestEmbedTitle(embed.ref)
+    return true
+  },
+
+  // Ask the server (this LiveView) for the oEmbed title. Only surfaces that
+  // delegate the `resolve_embed` event opt in with data-embed-resolve="true":
+  // everywhere else the reference is inserted as-is and no event is sent.
+  requestEmbedTitle(ref) {
+    if (this.el.dataset.embedResolve !== "true") return
+
+    this.pushEvent("resolve_embed", { ref }, (reply) => {
+      if (!reply || !reply.ok || !reply.title) return
+      this.setEmbedDisplay(ref, reply.title)
+    })
+  },
+
+  // Fill the display text of the embed nodes that reference `ref` and carry
+  // none, so the body ends up as `![[yt:ID|Title]]`.
+  setEmbedDisplay(ref, title) {
+    const editor = this.editor
+    if (!editor) return
+
+    const { state } = editor.view
+    let target = null
+
+    state.doc.descendants((node, pos) => {
+      if (target) return false
+
+      if (node.type.name === "embed" && node.attrs.slug === ref && !node.attrs.display) {
+        target = { pos, attrs: node.attrs }
+        return false
+      }
+
+      return true
+    })
+
+    if (!target) return
+
+    editor.view.dispatch(
+      state.tr.setNodeMarkup(target.pos, null, { ...target.attrs, display: title })
+    )
+  },
+
   runCommand(cmd) {
     const editor = this.editor
     if (!editor) return
@@ -390,6 +567,22 @@ const MarkdownEditor = {
       case "embed": {
         // Trigger file upload via LiveView event
         this.pushEvent("request_upload", {})
+        break
+      }
+      case "mediaEmbed": {
+        // A video or a map hosted somewhere else: paste the URL of the item.
+        const url = prompt("URL del video o del mapa (YouTube, Vimeo, Google Maps):")
+        if (!url) break
+
+        const embed = embedRefFromUrl(url)
+
+        if (!embed) {
+          alert("Proveedor no soportado: pega una URL de YouTube, Vimeo o Google Maps.")
+          break
+        }
+
+        chain.insertContent({ type: "embed", attrs: { slug: embed.ref, display: "" } }).run()
+        this.requestEmbedTitle(embed.ref)
         break
       }
       case "table":

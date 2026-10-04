@@ -231,6 +231,7 @@ defmodule DranWeb.ResourceComponents do
   attr :hidden_field, :string, default: "page[body]"
   attr :label, :string, default: nil
   attr :autosave, :boolean, default: false
+  attr :resolve_embeds, :boolean, default: false
   attr :save_status, :string, default: "idle"
   attr :toolbar, :boolean, default: true
   attr :min_height, :string, default: nil
@@ -246,6 +247,7 @@ defmodule DranWeb.ResourceComponents do
         body={@body}
         workspace_id={@workspace_id}
         autosave={@autosave}
+        resolve_embeds={@resolve_embeds}
         save_status={@save_status}
         toolbar={@toolbar}
         hidden_field={@hidden_field}

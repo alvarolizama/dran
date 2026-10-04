@@ -57,7 +57,9 @@ Two things live inside, and they are different on purpose:
   `works_in`, `has_tier`, `based_in`, `written_in`, `built_with`, `informs`).
   Five `meta.props` keys auto-materialize into edges.
 - **TipTap markdown editor** — tables, code blocks, mermaid, `![[slug]]`
-  embeds. Version history with diff view.
+  embeds of your own pages and `![[yt:ID]]` / `![[vimeo:ID]]` / `![[map:q]]`
+  third-party embeds (paste a URL, Dran builds the frame — no key, no raw
+  HTML). Version history with diff view.
 - **Hybrid search** — full-text, fuzzy and semantic, fused.
 
 **Memory**

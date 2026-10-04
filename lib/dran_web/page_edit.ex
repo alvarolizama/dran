@@ -21,6 +21,7 @@ defmodule DranWeb.PageEdit do
   - `"save_page"` — persist the page (create or update)
   - `"body_change"` — autosave body (debounced on the client)
   - `"request_upload"` — open the file picker for an embed upload
+  - `"resolve_embed"` — oEmbed metadata for a pasted external embed
   - `"cancel_edit"` — exit edit mode
   """
 
@@ -356,6 +357,35 @@ defmodule DranWeb.PageEdit do
     else
       {:noreply, put_flash(socket, :error, gettext("Uploads are not configured."))}
     end
+  end
+
+  # `resolve_embed` — oEmbed metadata for an external embed the editor just
+  # inserted (`![[yt:ID]]`, `![[vimeo:ID]]`, `![[map:query]]`).
+  #
+  # Read-only and side-effect free: it answers with `{:reply, ...}` so the JS
+  # hook can fill the embed's display text with the provider title. The result
+  # lands in `Dran.Embeds.Cache`, which is where the RENDER path reads it from —
+  # rendering never talks to a provider (see `Dran.Embeds.Cache`).
+  #
+  # Google Maps publishes no oEmbed endpoint, so it answers `ok: false`; the
+  # embed still renders, captioned by its provider label. This handler only runs
+  # on surfaces whose editor opts in with `resolve_embeds` (see
+  # `DranWeb.MarkdownEditorComponents.markdown_editor/1`).
+  def handle_event("resolve_embed", %{"ref" => ref}, socket) when is_binary(ref) do
+    reply =
+      case Dran.Embeds.resolve(ref) do
+        {:ok, meta} ->
+          %{ok: true, title: meta.title, author: meta.author, provider: meta.provider}
+
+        {:error, reason} ->
+          %{ok: false, reason: inspect(reason)}
+      end
+
+    {:reply, reply, socket}
+  end
+
+  def handle_event("resolve_embed", _params, socket) do
+    {:reply, %{ok: false, reason: "missing_ref"}, socket}
   end
 
   def handle_event("upload_complete", _params, %{assigns: %{upload: _upload}} = socket) do

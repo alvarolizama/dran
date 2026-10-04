@@ -429,6 +429,12 @@ defmodule DranWeb.PagesLive do
   def handle_event("request_upload", params, socket),
     do: PageEdit.handle_event("request_upload", params, socket)
 
+  # Only the page editors opt in (`resolve_embeds`): a pasted YouTube/Vimeo URL
+  # asks here for its oEmbed title, which the hook writes into the embed's
+  # display text.
+  def handle_event("resolve_embed", params, socket),
+    do: PageEdit.handle_event("resolve_embed", params, socket)
+
   def handle_event("upload_complete", params, socket),
     do: PageEdit.handle_event("upload_complete", params, socket)
 

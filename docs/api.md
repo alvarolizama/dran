@@ -232,6 +232,24 @@ curl -s "localhost:4000/api/knowledge-pages/hello?workspace=personal&include=bod
   -H "Authorization: Bearer $KEY"
 ```
 
+**Body syntax an agent may write.** `body` is markdown. Besides GFM, two
+embed idioms are Dran's own and are rendered by the web surface:
+
+| In the body | Renders as |
+|---|---|
+| `[[slug]]` / `[[slug\|display]]` | a link to another page |
+| `![[slug]]` | that page's media inline (image, video, audio, PDF) |
+| `![[yt:VIDEO_ID]]` | a YouTube player (nocookie), no key needed |
+| `![[vimeo:ID]]` | a Vimeo player, no key needed |
+| `![[map:query]]` | a Google Maps frame, no key needed |
+
+A video or map reference must be the canonical `<provider>:<id>` form:
+11 url-safe characters for `yt:`, digits for `vimeo:`, a place/query (or a
+`!1m…` blob from Maps' *Share → Embed a map*) for `map:`. A full provider URL
+works too (`![[https://youtu.be/VIDEO_ID]]`) — Dran normalizes it. Anything
+else renders as a broken-embed marker; raw HTML in a body is discarded, so
+an `<iframe>` sent through the API never renders.
+
 ### Relations
 
 | Method | Path | Auth | Purpose |

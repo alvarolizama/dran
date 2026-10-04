@@ -96,6 +96,11 @@ flowchart TD
 - `dran_list_pages` takes an optional `page_type`; `dran_list_page_types`
   returns the effective types with their full definitions; `dran_get_page`
   for one slug.
+- **The body is markdown, and it embeds**: `![[slug]]` frames another page's
+  media, and `![[yt:VIDEO_ID]]` / `![[vimeo:ID]]` / `![[map:query]]` frame
+  YouTube, Vimeo and Google Maps (a full provider URL works as well — Dran
+  normalizes it). Raw HTML in a body is discarded, so never send an
+  `<iframe>`: the reference is the contract.
 - **Brain ops on a page** — real tools of this flow, no separate skill:
   - `dran_rename_slug` — rewrites every `![[old-slug]]` embed in the
     workspace, so it WRITES other pages: ASK first.

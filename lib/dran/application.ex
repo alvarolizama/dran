@@ -27,6 +27,9 @@ defmodule Dran.Application do
       Dran.Relations.Supervisor,
       Dran.Scheduler,
       Dran.GraphCache,
+      # External-embed metadata (oEmbed titles/thumbnails): written when an
+      # embed is inserted, read — never fetched — while rendering.
+      Dran.Embeds.Cache,
       DranWeb.LoginThrottle,
       DranWeb.Endpoint
     ]
