@@ -60,14 +60,18 @@ defmodule DranWeb.Layouts do
     # Resolve admin status for the sidebar's admin-only links. A session user
     # with a row in users is admin iff users.is_owner; a session user without
     # a DB row (pre-multi-user sessions) is treated as a full admin.
-    is_owner =
+    {is_owner, can_config} =
       if is_binary(assigns[:current_user]) do
         case Dran.Accounts.get_user_by_email(assigns[:current_user]) do
-          nil -> true
-          user -> user.is_owner == true
+          nil -> {true, true}
+          user -> {user.is_owner == true, Dran.Accounts.User.instance_admin?(user)}
         end
       else
-        assigns[:is_owner] || false
+        # Sin fila que consultar (current_user no binario): el shell hereda el
+        # flag y el flag manda — el comportamiento legacy de las sesiones
+        # pre-multi-user.
+        owner = assigns[:is_owner] || false
+        {owner, owner}
       end
 
     # If the caller didn't forward page_counts, compute them here so the
@@ -110,11 +114,14 @@ defmodule DranWeb.Layouts do
         counts: counts,
         page_counts: page_counts,
         is_owner: is_owner,
-        # Quién configura la instancia: el dueño o un admin de instancia — la
-        # MISMA regla que aplica `DranWeb.WorkspaceSettingsLive` (y la que ya
-        # derivaba `user_footer`). Se computa una vez y se la llevan los dos
-        # navs para no divergir.
-        can_config: is_owner or assigns[:workspace_role] in ~w(owner admin),
+        # Quién configura la instancia: la FILA decide (dueño ∪ instance_role
+        # admin/owner) — el MISMO predicado que el guard de la ruta
+        # (`require_instance_admin/2` y su gemelo `LiveAuth.on_mount`) y el que
+        # aplica `DranWeb.WorkspaceSettingsLive`. No `workspace_role`: ese es
+        # el rol de MEMBRESÍA en el workspace y un admin de instancia puede ser
+        # sólo viewer ahí — el ítem del nav no puede depender de la página
+        # donde estás parado.
+        can_config: can_config,
         instance_nav?: instance_nav?
       )
 
@@ -736,10 +743,16 @@ defmodule DranWeb.Layouts do
   def user_footer(assigns) do
     name = display_name(assigns[:user], assigns[:current_user])
 
-    # El shell lo computa una vez (`Layouts.app/1`); un render suelto —los tests
-    # montan el componente solo— lo deriva de sus propios assigns.
+    # El shell lo computa una vez (`Layouts.app/1`, desde la FILA); un render
+    # suelto —los tests montan el componente solo— lo deriva de sus propios
+    # assigns: el owner flag, el rol de workspace o la fila que el caller traiga.
     can_config =
-      assigns[:can_config] || assigns[:is_owner] || assigns[:workspace_role] in ~w(owner admin)
+      assigns[:can_config] || assigns[:is_owner] ||
+        assigns[:workspace_role] in ~w(owner admin) ||
+        case assigns[:user] do
+          %Dran.Accounts.User{} = user -> Dran.Accounts.User.instance_admin?(user)
+          _ -> false
+        end
 
     assigns =
       assigns

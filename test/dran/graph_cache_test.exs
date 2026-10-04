@@ -163,6 +163,67 @@ defmodule Dran.GraphCacheTest do
     assert {goal.id, page.id} in edge_pairs(own) or {page.id, goal.id} in edge_pairs(own)
   end
 
+  # El total de aristas (total_edges) cuenta TODAS las familias que la lista
+  # pinta: page↔page, memory→page, memory↔memory y page↔entidad. Antes el
+  # aggregate capeado sólo contaba page↔page (su join interno a Page no matchea
+  # extremos polimórficos) y el «X de Y» del UI subcontaba.
+  test "total_edges cuenta las aristas de entidad y de memoria, capeado o no" do
+    workspace = Dran.DataCase.ensure_workspace!()
+    author = user!("graph-totals-author")
+
+    page_a = page!(workspace, author, "Página A del total", "public")
+    page_b = page!(workspace, author, "Página B del total", "public")
+    goal = goal!(author)
+    plan = plan!(author)
+
+    # Dos aristas de página↔página, una goal↔página y una plan↔página.
+    {:ok, _} =
+      Knowledge.create_relation(%{
+        source_id: page_a.id,
+        source_type: "page",
+        target_id: page_b.id,
+        target_type: "page",
+        relation_type: "related"
+      })
+
+    {:ok, _} =
+      Knowledge.create_relation(%{
+        source_id: goal.id,
+        source_type: "goal",
+        target_id: page_a.id,
+        target_type: "page",
+        relation_type: "related"
+      })
+
+    {:ok, _} =
+      Knowledge.create_relation(%{
+        source_id: plan.id,
+        source_type: "plan",
+        target_id: page_b.id,
+        target_type: "page",
+        relation_type: "related"
+      })
+
+    # Uncapped: la lista completa es el total.
+    full = Knowledge.graph_data(workspace.id, scope: :all)
+
+    assert length(full.edges) == full.total_edges
+    assert full.total_edges == 3
+
+    # Capeado (máximo 1 página visible): el total de page↔page sale del
+    # aggregate REAL del workspace (1), no de la lista truncada (0). Las
+    # aristas de entidad cuentan las que el grafo PINTA: con una sola página
+    # visible, la intersección estricta deja fuera las dos — el «X de Y»
+    # describe la vista, no el universo.
+    capped = Knowledge.graph_data(workspace.id, scope: :all, max_nodes: 1)
+
+    assert length(capped.edges) < capped.total_edges
+    assert capped.total_edges == 2
+    # El cap guarda la página MÁS CONECTADA (page_a): su arista de entidad
+    # sobrevive en la lista; la de page_b queda fuera con la página.
+    assert length(capped.edges) == 1
+  end
+
   test "el cache está keyeado por los DOS scopes: dos lectores, dos payloads" do
     workspace = Dran.DataCase.ensure_workspace!()
     one = user!("graph-cache-one")

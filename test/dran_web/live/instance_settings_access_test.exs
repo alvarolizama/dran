@@ -78,6 +78,44 @@ defmodule DranWeb.InstanceSettingsAccessTest do
     end
   end
 
+  describe "el nav muestra Instance settings donde el guard ya admitiría" do
+    # El guard de la ruta admite owner ∪ admin de instancia EN CUALQUIER página;
+    # el ítem del nav no puede depender de dónde esté parado el lector: la misma
+    # fila que decide el guard decide el enlace (bug medido: en /settings/account
+    # un admin de instancia perdía el enlace porque `can_config` salía del rol
+    # de membresía del workspace, que para él era nil).
+    test "un admin de instancia ve el enlace en /settings/account", %{conn: conn} do
+      admin = user!("nav_admin@test.dev") |> with_role("admin")
+      conn = session_conn(conn, admin.email, false)
+
+      {:ok, view, _html} = live(conn, ~p"/settings/account")
+
+      assert has_element?(view, "aside a[href='/settings/instance']")
+    end
+
+    test "un admin de instancia ve el enlace también en una página de conocimiento", %{
+      conn: conn
+    } do
+      admin = user!("nav_admin_knowledge@test.dev") |> with_role("admin")
+      conn = session_conn(conn, admin.email, false)
+
+      {:ok, view, _html} = live(conn, ~p"/notes")
+
+      assert has_element?(view, "#user-menu a[href='/settings/instance']")
+    end
+
+    test "un viewer no lo ve en ninguna de las dos", %{conn: conn} do
+      viewer = user!("nav_viewer@test.dev") |> with_role("viewer")
+      conn = session_conn(conn, viewer.email, false)
+
+      {:ok, view_account, _html} = live(conn, ~p"/settings/account")
+      {:ok, view_notes, _html} = live(conn, ~p"/notes")
+
+      refute has_element?(view_account, "aside a[href='/settings/instance']")
+      refute has_element?(view_notes, "#user-menu a[href='/settings/instance']")
+    end
+  end
+
   describe "el gemelo del socket (re-mount por websocket)" do
     defp hook(session) do
       socket = %Phoenix.LiveView.Socket{assigns: %{flash: %{}}}

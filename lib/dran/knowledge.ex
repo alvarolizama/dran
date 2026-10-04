@@ -1521,9 +1521,9 @@ defmodule Dran.Knowledge do
     memory_ids = Enum.map(memory_nodes, & &1.id)
     entity_ids = Enum.map(entity_nodes, & &1.id)
 
-    edges =
+    {edges, page_edges} =
       if Enum.empty?(node_ids) and Enum.empty?(memory_ids) and Enum.empty?(entity_ids) do
-        []
+        {[], []}
       else
         # Page↔Page edges (both endpoints are pages)
         page_edges =
@@ -1616,12 +1616,13 @@ defmodule Dran.Knowledge do
             )
           end
 
-        page_edges ++ memory_edges ++ memory_memory_edges ++ entity_edges
+        all_edges = page_edges ++ memory_edges ++ memory_memory_edges ++ entity_edges
+        {all_edges, page_edges}
       end
 
-    total_edges =
-      if total_nodes <= length(nodes) do
-        length(edges)
+    page_edges_total =
+      if total_pages <= length(page_nodes) do
+        length(page_edges)
       else
         q =
           from r in Relation,
@@ -1639,6 +1640,10 @@ defmodule Dran.Knowledge do
 
         Repo.aggregate(q, :count)
       end
+
+    # Memoria y entidad no se capean: la lista visible ES el total.
+    total_edges =
+      page_edges_total + length(edges) - length(page_edges)
 
     %{nodes: nodes, edges: edges, total_nodes: total_nodes, total_edges: total_edges}
   end
