@@ -15,6 +15,7 @@ defmodule DranWeb.API.TasksTest do
   use DranWeb.ConnCase, async: false
 
   alias Dran.{Accounts, Goals, Tasks}
+  alias Dran.Sharing
 
   setup do
     Dran.DataCase.ensure_workspace!()
@@ -34,7 +35,14 @@ defmodule DranWeb.API.TasksTest do
         api_token: "tok-task-stranger-#{u}"
       })
 
-    %{owner: owner, stranger: stranger}
+    {:ok, member} =
+      Accounts.create_user(%{
+        email: "task-member-#{u}@example.com",
+        name: "Member",
+        api_token: "tok-task-member-#{u}"
+      })
+
+    %{owner: owner, stranger: stranger, member: member}
   end
 
   describe "crear (P3)" do
@@ -176,6 +184,50 @@ defmodule DranWeb.API.TasksTest do
         |> Map.fetch!("data")
 
       assert Enum.map(data, & &1["id"]) == [done.id]
+    end
+
+    test "el goal compartido con un grupo: la task la lee el miembro, no el tercero", %{
+      owner: owner,
+      member: member,
+      stranger: stranger
+    } do
+      # La task NO declara visibilidad: hereda la del goal, así que compartir el
+      # goal es lo que comparte sus tasks (y el caso positivo faltaba).
+      group = group_with(owner, [member])
+
+      goal =
+        json_response(
+          post_json(conn_for(owner), "/api/goals", %{
+            "title" => "Del equipo",
+            "scope" => %{"group" => group.slug}
+          }),
+          201
+        )["data"]
+
+      assert goal["visibility"] == "shared"
+
+      task =
+        json_response(
+          post_json(conn_for(owner), "/api/tasks", %{
+            "goal" => goal["id"],
+            "title" => "La del equipo"
+          }),
+          201
+        )["data"]
+
+      # El miembro la lee, y también la ve en el índice…
+      assert json_response(get_json(conn_for(member), "/api/tasks/#{task["id"]}"), 200)["data"][
+               "id"
+             ] ==
+               task["id"]
+
+      listed =
+        conn_for(member) |> get_json("/api/tasks") |> json_response(200) |> Map.fetch!("data")
+
+      assert Enum.any?(listed, &(&1["id"] == task["id"]))
+
+      # …y el tercero no: 404 (fail-closed, la existencia no se filtra).
+      assert json_response(get_json(conn_for(stranger), "/api/tasks/#{task["id"]}"), 404)
     end
   end
 
@@ -461,5 +513,14 @@ defmodule DranWeb.API.TasksTest do
   defp task!(goal, attrs) do
     {:ok, task} = Tasks.create_task(Map.put(attrs, "goal_id", goal.id))
     task
+  end
+
+  # Un grupo con el dueño dentro y los miembros que se pidan (el mismo helper de
+  # `goals_test`: la membresía es lo que hace legible lo compartido).
+  defp group_with(owner, members) do
+    {:ok, group} = Sharing.create_group(%{name: "Equipo #{u()}"})
+    {:ok, _} = Sharing.add_group_member(group, owner.id)
+    Enum.each(members, fn m -> {:ok, _} = Sharing.add_group_member(group, m.id) end)
+    group
   end
 end
