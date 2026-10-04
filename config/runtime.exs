@@ -36,6 +36,11 @@ config :dran, :uploads,
 # Inference API configuration. Disabled when DRAN_INFERENCE_API_URL is not set.
 config :dran, :inference, Dran.Inference.Config.load_from_env()
 
+# Composio (services surface). Disabled when DRAN_COMPOSIO_API_KEY is not set:
+# the key is instance state — one scoped project key, server-side only — and
+# the whole /api/services surface answers :not_configured without it.
+config :dran, :composio, Dran.Composio.Config.load_from_env()
+
 config :dran, :worker_max_steps, String.to_integer(System.get_env("WORKER_MAX_STEPS", "150"))
 
 config :dran,

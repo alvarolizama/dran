@@ -335,6 +335,12 @@ defmodule DranWeb.Router do
     get "/memory", MemoryController, :index
     get "/memory/search", MemoryController, :search
 
+    # Servicios (lectura): el estado de lo que ESTE lector tiene conectado,
+    # recortado por la allowlist de instancia. La lista de conexiones de
+    # Composio es del PROYECTO, así que el filtro por el lector es parte del
+    # contrato de la lectura (`Dran.Services`), no un detalle del controlador.
+    get "/services", ServiceController, :index
+
     # Groups (read) — W7/P19: los grupos donde el lector es MIEMBRO, el mismo
     # conjunto al que puede apuntar con un `scope` de grupo (W6). El payload
     # está acotado al lector, así que no hay workspace que autorizar.
