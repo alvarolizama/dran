@@ -436,8 +436,6 @@ defmodule DranWeb.WorkspaceSettingsLive do
       params
       |> brain_attrs()
       |> Map.put("enabled_features", features_attrs(params))
-      |> Map.put("share_memory", share_attr(params, "share_memory"))
-      |> Map.put("share_pages", share_attr(params, "share_pages"))
 
     case workspace |> Workspace.settings_changeset(attrs) |> Repo.update() do
       {:ok, updated} ->
@@ -1307,75 +1305,6 @@ defmodule DranWeb.WorkspaceSettingsLive do
             </div>
           </div>
 
-          <%!-- Read sharing policy --%>
-          <div class="space-y-3">
-            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-              {gettext("Share read access")}
-            </h3>
-            <div class="space-y-4">
-              <div>
-                <input
-                  type="hidden"
-                  name="workspace[share_memory]"
-                  value="false"
-                />
-                <label
-                  for="workspace-share-memory"
-                  class="flex items-start gap-3 cursor-pointer rounded-xl border border-base-content/10 px-3 py-2.5 transition-colors duration-150 hover:bg-base-200/40"
-                >
-                  <input
-                    id="workspace-share-memory"
-                    type="checkbox"
-                    name="workspace[share_memory]"
-                    value="true"
-                    checked={@workspace.share_memory}
-                    class="mt-0.5 size-4 rounded border-base-300 text-primary focus:ring-1 focus:ring-primary"
-                  />
-                  <span class="min-w-0">
-                    <span class="block text-sm font-medium text-base-content">
-                      {gettext("Share memory between workspace users")}
-                    </span>
-                    <span class="block text-xs text-base-content/60 mt-1">
-                      {gettext(
-                        "When disabled, each user (and their agents) only sees the facts that belong to them; workspace owners and admins keep the full view."
-                      )}
-                    </span>
-                  </span>
-                </label>
-              </div>
-              <div>
-                <input
-                  type="hidden"
-                  name="workspace[share_pages]"
-                  value="false"
-                />
-                <label
-                  for="workspace-share-pages"
-                  class="flex items-start gap-3 cursor-pointer rounded-xl border border-base-content/10 px-3 py-2.5 transition-colors duration-150 hover:bg-base-200/40"
-                >
-                  <input
-                    id="workspace-share-pages"
-                    type="checkbox"
-                    name="workspace[share_pages]"
-                    value="true"
-                    checked={@workspace.share_pages}
-                    class="mt-0.5 size-4 rounded border-base-300 text-primary focus:ring-1 focus:ring-primary"
-                  />
-                  <span class="min-w-0">
-                    <span class="block text-sm font-medium text-base-content">
-                      {gettext("Share pages between workspace users")}
-                    </span>
-                    <span class="block text-xs text-base-content/60 mt-1">
-                      {gettext(
-                        "When disabled, each user only sees the pages that belong to them; the graph only draws visible nodes and edges."
-                      )}
-                    </span>
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
-
           <%!-- Advanced: semantic thresholds --%>
           <details class="group rounded-xl border border-base-content/10 px-4 py-3">
             <summary class="flex items-center gap-2 cursor-pointer select-none">
@@ -2188,14 +2117,6 @@ defmodule DranWeb.WorkspaceSettingsLive do
     Map.new(@features, fn feature ->
       {feature, Map.get(raw, feature) == "true"}
     end)
-  end
-
-  # Los toggles de compartición viven en el sub-map `workspace` (como el
-  # resto de campos del workspace). Un checkbox sin marcar no llega: solo el
-  # hidden input envía "false", así que ausente = false.
-  defp share_attr(params, key) do
-    ws_params = Map.get(params, "workspace", %{})
-    Map.get(ws_params, key) == "true"
   end
 
   # Blank form values become nil so callers can fall back to a default.

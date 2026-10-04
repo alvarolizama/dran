@@ -229,10 +229,12 @@ defmodule DranWeb.VisibilityLiveTest do
     end
   end
 
-  describe "settings — toggles de compartición" do
-    test "el form expone ambos toggles y persiste el cambio", %{conn: conn} do
-      # W1 single-workspace: the settings page edits the instance workspace. La
-      # página es /admin/instance (owner-only), así que el actor es el DUEÑO.
+  describe "settings — los toggles de compartición ya no existen" do
+    test "el form de Automation no los ofrece ni los manda, y sigue guardando lo suyo",
+         %{conn: conn} do
+      # El modelo v1 (workspace-wide share_memory / share_pages) murió: la
+      # lectura se resuelve por ÍTEM (Dran.ContentVisibility + content_shares),
+      # así que la página dejó de ofrecer un control que no gobernaba nada.
       unique = System.unique_integer([:positive])
       ws = Dran.DataCase.ensure_workspace!()
       {owner, _} = create_user(unique * 10 + 9)
@@ -240,24 +242,28 @@ defmodule DranWeb.VisibilityLiveTest do
 
       {:ok, view, _html} = conn |> login(owner) |> live(~p"/admin/instance")
 
-      # El form de automatización (donde viven los toggles) está en su tab.
+      # El form de automatización (donde vivían los toggles) está en su tab.
       view |> element("button[phx-value-tab='brain_tuning']") |> render_click()
 
-      assert has_element?(view, "#workspace-share-memory")
-      assert has_element?(view, "#workspace-share-pages")
-      assert has_element?(view, "#workspace-share-memory[checked]")
+      refute has_element?(view, "#workspace-share-memory")
+      refute has_element?(view, "#workspace-share-pages")
+      refute has_element?(view, ~s{[name="workspace[share_memory]"]})
+      refute has_element?(view, ~s{[name="workspace[share_pages]"]})
 
-      # Desactiva compartir memoria (el form envía ambos toggles: uno solo
-      # dejaría el otro en su default del hidden input).
-      view
-      |> form("#workspace-settings-form", %{
-        "workspace" => %{"share_memory" => "false", "share_pages" => "true"}
-      })
-      |> render_submit()
+      # Y el form sigue guardando lo que SÍ gobierna.
+      html =
+        render_submit(view, "save", %{
+          "workspace" => %{"worker_max_pages" => "7", "summary_language" => "auto"}
+        })
 
-      updated = Knowledge.get_workspace_by_slug(ws.slug)
-      assert updated.share_memory == false
-      assert updated.share_pages == true
+      assert html =~ "Settings saved"
+
+      reloaded = Knowledge.get_workspace!(ws.id)
+      assert reloaded.worker_max_pages == 7
+      # Las columnas quedan (decisión D2: retiro de UI, sin migración) y ningún
+      # save de la página las toca.
+      assert reloaded.share_memory == true
+      assert reloaded.share_pages == true
     end
   end
 
