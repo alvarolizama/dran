@@ -48,6 +48,65 @@ defmodule DranWeb.API.Instance do
   @page_write_fields ~w(title slug body page_type summary tags meta kb_confidence kb_source_url visibility archived pinned)
   def page_write_fields, do: @page_write_fields
 
+  # ── El contenedor de trabajo y el plan (W2, contrato de superficies) ──────
+  #
+  # Whitelist, no blacklist (SEC-006): el cliente no manda `owner_user_id` ni
+  # `visibility` — el dueño sale de la credencial (Constraint 3) y el destino de
+  # la `scope` (Constraint 5). En las tasks, `status`/`position`/`goal_id`/
+  # `lock_version` NO son campos de escritura directa: la columna y el goal se
+  # cambian SÓLO por `move_task/2` (Constraint 13).
+
+  @goal_write_fields ~w(title slug summary body horizon starts_on due_on status progress_manual pinned archived)
+  @task_write_fields ~w(title slug body priority due_date assignee_id checklist recurrence completed_at archived)
+  @plan_write_fields ~w(title slug summary body status starts_on due_on archived)
+
+  def goal_write_fields, do: @goal_write_fields
+  def task_write_fields, do: @task_write_fields
+  def plan_write_fields, do: @plan_write_fields
+
+  @doc "Strips client params to the goal write fields."
+  def permit_goal_params(params), do: Map.take(params, @goal_write_fields)
+
+  @doc "Strips client params to the task write fields (see the note above)."
+  def permit_task_params(params), do: Map.take(params, @task_write_fields)
+
+  @doc "Strips client params to the plan write fields (`checklist` has its own door)."
+  def permit_plan_params(params), do: Map.take(params, @plan_write_fields)
+
+  @doc """
+  Resolves an id-or-slug route segment (Constraint 11).
+
+  A uuid is canonical and the slug is a readable fallback. The 36-byte guard
+  runs BEFORE the cast: `Ecto.UUID.cast/1` accepts a raw 16-byte binary, so a
+  16-char slug would be read as a uuid and the lookup would miss. Both lookups
+  receive the already-validated segment (the caller closes the read scope).
+  """
+  def fetch_segment(segment, by_id, by_slug) when is_binary(segment) do
+    if byte_size(segment) == 36 do
+      case Ecto.UUID.cast(segment) do
+        {:ok, uuid} -> by_id.(uuid)
+        :error -> by_slug.(segment)
+      end
+    else
+      by_slug.(segment)
+    end
+  end
+
+  def fetch_segment(_segment, _by_id, _by_slug), do: nil
+
+  @doc """
+  La identidad de escritura resuelta server-side: el dueño de la credencial.
+
+  Devuelve `%{"owner_user_id" => id}` o `%{}` cuando la credencial no tiene
+  dueño (el token admin legacy): ahí el caller decide, nunca el body.
+  """
+  def owner_attrs(conn) do
+    case Dran.Auth.resolve_owner_user_id(conn.assigns[:user]) do
+      nil -> %{}
+      user_id -> %{"owner_user_id" => user_id}
+    end
+  end
+
   @doc """
   Strips client params down to the permitted write fields, dropping
   server-owned ones (workspace_id, owner, created_by…).

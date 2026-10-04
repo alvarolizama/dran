@@ -342,6 +342,18 @@ defmodule DranWeb.Router do
 
     # Worker sessions (read: poll a running session by id)
     get "/workers/:id", WorkerController, :show
+
+    # Goals, tasks y planes (W2, contrato de superficies). El contenedor de
+    # trabajo y el plan: la LECTURA pasa por la política única con el scope del
+    # lector, y `:slug` es id-o-slug (Constraint 11) — el uuid es canónico y el
+    # slug el atajo legible.
+    get "/goals", GoalController, :index
+    get "/goals/:slug", GoalController, :show
+    get "/goals/:slug/tasks", GoalController, :tasks
+    get "/tasks", TaskController, :index
+    get "/tasks/:id", TaskController, :show
+    get "/plans", PlanController, :index
+    get "/plans/:slug", PlanController, :show
   end
 
   # ── REST API — write routes (requires write access) ────────────
@@ -378,6 +390,28 @@ defmodule DranWeb.Router do
 
     # Workers (write: starting a worker writes pages)
     post "/workers", WorkerController, :create
+
+    # Goals, tasks y planes (W2): la escritura resuelve el dueño server-side y
+    # traduce el destino declarado (`scope`) en la misma transacción. El cambio
+    # de columna o de goal de una task tiene UNA puerta (`/move`, Constraint 13)
+    # y el checklist del plan tiene la suya (Constraint 16).
+    post "/goals", GoalController, :create
+    put "/goals/:slug", GoalController, :update
+    delete "/goals/:slug", GoalController, :delete
+
+    post "/tasks", TaskController, :create
+    post "/tasks/:id/move", TaskController, :move
+    put "/tasks/:id", TaskController, :update
+    delete "/tasks/:id", TaskController, :delete
+
+    # Captura rápida: una task en el goal bandeja del dueño de la credencial.
+    post "/capture", TaskController, :capture
+
+    post "/plans", PlanController, :create
+    put "/plans/:slug", PlanController, :update
+    delete "/plans/:slug", PlanController, :delete
+    put "/plans/:slug/checklist", PlanController, :checklist
+    post "/checklist/toggle", PlanController, :toggle
   end
 
   # ── REST API — memory write routes (requires write access) ─────
@@ -430,10 +464,22 @@ defmodule DranWeb.Router do
     # genérica /:type, que si no los traga. `/tasks/:id` es el board de UN goal
     # (:id es el goal, uuid primero y slug de respaldo); `/tasks` es el board
     # global filtrable por goal.
+    #
+    # El alta y la edición NO son rutas (contrato de paridad UI/UX): el alta es
+    # el modal de `?new=true` y la edición el `?edit=true` del detalle, los dos
+    # como estado de URL sobre estas mismas dos rutas (el precedente es pages:
+    # «The `/new` ROUTE is gone — the create modal is URL state, not a page»).
     live "/goals", GoalLive, :index
     live "/goals/:id", GoalLive, :show
     live "/tasks", TaskBoardLive, :index
     live "/tasks/:id", TaskBoardLive, :show
+
+    # El plan es una ENTIDAD con su propia superficie (no un tipo de página):
+    # `/plans` es su categoría, con el checklist editable en el detalle. Como en
+    # goals, el alta y la edición son estado de URL (`?new=true` / `?edit=true`)
+    # y no rutas — la estructura de pages.
+    live "/plans", PlanLive, :index
+    live "/plans/:id", PlanLive, :show
 
     live "/reports/:slug", ReportLive, :show
 

@@ -336,6 +336,65 @@ curl -s -X POST localhost:4000/api/memory \
   -d '{"workspace":"personal","content":"Prefers concise answers."}'
 ```
 
+### Goals, tasks and plans
+
+El contenedor de trabajo y el plan. `:slug` es **id-o-slug** (el uuid es
+canónico; el slug, el atajo legible). Un recurso fuera del alcance del lector es
+`404`, nunca `403`: la existencia no se filtra.
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/goals` | read | Goals legibles (`status`, `archived`, `limit`) |
+| GET | `/api/goals/:slug` | read | Un goal por uuid o slug |
+| GET | `/api/goals/:slug/tasks` | read | Las tasks de ESE goal (404 si el goal no es legible) |
+| POST | `/api/goals` | write | Crear (sella el dueño de la credencial; `scope` declara el destino) |
+| PUT | `/api/goals/:slug` | write | Actualizar (un `scope` presente re-traduce visibilidad + shares) |
+| DELETE | `/api/goals/:slug` | write | Borrar el goal, sus tasks (FK `delete_all`) y sus aristas |
+| GET | `/api/tasks` | read | Tasks legibles (`goal`, `status`, `assignee`, `archived`, `limit`) |
+| GET | `/api/tasks/:id` | read | Una task por uuid |
+| POST | `/api/tasks` | write | Crear; **sin `goal`** aterriza en el goal bandeja del dueño |
+| PUT | `/api/tasks/:id` | write | Contenido (título, cuerpo, prioridad, fecha, asignado, checklist, recurrencia, archivado) |
+| POST | `/api/tasks/:id/move` | write | Columna, posición y/o goal, atómico, con `lock_version` |
+| DELETE | `/api/tasks/:id` | write | Borrar la task y sus aristas |
+| POST | `/api/capture` | write | Captura rápida: una task en el goal bandeja del dueño |
+| GET | `/api/plans` | read | Planes legibles (`status`, `archived`, `limit`) |
+| GET | `/api/plans/:slug` | read | Un plan con su checklist y su `progress` DERIVADO |
+| POST | `/api/plans` | write | Crear (acepta `checklist`: los pasos nacen con el plan) |
+| PUT | `/api/plans/:slug` | write | Actualizar campos (**nunca** el checklist: tiene su puerta) |
+| PUT | `/api/plans/:slug/checklist` | write | Reemplaza el array ordenado de pasos |
+| DELETE | `/api/plans/:slug` | write | Borrar el plan y sus aristas |
+| POST | `/api/checklist/toggle` | write | Tacha/destacha UN ítem: `{target: "plan"\|"task", id, index\|text}` |
+
+**El destino de una escritura** se declara con `scope` — `"private"` (default),
+`"public"` o `{"group": "<slug>"}` — y el servidor lo traduce a `visibility` +
+`content_shares` validando la membresía y fallando cerrado con `422`. No es
+estado de ninguna credencial y el cliente **nunca** declara lectura.
+
+**El destino de una task** es su goal: la task NO declara visibilidad (la hereda
+por join). Moverla a un goal que el lector no puede leer es `404` y no mueve la
+fila.
+
+**El checklist** es UNO: array jsonb ordenado `[{"text": ..., "done": ...}]`, la
+misma forma para el plan y la task. Tachar un ítem reescribe el array (no crea ni
+mueve tasks) y respeta `lock_version`: una mano lenta recibe `409`, nunca pisa a
+la rápida. `PUT /api/plans/:slug` no toca el checklist — doce puertas para lo
+mismo es cómo se diverge (el contrato ya cerró ese caso con `?14`).
+
+```bash
+# Captura rápida: sin goal, cae en la bandeja del dueño
+curl -s -X POST localhost:4000/api/capture \
+  -H "Authorization: Bearer ***" -H "Content-Type: application/json" \
+  -d '{"title":"Llamar al contador"}'
+
+# Un goal compartido con un grupo, en la misma escritura
+curl -s -X POST localhost:4000/api/goals \
+  -H "Authorization: Bearer ***" -H "Content-Type: application/json" \
+  -d '{"title":"Lanzamiento","scope":{"group":"equipo"}}'
+```
+
+**El plan es una ENTIDAD** (tabla `plans` con dueño y visibilidad), no un tipo de
+página: `page_type: "plan"` en `/api/knowledge-pages` es `422`.
+
 ## Health
 
 | Method | Path | Auth | Purpose |
