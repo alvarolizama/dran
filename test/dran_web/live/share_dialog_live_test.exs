@@ -163,14 +163,18 @@ defmodule DranWeb.ShareDialogLiveTest do
   describe "/admin/groups" do
     test "creates a group, adds members through the two doors, removes one, deletes the group",
          %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/admin/groups")
+      {:ok, view, html} = live(conn, ~p"/admin/groups?new=true")
       assert html =~ "Groups"
 
-      # Create.
+      # Create — el alta es el modal del molde, abierto por ESTADO DE URL: el
+      # formulario inline que vivía arriba de la página ya no existe.
+      refute has_element?(view, "#group-create-form")
+
       view
-      |> form("#group-create-form", %{"group" => %{"name" => "Equipo"}})
+      |> form("#group-form", %{"group" => %{"name" => "Equipo"}})
       |> render_submit()
 
+      assert_patch(view, ~p"/admin/groups")
       html = render(view)
       assert html =~ "Equipo"
       group = hd(Sharing.list_groups())

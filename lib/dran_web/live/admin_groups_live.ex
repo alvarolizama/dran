@@ -5,12 +5,26 @@ defmodule DranWeb.AdminGroupsLive do
   Instance admins create/rename/delete `user_groups` and manage their
   memberships — the share-with-group targets. Reachable at /admin/groups
   under the :admin pipeline (instance owner ∪ admin role).
+
+  ## La superficie está en el molde de la casa
+
+  El header es el compartido (`resource_list_header/1`), el alta y el
+  renombrado son el MISMO modal abierto por estado de URL (`?new=true` y
+  `?edit=<id>`, cerrado con `push_patch`) y el vacío de la colección es
+  `resource_empty_state/1` por CONTADOR. El renombrado, que antes era una
+  puerta sin UI, se administra desde la fila.
+
+  El panel de miembros queda EN la página (no es un modal): es el port del
+  bloque «Add users» del panel de miembros del workspace.
   """
 
   use DranWeb, :live_view
 
   alias Dran.Accounts
+  alias Dran.Accounts.UserGroup
   alias Dran.Sharing
+
+  @index_path "/admin/groups"
 
   @impl true
   def mount(_params, session, socket) do
@@ -25,8 +39,11 @@ defmodule DranWeb.AdminGroupsLive do
       # group vanished on the one page that IS admin. `workspace_slug: nil`
       # mirrors the rest of /admin/* — no sidebar search box on instance pages.
       |> assign(:workspace_slug, nil)
+      |> assign(:group_modal, nil)
+      |> assign(:editing_group, nil)
+      |> assign(:group_submit_event, "save_group")
+      |> assign_group_form(nil)
       |> assign_groups()
-      |> assign(:group_form, to_form(%{"name" => ""}, as: :group))
       |> assign(:members_group, nil)
       |> assign(:members, [])
       |> assign(:all_users, [])
@@ -36,23 +53,73 @@ defmodule DranWeb.AdminGroupsLive do
     {:ok, socket}
   end
 
+  # El alta y el renombrado son ESTADO DE URL (C11): `?new=true` abre el modal
+  # de creación y `?edit=<id>` el de renombrado. Este es el ÚNICO lugar que los
+  # administra, así que recargar o entrar por un enlace deja el modal correcto
+  # abierto; la ✕ vuelve a la URL limpia con `push_patch` — nunca
+  # `push_navigate`, que remonta el LiveView y pierde el estado.
+  @impl true
+  def handle_params(params, _uri, socket) do
+    socket =
+      case params do
+        %{"new" => "true"} ->
+          open_group_modal(socket, nil)
+
+        %{"edit" => id} ->
+          case find_group(id) do
+            nil -> close_group_modal(socket)
+            group -> open_group_modal(socket, group)
+          end
+
+        _ ->
+          close_group_modal(socket)
+      end
+
+    {:noreply, socket}
+  end
+
+  defp open_group_modal(socket, group) do
+    socket
+    |> assign(:editing_group, group)
+    |> assign(:group_modal, if(group, do: :rename, else: :new))
+    |> assign(:group_submit_event, if(group, do: "rename_group", else: "save_group"))
+    |> assign_group_form(group)
+  end
+
+  defp close_group_modal(socket) do
+    socket
+    |> assign(:group_modal, nil)
+    |> assign(:editing_group, nil)
+    |> assign(:group_submit_event, "save_group")
+  end
+
+  defp assign_group_form(socket, %UserGroup{} = group) do
+    assign(socket, :group_form, to_form(%{"name" => group.name}, as: :group))
+  end
+
+  defp assign_group_form(socket, _group), do: assign(socket, :group_form, new_group_form())
+
   defp assign_groups(socket) do
     groups =
       Enum.map(Sharing.list_groups_with_counts(), fn {group, count} ->
         %{id: group.id, name: group.name, slug: group.slug, members: count}
       end)
 
-    assign(socket, :groups, groups)
+    socket
+    |> assign(:groups, groups)
+    # El contador viaja aparte: el vacío se decide por CONTADOR, no por la lista.
+    |> assign(:group_count, length(groups))
   end
 
   @impl true
-  def handle_event("create_group", %{"group" => %{"name" => name}}, socket) do
+  def handle_event("save_group", %{"group" => %{"name" => name}}, socket) do
     case Sharing.create_group(%{name: name}) do
       {:ok, _group} ->
         {:noreply,
          socket
          |> assign_groups()
-         |> assign(:group_form, to_form(%{"name" => ""}, as: :group))
+         |> close_group_modal()
+         |> push_patch(to: @index_path)
          |> put_flash(:info, gettext("Group created."))}
 
       {:error, changeset} ->
@@ -63,32 +130,63 @@ defmodule DranWeb.AdminGroupsLive do
     end
   end
 
+  # Payload incompleto o forjado: no hay nombre que crear. Sin esta cláusula el
+  # evento tira el proceso en vez de no hacer nada.
+  def handle_event("save_group", _params, socket), do: {:noreply, socket}
+
+  # El renombrado es la MISMA puerta de dominio que ya existía (`update_group/2`),
+  # ahora con UI: `?edit=<id>` abre el modal y el submit llega con el id del
+  # grupo en el propio form. Un id desconocido no hace nada.
+  def handle_event("rename_group", %{"_id" => id, "group" => %{"name" => name}}, socket) do
+    case find_group(id) do
+      nil ->
+        {:noreply, close_group_modal(socket) |> push_patch(to: @index_path)}
+
+      group ->
+        case Sharing.update_group(group, %{name: name}) do
+          {:ok, _updated} ->
+            {:noreply,
+             socket
+             |> assign_groups()
+             |> close_group_modal()
+             |> push_patch(to: @index_path)
+             |> put_flash(:info, gettext("Group renamed."))}
+
+          {:error, changeset} ->
+            {:noreply,
+             socket
+             |> assign(:group_form, to_form(changeset, as: :group))
+             |> put_flash(:error, gettext("Could not rename the group."))}
+        end
+    end
+  end
+
+  def handle_event("rename_group", _params, socket), do: {:noreply, socket}
+
+  def handle_event("close_group_modal", _params, socket) do
+    {:noreply, socket |> close_group_modal() |> push_patch(to: @index_path)}
+  end
+
   def handle_event("delete_group", %{"id" => id}, socket) do
-    group = Sharing.get_group!(String.to_integer(id))
+    case find_group(id) do
+      nil ->
+        {:noreply, socket}
 
-    case Sharing.delete_group(group) do
-      {:ok, _} ->
-        {:noreply,
-         socket
-         |> assign_groups()
-         |> put_flash(:info, gettext("Group deleted — its shares were removed too."))}
+      group ->
+        case Sharing.delete_group(group) do
+          {:ok, _} ->
+            {:noreply,
+             socket
+             |> assign_groups()
+             |> put_flash(:info, gettext("Group deleted — its shares were removed too."))}
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not delete the group."))}
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not delete the group."))}
+        end
     end
   end
 
-  def handle_event("rename_group", %{"id" => id, "name" => name}, socket) do
-    group = Sharing.get_group!(String.to_integer(id))
-
-    case Sharing.update_group(group, %{name: name}) do
-      {:ok, _} ->
-        {:noreply, assign_groups(socket)}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not rename the group."))}
-    end
-  end
+  def handle_event("delete_group", _params, socket), do: {:noreply, socket}
 
   # Membership is managed inline per group row. id "0" closes the panel.
   def handle_event("manage_members", %{"id" => "0"}, socket) do
@@ -96,17 +194,23 @@ defmodule DranWeb.AdminGroupsLive do
   end
 
   def handle_event("manage_members", %{"id" => id}, socket) do
-    group = Sharing.get_group!(String.to_integer(id))
+    case find_group(id) do
+      nil ->
+        {:noreply, socket}
 
-    {:noreply,
-     socket
-     |> assign(:members_group, group)
-     # Abrir (o cambiar de) grupo arranca con la búsqueda limpia: el filtro
-     # pertenece al panel donde se escribió.
-     |> assign(:member_search, "")
-     |> assign(:invite_form, blank_invite_form())
-     |> assign_members(group.id)}
+      group ->
+        {:noreply,
+         socket
+         |> assign(:members_group, group)
+         # Abrir (o cambiar de) grupo arranca con la búsqueda limpia: el filtro
+         # pertenece al panel donde se escribió.
+         |> assign(:member_search, "")
+         |> assign(:invite_form, blank_invite_form())
+         |> assign_members(group.id)}
+    end
   end
+
+  def handle_event("manage_members", _params, socket), do: {:noreply, socket}
 
   # Filtro en vivo sobre la lista local de usuarios — una query por tecla no
   # hace falta. Es el mismo molde del panel de miembros del workspace
@@ -116,13 +220,9 @@ defmodule DranWeb.AdminGroupsLive do
   end
 
   def handle_event("add_member", %{"group_id" => group_id, "user_id" => user_id}, socket) do
-    group = Sharing.get_group!(String.to_integer(group_id))
-    {:ok, _} = Sharing.add_group_member(group, String.to_integer(user_id))
-
-    {:noreply,
-     socket
-     |> assign_members(group.id)
-     |> put_flash(:info, gettext("Membership updated"))}
+    member_event(socket, group_id, user_id, fn group, uid ->
+      _ = Sharing.add_group_member(group, uid)
+    end)
   end
 
   # Payload incompleto o forjado: no hay a quién agregar. El select viejo tenía
@@ -131,16 +231,14 @@ defmodule DranWeb.AdminGroupsLive do
   def handle_event("add_member", _params, socket), do: {:noreply, socket}
 
   def handle_event("remove_member", %{"group_id" => group_id, "user_id" => user_id}, socket) do
-    group = Sharing.get_group!(String.to_integer(group_id))
-    :ok = Sharing.remove_group_member(group, String.to_integer(user_id))
-
-    {:noreply,
-     socket
-     |> assign_members(group.id)
-     |> put_flash(:info, gettext("Membership updated"))}
+    member_event(socket, group_id, user_id, fn group, uid ->
+      :ok = Sharing.remove_group_member(group, uid)
+    end)
   end
 
-  # El panel cerrado no tiene formulario que dispare esto; la cláusula existe
+  def handle_event("remove_member", _params, socket), do: {:noreply, socket}
+
+  # El grupo cerrado no tiene formulario que dispare esto; la cláusula existe
   # para que un evento viejo (o forjado) no reviente en `add_group_member_by_email/2`.
   def handle_event("invite_member", _params, %{assigns: %{members_group: nil}} = socket) do
     {:noreply, socket}
@@ -178,6 +276,25 @@ defmodule DranWeb.AdminGroupsLive do
     end
   end
 
+  def handle_event("invite_member", _params, socket), do: {:noreply, socket}
+
+  # Una sola puerta para las dos membresías: el grupo se resuelve por id contra
+  # la lista (un id forjado no existe, no revienta) y el user id se castea — el
+  # evento es input no verificado.
+  defp member_event(socket, group_id, user_id, fun) do
+    with %UserGroup{} = group <- find_group(group_id),
+         uid when is_integer(uid) <- int_or_nil(user_id) do
+      fun.(group, uid)
+
+      {:noreply,
+       socket
+       |> assign_members(group.id)
+       |> put_flash(:info, gettext("Membership updated"))}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
   defp assign_members(socket, group_id) do
     socket
     |> assign(:members, Sharing.list_group_members(group_id))
@@ -186,8 +303,41 @@ defmodule DranWeb.AdminGroupsLive do
 
   defp blank_invite_form, do: to_form(%{"email" => ""}, as: :invite)
 
+  defp new_group_form, do: to_form(%{"name" => ""}, as: :group)
+
+  # El grupo por id, SIN `get_group!/1`: los ids llegan del cliente (un `?edit=`
+  # a mano, un `phx-value-` forjado) y una fila inexistente tiene que devolver
+  # `nil` — que la lectura reviente mataría el proceso del LiveView.
+  defp find_group(id) do
+    case int_or_nil(id) do
+      nil -> nil
+      int -> Enum.find(Sharing.list_groups(), &(&1.id == int))
+    end
+  end
+
+  defp int_or_nil(value) when is_integer(value), do: value
+
+  defp int_or_nil(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
+  defp int_or_nil(_value), do: nil
+
   @impl true
   def render(assigns) do
+    # El modal sólo existe cuando `handle_params` pasó por una rama que lo
+    # administra: se normalizan los assigns para que cualquier render lo tenga.
+    assigns =
+      assigns
+      |> assign(:group_modal, Map.get(assigns, :group_modal, nil))
+      |> assign(:editing_group, Map.get(assigns, :editing_group, nil))
+      |> assign(:group_submit_event, Map.get(assigns, :group_submit_event, "save_group"))
+      |> assign(:group_count, Map.get(assigns, :group_count, 0))
+      |> assign(:members_group, Map.get(assigns, :members_group, nil))
+
     ~H"""
     <Layouts.app
       flash={@flash}
@@ -199,36 +349,39 @@ defmodule DranWeb.AdminGroupsLive do
       nav={:instance}
     >
       <div class="p-6 space-y-6 max-w-4xl">
-        <div>
-          <h1 class="text-title">{gettext("Groups")}</h1>
-          <p class="text-caption mt-1">
-            {gettext(
-              "Share content with several people at once — a group is a list of users used as a share target."
-            )}
-          </p>
-        </div>
+        <.resource_list_header
+          title={gettext("Groups")}
+          new_path={~p"/admin/groups?new=true"}
+          new_id="group-new"
+          new_testid="new-group-button"
+          new_label={gettext("New group")}
+        />
 
-        <.form for={@group_form} id="group-create-form" phx-submit="create_group" class="flex gap-2">
-          <.input
-            field={@group_form[:name]}
-            type="text"
-            placeholder={gettext("New group name…")}
-            class="flex-1"
-          />
-          <button type="submit" class="btn btn-primary btn-sm">
-            <.icon name="hero-plus" class="size-4" /> {gettext("Create")}
-          </button>
-        </.form>
+        <p class="text-caption -mt-4">
+          {gettext(
+            "Share content with several people at once — a group is a list of users used as a share target."
+          )}
+        </p>
 
         <div class="space-y-2">
           <div
             :for={group <- @groups}
             id={"group-row-#{group.id}"}
-            class="surface-2 rounded-xl p-4 flex items-center justify-between gap-3"
+            data-testid="group-row"
+            class="surface-2 lift hover:border-primary/40 p-4 rounded-xl"
           >
-            <div class="min-w-0 space-y-1">
-              <p class="font-medium truncate">{group.name}</p>
-              <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-3">
+              <span class="size-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <.icon name="hero-user-group" class="size-4 text-primary" />
+              </span>
+              <p class="font-medium leading-snug flex-1 truncate">{group.name}</p>
+              <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/60">
+                {group.members} {gettext("members")}
+              </span>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
+              <div class="flex items-center gap-2 min-w-0">
                 <%!-- El slug es la identidad que el cliente copia a su config
                        de agente (shaping A9/F17, P19): visible y copiable. --%>
                 <code
@@ -255,29 +408,53 @@ defmodule DranWeb.AdminGroupsLive do
                     {gettext("Copied!")}
                   </span>
                 </button>
-                <span class="text-caption text-base-content/50">
-                  {group.members} {gettext("members")}
-                </span>
               </div>
-            </div>
-            <div class="flex gap-2 shrink-0">
-              <button phx-click="manage_members" phx-value-id={group.id} class="btn btn-ghost btn-sm">
-                <.icon name="hero-users" class="size-4" /> {gettext("Members")}
-              </button>
-              <button
-                phx-click="delete_group"
-                phx-value-id={group.id}
-                data-confirm={gettext("Delete this group? Its shares are removed too.")}
-                class="btn btn-ghost btn-sm text-error"
-              >
-                <.icon name="hero-trash" class="size-4" />
-              </button>
+
+              <div class="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  id={"group-members-#{group.id}"}
+                  phx-click="manage_members"
+                  phx-value-id={group.id}
+                  class="btn btn-ghost btn-sm"
+                >
+                  <.icon name="hero-users" class="size-4" /> {gettext("Members")}
+                </button>
+                <%!-- Renombrar entra por la MISMA puerta que el alta (`?edit=<id>`
+                       abre el modal con el nombre puesto): antes el handler
+                       existía sin ningún control que lo alcanzara. --%>
+                <.link
+                  patch={~p"/admin/groups?edit=#{group.id}"}
+                  id={"group-edit-#{group.id}"}
+                  class="btn btn-ghost btn-sm"
+                  title={gettext("Rename this group")}
+                >
+                  <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
+                </.link>
+                <button
+                  type="button"
+                  id={"group-delete-#{group.id}"}
+                  phx-click="delete_group"
+                  phx-value-id={group.id}
+                  data-confirm={gettext("Delete this group? Its shares are removed too.")}
+                  class="btn btn-ghost btn-sm text-error"
+                >
+                  <.icon name="hero-trash" class="size-4" />
+                </button>
+              </div>
             </div>
           </div>
 
-          <p :if={@groups == []} class="text-sm text-base-content/50 text-center py-8">
-            {gettext("No groups yet — create one to share with several people at once.")}
-          </p>
+          <.resource_empty_state
+            :if={@group_count == 0}
+            icon="hero-user-group"
+            title={gettext("No groups yet")}
+            description={
+              gettext("A group is a list of users you can share content with in one step.")
+            }
+            cta={gettext("Create group")}
+            new_path={~p"/admin/groups?new=true"}
+          />
         </div>
 
         <%!-- Members panel — mismo molde que el bloque "Add users" del panel de
@@ -450,6 +627,44 @@ defmodule DranWeb.AdminGroupsLive do
             </div>
           </div>
         </div>
+
+        <%!-- Alta y renombrado: el MISMO modal del molde, abierto por estado de
+               URL (`?new=true` / `?edit=<id>`) y con el botón Guardar en el
+               footer del shell apuntando al form del cuerpo por su id. --%>
+        <.resource_modal
+          :if={@group_modal}
+          id="group-resource-modal"
+          title={if @editing_group, do: gettext("Rename group"), else: gettext("New group")}
+          pill="GROUP"
+          on_close="close_group_modal"
+          form_id="group-form"
+          submit_label={if @editing_group, do: gettext("Save"), else: gettext("Create")}
+          cancel_label={gettext("Cancel")}
+          max_w="max-w-xl"
+        >
+          <div class="max-w-xl">
+            <.form
+              for={@group_form}
+              id="group-form"
+              phx-submit={@group_submit_event}
+              class="space-y-4"
+            >
+              <input
+                :if={@editing_group}
+                type="hidden"
+                name="_id"
+                value={@editing_group.id}
+              />
+              <.input
+                field={@group_form[:name]}
+                type="text"
+                label={gettext("Name")}
+                placeholder={gettext("e.g. Design team")}
+                autofocus
+              />
+            </.form>
+          </div>
+        </.resource_modal>
 
         <%!-- Copia del slug: lee el valor del `data-slug` del `<code>` apuntado
                por `data-copy-target`, con fallback de clipboard. Mismo molde
