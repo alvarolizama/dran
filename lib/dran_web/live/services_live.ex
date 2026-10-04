@@ -189,7 +189,7 @@ defmodule DranWeb.ServicesLive do
             )
           }
           cta={gettext("Instance settings")}
-          navigate={~p"/settings/instance"}
+          navigate={~p"/admin/instance"}
         />
 
         <.manage_service

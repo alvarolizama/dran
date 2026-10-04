@@ -56,7 +56,9 @@ defmodule DranWeb.VisibilityLiveTest do
     conn
     |> Phoenix.ConnTest.init_test_session(%{
       "user" => user.email,
-      "workspace_slug" => nil
+      "workspace_slug" => nil,
+      # La bandera que el login cachea: el shell de /admin/* decide con ella.
+      "is_owner" => user.is_owner
     })
   end
 
@@ -229,14 +231,14 @@ defmodule DranWeb.VisibilityLiveTest do
 
   describe "settings — toggles de compartición" do
     test "el form expone ambos toggles y persiste el cambio", %{conn: conn} do
-      # W1 single-workspace: the settings page edits the instance workspace
-      # and the guard is the instance role, not a workspace membership.
+      # W1 single-workspace: the settings page edits the instance workspace. La
+      # página es /admin/instance (owner-only), así que el actor es el DUEÑO.
       unique = System.unique_integer([:positive])
       ws = Dran.DataCase.ensure_workspace!()
       {owner, _} = create_user(unique * 10 + 9)
-      owner |> Ecto.Changeset.change(instance_role: "admin") |> Repo.update!()
+      owner = owner |> Ecto.Changeset.change(is_owner: true) |> Repo.update!()
 
-      {:ok, view, _html} = conn |> login(owner) |> live(~p"/settings/instance")
+      {:ok, view, _html} = conn |> login(owner) |> live(~p"/admin/instance")
 
       # El form de automatización (donde viven los toggles) está en su tab.
       view |> element("button[phx-value-tab='brain_tuning']") |> render_click()

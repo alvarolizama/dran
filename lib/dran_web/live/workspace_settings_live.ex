@@ -1,17 +1,18 @@
 defmodule DranWeb.WorkspaceSettingsLive do
   @moduledoc """
-  Workspace configuration page with tabbed settings: General (name, default
+  Instance configuration page with tabbed settings: General (name, default
   flag), Page types, Features, Automation (worker limits + semantic
-  membership).
+  membership) and — owner-only — Services.
 
-  Access is enforced by the `:workspace_admin` router pipeline (owner/admin
-  of the workspace ∪ instance owner) plus an `attach_hook` defense-in-depth
-  that halts every event for non-owners/admins.
+  It IS instance administration, so it lives at `/admin/instance` and the guard
+  is the owner: `/admin/*` is owner policy (`pipeline :admin` +
+  `LiveAuth.on_mount(:require_admin, ...)` on the socket). The old
+  `/settings/instance` URL redirects here.
 
-  The workspace is resolved from the URL slug (`params["workspace_slug"]`),
-  NOT from the session — a user in session workspace "personal" navigating to
-  `/work/settings` edits "work" (corrección #10). The role guard also computes
-  the role from the URL slug's workspace (corrección #11).
+  The page always edits the INSTANCE workspace (single-workspace model, W1) —
+  never a URL slug — and an `attach_hook` halts every event for a reader who is
+  not the instance owner (defense-in-depth: the event path re-checks what the
+  route already decided).
   """
 
   use DranWeb, :live_view
@@ -45,8 +46,8 @@ defmodule DranWeb.WorkspaceSettingsLive do
     {socket, _context} = Auth.assign_to_socket(socket, session)
 
     # Single-workspace model (W1): the instance IS the workspace — always the
-    # instance workspace, never a URL slug. The admin guard is the
-    # instance-wide role, not a workspace membership.
+    # instance workspace, never a URL slug. The guard is the instance OWNER
+    # (the route's `pipeline :admin`), not a workspace membership.
     user = Accounts.get_user_by_email(socket.assigns.current_user)
     workspace = Dran.Auth.instance_workspace()
 
@@ -60,16 +61,16 @@ defmodule DranWeb.WorkspaceSettingsLive do
     socket =
       socket
       |> assign(
-        active_nav: "workspace_settings",
-        # The route (and the user menu) call this "Instance settings": the page
+        active_nav: "admin_instance",
+        # The route (and the nav link) call this "Instance settings": the page
         # configures the INSTANCE — page types, features, tuning — not a
         # workspace inside it. Title and shell follow the route name.
         page_title: gettext("Instance settings"),
         current_user_struct: user,
         workspace: workspace,
-        # Instance shell (DESIGN §T2): /settings/* renders the instance nav, so
-        # the sidebar loses the knowledge nav AND the search box — same shell as
-        # /admin/*, which is what makes it feel like one app.
+        # Instance shell (DESIGN §T2): /admin/* renders the instance nav, so
+        # the sidebar loses the knowledge nav AND the search box — which is what
+        # makes the instance surface feel like one app.
         workspace_slug: nil,
         workspace_role: role,
         features: @features,
@@ -86,8 +87,8 @@ defmodule DranWeb.WorkspaceSettingsLive do
       |> assign_custom_type_form()
       |> assign_workspace_members()
       |> assign_all_users()
-      # Corrección #11: defense-in-depth — halt every event for users who are
-      # not owner/admin of the URL workspace.
+      # Corrección #11: defense-in-depth — the route already admits only the
+      # owner, and the event path re-checks the same predicate.
       |> attach_hook(:require_workspace_admin, :handle_event, fn _event, _params, socket ->
         if workspace_admin?(socket) do
           {:cont, socket}

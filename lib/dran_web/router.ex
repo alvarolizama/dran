@@ -48,14 +48,6 @@ defmodule DranWeb.Router do
     plug :require_instance_owner
   end
 
-  # Instance administration (not only the owner): the instance owner ∪ an
-  # `instance_role` in owner/admin — the same rule `/settings/instance` had
-  # written in its own mount. The plug guards the HTTP request; the LiveView
-  # re-runs it on the socket via `LiveAuth.on_mount/4`.
-  pipeline :instance_admin do
-    plug :require_instance_admin
-  end
-
   # ── Browser auth plug ──
 
   defp require_login(conn, _opts) do
@@ -96,39 +88,6 @@ defmodule DranWeb.Router do
 
       true ->
         conn
-    end
-  end
-
-  # ── Instance admin auth plug (owner ∪ instance_role admin/owner) ──
-
-  defp require_instance_admin(conn, _opts) do
-    user = Plug.Conn.get_session(conn, "user")
-
-    cond do
-      is_nil(user) ->
-        conn
-        |> Phoenix.Controller.redirect(to: ~p"/login")
-        |> Plug.Conn.halt()
-
-      instance_admin_session?(user) ->
-        conn
-
-      true ->
-        conn
-        |> Phoenix.Controller.put_flash(:error, "Instance admin access required")
-        |> Phoenix.Controller.redirect(to: ~p"/")
-        |> Plug.Conn.halt()
-    end
-  end
-
-  # La fila decide, no la bandera cacheada en la sesión: un usuario BORRADO con
-  # `is_owner: true` viejo no entra (SEC-002), y un `instance_role` admin/owner
-  # no viaja en la sesión. Mismo predicado que su gemelo del socket
-  # (`LiveAuth.on_mount(:require_instance_admin, ...)`).
-  defp instance_admin_session?(user) do
-    case Dran.Accounts.get_user_by_email(user) do
-      nil -> false
-      db_user -> Dran.Accounts.User.instance_admin?(db_user)
     end
   end
 
@@ -288,32 +247,26 @@ defmodule DranWeb.Router do
   # ── Settings ──────────────────────────────────────────────────────────────
   #
   # Account is for ANY logged-in user (it carries the user's ONE credential,
-  # users.api_token). Instance settings is INSTANCE ADMINISTRATION: owner ∪
-  # instance_role admin/owner. They are separate scopes because the guard
-  # belongs to the route, not to the page.
+  # users.api_token). Instance settings is NOT here any more: configuring the
+  # instance is instance policy (owner-only, `/admin/instance`, below). The old
+  # URL keeps answering with a hop so bookmarks and plugin-built links survive:
+  # the guard of the destination decides who may read it.
 
   scope "/settings", DranWeb do
     pipe_through [:browser, :auth]
 
     live "/account", SettingsLive, :account
-  end
 
-  scope "/settings", DranWeb do
-    pipe_through [:browser, :auth, :instance_admin]
-
-    # live_session wraps the LiveView with an on_mount twin of the plug: the
-    # plug runs on the HTTP request only, so without this the guard would not
-    # re-run when the LiveView mounts over the socket.
-    live_session :instance_admin, on_mount: {DranWeb.LiveAuth, :require_instance_admin} do
-      live "/instance", WorkspaceSettingsLive, :index
-    end
+    # /settings/instance → /admin/instance (the page moved to the admin shell).
+    get "/instance", RedirectController, :instance_settings
   end
 
   # ── Admin (instance-level, owner-only) ────────────────────────────────────
   #
   # Administration is instance policy (F3): users, workspaces, models, system
-  # info, and global jobs. Defined BEFORE the /:workspace_slug wildcard so
-  # 'admin' stays a reserved segment.
+  # info, global jobs, and the instance configuration itself (page types,
+  # features, tuning, the services policy). Defined BEFORE the
+  # /:workspace_slug wildcard so 'admin' stays a reserved segment.
 
   scope "/admin", DranWeb do
     pipe_through [:browser, :auth, :admin]
@@ -327,6 +280,7 @@ defmodule DranWeb.Router do
     # the guard would not re-run when the LiveView mounts over the socket.
     live_session :admin, on_mount: {DranWeb.LiveAuth, :require_admin} do
       live "/", AdminLive, :index
+      live "/instance", WorkspaceSettingsLive, :index
       live "/users", AdminUsersLive, :index
       live "/groups", AdminGroupsLive, :index
       live "/models", AdminModelsLive, :index

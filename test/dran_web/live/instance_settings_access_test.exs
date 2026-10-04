@@ -1,13 +1,17 @@
 defmodule DranWeb.InstanceSettingsAccessTest do
   @moduledoc """
-  `/settings/instance` es administración de la instancia: entra el dueño o un
-  `instance_role` admin/owner. Un usuario normal NO la lee — la guardia vive en
-  la ruta (`pipeline :instance_admin`) y su gemelo en el socket
-  (`LiveAuth.on_mount(:require_instance_admin, ...)`), no en la página.
+  `/admin/instance` es administración de la INSTANCIA y su guard es el DUEÑO:
+  entra el owner de la instancia y nadie más (es la regla de todo `/admin/*`,
+  `pipeline :admin`). Un `instance_role` admin ya no entra: configurar la
+  instancia es política del dueño.
 
-  La matriz se prueba por los DOS caminos: la petición HTTP + el mount del
-  LiveView (`live/2` corre los plugs y el `on_mount`) y el hook suelto, que es
-  el que cubre el re-mount por websocket.
+  La guardia vive en la ruta (`pipeline :admin` + `require_instance_owner/2`) y
+  su gemelo en el socket (`LiveAuth.on_mount(:require_admin, ...)`), no en la
+  página. La matriz se prueba por los DOS caminos: la petición HTTP + el mount
+  del LiveView (`live/2` corre los plugs y el `on_mount`) y el hook suelto, que
+  es el que cubre el re-mount por websocket.
+
+  La URL vieja (`/settings/instance`) queda viva como hop al destino nuevo.
   """
 
   use DranWeb.ConnCase, async: false
@@ -34,74 +38,104 @@ defmodule DranWeb.InstanceSettingsAccessTest do
     |> Plug.Conn.put_session(:is_owner, is_owner)
   end
 
-  describe "la ruta (/settings/instance)" do
+  describe "la ruta (/admin/instance)" do
     test "el dueño de la instancia entra", %{conn: conn} do
       owner = user!("instance_owner@test.dev", %{is_owner: true})
       conn = session_conn(conn, owner.email, true)
 
-      {:ok, _view, html} = live(conn, ~p"/settings/instance")
+      {:ok, _view, html} = live(conn, ~p"/admin/instance")
 
       assert html =~ "Instance settings"
     end
 
-    test "un admin de instancia entra (sin ser el dueño)", %{conn: conn} do
+    test "un admin de instancia NO entra: la configuración es del dueño", %{conn: conn} do
       admin = user!("instance_admin@test.dev") |> with_role("admin")
       conn = session_conn(conn, admin.email, false)
 
-      {:ok, _view, html} = live(conn, ~p"/settings/instance")
-
-      assert html =~ "Instance settings"
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/instance")
     end
 
     test "un usuario normal (viewer) NO entra: vuelve al home", %{conn: conn} do
       viewer = user!("instance_viewer@test.dev") |> with_role("viewer")
       conn = session_conn(conn, viewer.email, false)
 
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/settings/instance")
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/instance")
     end
 
     test "un editor tampoco: no es rol de administración", %{conn: conn} do
       editor = user!("instance_editor@test.dev") |> with_role("editor")
       conn = session_conn(conn, editor.email, false)
 
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/settings/instance")
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/instance")
     end
 
     test "una sesión sin usuario va al login", %{conn: conn} do
-      assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/settings/instance")
+      assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/admin/instance")
     end
 
-    test "una sesión con usuario borrado (sin fila) no entra", %{conn: conn} do
-      conn = session_conn(conn, "deleted@test.dev", true)
+    # El plug de /admin/* decide con la bandera que el login cachea en la sesión
+    # — igual que el resto del shell de administración — así que una sesión con
+    # `is_owner: false` explícito queda afuera aunque su fila traiga un
+    # `instance_role` de administración.
+    test "una sesión con is_owner: false explícito no entra", %{conn: conn} do
+      admin = user!("flag_false@test.dev", %{is_owner: false}) |> with_role("admin")
+      conn = session_conn(conn, admin.email, false)
 
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/settings/instance")
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/instance")
     end
   end
 
-  describe "el nav muestra Instance settings donde el guard ya admitiría" do
-    # El guard de la ruta admite owner ∪ admin de instancia EN CUALQUIER página;
-    # el ítem del nav no puede depender de dónde esté parado el lector: la misma
-    # fila que decide el guard decide el enlace (bug medido: en /settings/account
-    # un admin de instancia perdía el enlace porque `can_config` salía del rol
-    # de membresía del workspace, que para él era nil).
-    test "un admin de instancia ve el enlace en /settings/account", %{conn: conn} do
-      admin = user!("nav_admin@test.dev") |> with_role("admin")
-      conn = session_conn(conn, admin.email, false)
+  describe "la URL vieja (/settings/instance)" do
+    test "redirige al destino nuevo", %{conn: conn} do
+      owner = user!("legacy_owner@test.dev", %{is_owner: true})
+
+      conn =
+        conn
+        |> session_conn(owner.email, true)
+        |> get(~p"/settings/instance")
+
+      assert redirected_to(conn) == ~p"/admin/instance"
+    end
+
+    test "sin sesión va al login", %{conn: conn} do
+      conn = get(conn, ~p"/settings/instance")
+
+      assert redirected_to(conn) == ~p"/login"
+    end
+  end
+
+  describe "el nav muestra Instance settings sólo al dueño" do
+    # El guard admite al dueño EN CUALQUIER página, así que el ítem del nav no
+    # puede depender de dónde esté parado el lector — y los dos hablan del dueño:
+    # la página vive en el grupo Admin (`/admin/instance`) y el menú de perfil
+    # repite el mismo grupo, que es owner-only.
+    test "el dueño ve el enlace en /settings/account", %{conn: conn} do
+      owner = user!("nav_owner@test.dev", %{is_owner: true})
+      conn = session_conn(conn, owner.email, true)
 
       {:ok, view, _html} = live(conn, ~p"/settings/account")
 
-      assert has_element?(view, "aside a[href='/settings/instance']")
+      assert has_element?(view, "aside a[href='/admin/instance']")
     end
 
-    test "un admin de instancia ve el enlace también en una página de conocimiento", %{
-      conn: conn
-    } do
-      admin = user!("nav_admin_knowledge@test.dev") |> with_role("admin")
-      conn = session_conn(conn, admin.email, false)
+    test "el dueño ve el enlace también en una página de conocimiento", %{conn: conn} do
+      owner = user!("nav_owner_knowledge@test.dev", %{is_owner: true})
+      conn = session_conn(conn, owner.email, true)
 
       {:ok, view, _html} = live(conn, ~p"/notes")
 
-      assert has_element?(view, "#user-menu a[href='/settings/instance']")
+      assert has_element?(view, "#user-menu a[href='/admin/instance']")
+    end
+
+    test "un admin de instancia no lo ve en ninguna de las dos", %{conn: conn} do
+      admin = user!("nav_admin@test.dev") |> with_role("admin")
+      conn = session_conn(conn, admin.email, false)
+
+      {:ok, view_account, _html} = live(conn, ~p"/settings/account")
+      {:ok, view_notes, _html} = live(conn, ~p"/notes")
+
+      refute has_element?(view_account, "aside a[href='/admin/instance']")
+      refute has_element?(view_notes, "#user-menu a[href='/admin/instance']")
     end
 
     test "un viewer no lo ve en ninguna de las dos", %{conn: conn} do
@@ -111,15 +145,15 @@ defmodule DranWeb.InstanceSettingsAccessTest do
       {:ok, view_account, _html} = live(conn, ~p"/settings/account")
       {:ok, view_notes, _html} = live(conn, ~p"/notes")
 
-      refute has_element?(view_account, "aside a[href='/settings/instance']")
-      refute has_element?(view_notes, "#user-menu a[href='/settings/instance']")
+      refute has_element?(view_account, "aside a[href='/admin/instance']")
+      refute has_element?(view_notes, "#user-menu a[href='/admin/instance']")
     end
   end
 
   describe "el gemelo del socket (re-mount por websocket)" do
     defp hook(session) do
       socket = %Phoenix.LiveView.Socket{assigns: %{flash: %{}}}
-      DranWeb.LiveAuth.on_mount(:require_instance_admin, %{}, session, socket)
+      DranWeb.LiveAuth.on_mount(:require_admin, %{}, session, socket)
     end
 
     # `push_navigate/2` devuelve el socket con el redirect anotado, no una tupla.
@@ -134,10 +168,10 @@ defmodule DranWeb.InstanceSettingsAccessTest do
       assert destino(hook(%{"user" => owner.email, "is_owner" => true})) == :cont
     end
 
-    test "el admin de instancia continúa" do
+    test "el admin de instancia se va al home" do
       admin = user!("socket_admin@test.dev") |> with_role("admin")
 
-      assert destino(hook(%{"user" => admin.email, "is_owner" => false})) == :cont
+      assert destino(hook(%{"user" => admin.email, "is_owner" => false})) == "/"
     end
 
     test "el usuario normal se va al home" do

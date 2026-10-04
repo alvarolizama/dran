@@ -310,8 +310,8 @@ defmodule DranWeb.HomeLiveTest do
       assert redirected_to(conn) == ~p"/login"
     end
 
-    test "GET /settings redirects to /login without a session" do
-      conn = build_conn() |> get(~p"/settings/instance")
+    test "GET /admin/instance redirects to /login without a session" do
+      conn = build_conn() |> get(~p"/admin/instance")
       assert redirected_to(conn) == ~p"/login"
     end
   end

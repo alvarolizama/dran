@@ -19,4 +19,13 @@ defmodule DranWeb.RedirectController do
     path = "/" <> Enum.join(List.wrap(rest), "/")
     redirect(conn, to: path)
   end
+
+  # `/settings/instance` → `/admin/instance`: configuring the instance is
+  # instance policy and lives in the admin shell (`pipeline :admin`,
+  # owner-only). The hop is here — and not as a live route — so the old URL
+  # keeps answering for bookmarks without mounting a page for a user the
+  # destination would refuse.
+  def instance_settings(conn, _params) do
+    redirect(conn, to: "/admin/instance")
+  end
 end

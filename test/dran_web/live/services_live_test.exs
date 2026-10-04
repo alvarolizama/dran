@@ -152,7 +152,7 @@ defmodule DranWeb.ServicesLiveTest do
       refute has_element?(view, "#services-list")
       assert html =~ t("No services exposed")
       # El CTA lleva a la política de instancia (no hay modal de alta acá).
-      assert has_element?(view, "[data-testid=empty-state] a[href=\"/settings/instance\"]")
+      assert has_element?(view, "[data-testid=empty-state] a[href=\"/admin/instance\"]")
     end
   end
 

@@ -263,7 +263,7 @@ defmodule DranWeb.AdminSystemLive do
                   {length(Dran.Services.allowlist())}
                 </span>
                 <.link
-                  navigate={~p"/settings/instance"}
+                  navigate={~p"/admin/instance"}
                   id="services-instance-settings-link"
                   class="link link-hover text-xs font-medium"
                 >

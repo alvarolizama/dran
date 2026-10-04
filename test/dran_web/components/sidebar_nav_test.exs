@@ -47,38 +47,40 @@ defmodule DranWeb.SidebarNavTest do
     defp instance_nav(assigns \\ %{}) do
       render_component(
         &Layouts.instance_nav/1,
-        Map.merge(%{active: "home", is_owner: true, can_config: true}, assigns)
+        Map.merge(%{active: "home", is_owner: true}, assigns)
       )
     end
 
-    test "lleva Home, Account (Profile + Instance settings) y el grupo Admin" do
+    test "lleva Home, Account (Profile) y el grupo Admin con Instance settings" do
       html = instance_nav()
 
       assert html =~ ~s(href="/")
       assert html =~ ~s(href="/settings/account")
-      assert html =~ ~s(href="/settings/instance")
+      # La configuración de la instancia ES administración (owner-only): vive en
+      # el grupo Admin, con la URL del shell de admin.
+      assert html =~ ~s(href="/admin/instance")
       assert html =~ t("Instance settings")
+      refute html =~ ~s(href="/settings/instance")
 
-      for path <- ~w(users groups models system jobs) do
+      for path <- ~w(instance users groups models system jobs) do
         assert html =~ ~s(href="/admin/#{path}")
       end
     end
 
-    # Era el hueco: /settings/instance no estaba en NINGÚN nav del shell de
-    # instancia (sólo en el menú de perfil del shell de conocimiento, y ahí
-    # escondido si no había workspace).
-    test "Instance settings no se ofrece a quien no configura la instancia" do
-      html = instance_nav(%{is_owner: false, can_config: false})
+    # El enlace no puede ofrecerse a quien el guard de la ruta rebotaría: la
+    # página es del owner y sólo para él se pinta (dueño del grupo Admin).
+    test "Instance settings no se ofrece a quien no es el dueño" do
+      html = instance_nav(%{is_owner: false})
 
-      refute html =~ ~s(href="/settings/instance")
+      refute html =~ ~s(href="/admin/instance")
       refute html =~ ~s(href="/admin/users")
       assert html =~ ~s(href="/settings/account")
     end
 
     test "la página se marca activa" do
-      html = instance_nav(%{active: "workspace_settings"})
+      html = instance_nav(%{active: "admin_instance"})
 
-      {pos, _} = :binary.match(html, ~s(href="/settings/instance"))
+      {pos, _} = :binary.match(html, ~s(href="/admin/instance"))
       {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
       anchor = binary_part(html, pos, end_pos - pos)
       assert anchor =~ ~s(aria-current="page")
@@ -375,30 +377,34 @@ defmodule DranWeb.SidebarNavTest do
       refute viewer =~ ~s(href="/settings/api-keys")
     end
 
-    test "workspace owner sees Activity + Workspace settings after a divider" do
-      html = menu(%{workspace_slug: "personal", workspace_role: "owner", is_owner: false})
+    test "workspace owner sees Activity; Instance settings is the INSTANCE owner's" do
+      ws_owner = menu(%{workspace_slug: "personal", workspace_role: "owner", is_owner: false})
+      inst_owner = menu(%{workspace_slug: "personal", workspace_role: "owner", is_owner: true})
 
-      assert html =~ ~s(href="/activity")
-      assert html =~ t("Activity")
-      assert html =~ ~s(href="/settings/instance")
-      assert html =~ t("Instance settings")
+      assert ws_owner =~ ~s(href="/activity")
+      assert ws_owner =~ t("Activity")
+      # El rol de WORKSPACE no abre la configuración de la instancia: la ruta es
+      # /admin/instance y ese shell es owner-only.
+      refute ws_owner =~ ~s(href="/admin/instance")
+      assert inst_owner =~ ~s(href="/admin/instance")
+      assert inst_owner =~ t("Instance settings")
       # account links siguen arriba
-      assert html =~ ~s(href="/settings/account")
-      assert html =~ ~s(id="logout-form")
+      assert ws_owner =~ ~s(href="/settings/account")
+      assert ws_owner =~ ~s(id="logout-form")
     end
 
     test "viewer sees Activity but not Instance settings" do
       html = menu(%{workspace_slug: "personal", workspace_role: "viewer", is_owner: false})
 
       assert html =~ ~s(href="/activity")
-      # can_config is owner/admin-only: viewer gets no settings link
-      refute html =~ ~s(href="/settings/instance")
+      # Instance settings is owner-only: viewer gets no admin link at all
+      refute html =~ ~s(href="/admin/instance")
     end
 
     test "instance owner sees Instance settings regardless of role" do
       html = menu(%{workspace_slug: "personal", workspace_role: "viewer", is_owner: true})
 
-      assert html =~ ~s(href="/settings/instance")
+      assert html =~ ~s(href="/admin/instance")
     end
 
     test "outside a workspace the menu keeps the instance entries (no workspace ones)" do
@@ -408,25 +414,26 @@ defmodule DranWeb.SidebarNavTest do
       # Workspace-scoped: siguen fuera (Activity es del cerebro).
       refute owner =~ "/activity"
       # Instance settings es de la INSTANCIA: está con o sin workspace, y sólo
-      # para quien puede abrirla (owner ∪ admin de instancia).
-      assert owner =~ ~s(href="/settings/instance")
+      # para el dueño (la ruta vive en /admin/*).
+      assert owner =~ ~s(href="/admin/instance")
       assert owner =~ t("Instance settings")
-      refute viewer =~ ~s(href="/settings/instance")
+      refute viewer =~ ~s(href="/admin/instance")
 
       assert owner =~ ~s(href="/")
       assert owner =~ ~s(href="/settings/account")
       refute owner =~ ~s(href="/settings/api-keys")
     end
 
-    test "the active workspace entry is marked" do
+    test "the active instance entry is marked" do
       html =
         menu(%{
           workspace_slug: "personal",
           workspace_role: "owner",
-          active: "workspace_settings"
+          is_owner: true,
+          active: "admin_instance"
         })
 
-      {pos, _} = :binary.match(html, ~s(href="/settings/instance"))
+      {pos, _} = :binary.match(html, ~s(href="/admin/instance"))
       {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
       anchor = binary_part(html, pos, end_pos - pos)
       assert anchor =~ ~s(aria-current="page")

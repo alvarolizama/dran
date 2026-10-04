@@ -35,6 +35,7 @@ defmodule DranWeb.InstanceShellTest do
   # dashboard launcher died with the multi-workspace model.
   @pages [
     {"/settings/account", "settings"},
+    {"/admin/instance", "admin_instance"},
     {"/admin/users", "admin_users"},
     {"/admin/groups", "admin_groups"},
     {"/admin/models", "admin_models"},
@@ -148,12 +149,15 @@ defmodule DranWeb.InstanceShellTest do
     refute has_element?(view, "#user-menu a[href='/admin/system']")
   end
 
-  # /settings/instance es una página de INSTANCIA: shell de instancia, sin el nav
+  # /admin/instance es una página de INSTANCIA: shell de instancia, sin el nav
   # de conocimiento y sin la caja de búsqueda del sidebar (DESIGN §T2).
-  test "/settings/instance usa el shell de instancia, no el de conocimiento", %{conn: conn} do
+  test "/admin/instance usa el shell de instancia, no el de conocimiento", %{conn: conn} do
     conn = owner_conn(conn, "shell_owner@test.dev")
-    {:ok, view, _html} = live(conn, ~p"/settings/instance")
+    {:ok, view, _html} = live(conn, ~p"/admin/instance")
 
+    # Y desde el shell de admin la página se alcanza por el nav, no sólo
+    # escribiendo la URL: el enlace vive en el grupo Admin.
+    assert has_element?(view, "aside a[href='/admin/instance']")
     assert has_element?(view, "a[href='/admin/users']")
     assert has_element?(view, "a[href='/admin/groups']")
     # El nav de conocimiento (Journey/Memory, o el buscador del sidebar) no está.

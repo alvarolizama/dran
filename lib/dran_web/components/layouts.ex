@@ -60,18 +60,17 @@ defmodule DranWeb.Layouts do
     # Resolve admin status for the sidebar's admin-only links. A session user
     # with a row in users is admin iff users.is_owner; a session user without
     # a DB row (pre-multi-user sessions) is treated as a full admin.
-    {is_owner, can_config} =
+    is_owner =
       if is_binary(assigns[:current_user]) do
         case Dran.Accounts.get_user_by_email(assigns[:current_user]) do
-          nil -> {true, true}
-          user -> {user.is_owner == true, Dran.Accounts.User.instance_admin?(user)}
+          nil -> true
+          user -> user.is_owner == true
         end
       else
         # Sin fila que consultar (current_user no binario): el shell hereda el
         # flag y el flag manda — el comportamiento legacy de las sesiones
         # pre-multi-user.
-        owner = assigns[:is_owner] || false
-        {owner, owner}
+        assigns[:is_owner] || false
       end
 
     # If the caller didn't forward page_counts, compute them here so the
@@ -114,14 +113,11 @@ defmodule DranWeb.Layouts do
         counts: counts,
         page_counts: page_counts,
         is_owner: is_owner,
-        # Quién configura la instancia: la FILA decide (dueño ∪ instance_role
-        # admin/owner) — el MISMO predicado que el guard de la ruta
-        # (`require_instance_admin/2` y su gemelo `LiveAuth.on_mount`) y el que
-        # aplica `DranWeb.WorkspaceSettingsLive`. No `workspace_role`: ese es
-        # el rol de MEMBRESÍA en el workspace y un admin de instancia puede ser
-        # sólo viewer ahí — el ítem del nav no puede depender de la página
-        # donde estás parado.
-        can_config: can_config,
+        # La configuración de la instancia vive en el shell de admin
+        # (`/admin/instance`, owner-only): el enlace lo gatea `is_owner`, no un
+        # flag de conveniencia. El viejo `can_config` (dueño ∪ instance_role
+        # admin/owner) murió con el move: existía SOLO para los dos enlaces a
+        # esa página.
         instance_nav?: instance_nav?
       )
 
@@ -237,7 +233,6 @@ defmodule DranWeb.Layouts do
                 <.instance_nav
                   active={@active_nav}
                   is_owner={@is_owner}
-                  can_config={@can_config}
                 />
               <% else %>
                 <.sidebar_nav
@@ -257,7 +252,6 @@ defmodule DranWeb.Layouts do
                 workspace_slug={@workspace_slug}
                 workspace_role={assigns[:workspace_role]}
                 is_owner={@is_owner}
-                can_config={@can_config}
                 active={@active_nav}
               />
             </div>
@@ -590,10 +584,6 @@ defmodule DranWeb.Layouts do
   attr :active, :string, default: nil
   attr :is_owner, :boolean, default: false
 
-  attr :can_config, :boolean,
-    default: false,
-    doc: "dueño de la instancia o admin de instancia: puede abrir /settings/instance"
-
   def instance_nav(assigns) do
     ~H"""
     <div class="flex flex-col gap-4">
@@ -616,21 +606,19 @@ defmodule DranWeb.Layouts do
           path={~p"/settings/account"}
           active={@active == "settings"}
         />
-        <%!-- La configuración de la instancia va acá, no en el grupo Admin:
-             /admin/* es owner-only, mientras /settings/instance la abre también
-             un admin de instancia (`can_config`). Antes no estaba en NINGÚN nav
-             del shell de instancia — sólo en el menú de perfil del shell de
-             conocimiento, y ahí escondido si no había workspace. --%>
-        <.nav_link
-          :if={@can_config}
-          label={gettext("Instance settings")}
-          icon="hero-cog-6-tooth"
-          path={~p"/settings/instance"}
-          active={@active == "workspace_settings"}
-        />
       </.nav_group>
 
+      <%!-- La configuración de la instancia ES administración (owner-only, como
+           el resto de /admin/*): vive en el grupo Admin, con su URL y su guard.
+           Estaba en el grupo Account porque un admin de instancia también podía
+           abrirla; eso ya no es así y un enlace que rebota no se deja. --%>
       <.nav_group :if={@is_owner} label={gettext("Admin")}>
+        <.nav_link
+          label={gettext("Instance settings")}
+          icon="hero-cog-6-tooth"
+          path={~p"/admin/instance"}
+          active={@active == "admin_instance"}
+        />
         <.nav_link
           label={gettext("Users")}
           icon="hero-users"
@@ -736,28 +724,10 @@ defmodule DranWeb.Layouts do
   attr :is_owner, :boolean, default: false
   attr :active, :string, default: nil
 
-  attr :can_config, :boolean,
-    default: nil,
-    doc: "lo computa el shell; renderizado suelto (tests) se deriva de los assigns"
-
   def user_footer(assigns) do
     name = display_name(assigns[:user], assigns[:current_user])
 
-    # El shell lo computa una vez (`Layouts.app/1`, desde la FILA); un render
-    # suelto —los tests montan el componente solo— lo deriva de sus propios
-    # assigns: el owner flag, el rol de workspace o la fila que el caller traiga.
-    can_config =
-      assigns[:can_config] || assigns[:is_owner] ||
-        assigns[:workspace_role] in ~w(owner admin) ||
-        case assigns[:user] do
-          %Dran.Accounts.User{} = user -> Dran.Accounts.User.instance_admin?(user)
-          _ -> false
-        end
-
-    assigns =
-      assigns
-      |> assign(:display_name, name)
-      |> assign(:can_config, can_config)
+    assigns = assign(assigns, :display_name, name)
 
     ~H"""
     <div
@@ -808,24 +778,12 @@ defmodule DranWeb.Layouts do
             label={gettext("Activity")}
             active={@active == "activity"}
           />
-          <%!-- La configuración de la instancia: con `can_config` —dueño o admin
-               de instancia— y con o sin workspace. Estaba atada a
-               `@workspace_slug`, así que en /admin/* y /settings/* —donde el
-               sidebar es el nav de instancia— el enlace no estaba en ningún
-               menú del shell. --%>
-          <div :if={@can_config} class="border-t border-base-300 my-1"></div>
-          <.menu_item
-            :if={@can_config}
-            href={~p"/settings/instance"}
-            icon="hero-cog-6-tooth"
-            label={gettext("Instance settings")}
-            active={@active == "workspace_settings"}
-          />
-
-          <%!-- Admin (owner-only) — the same six sections the instance nav
-               carries. They live here too so the admin surface is reachable
-               from the KNOWLEDGE shell: the sidebar there is the workspace nav
-               and /admin would otherwise be unreachable without typing the URL. --%>
+          <%!-- Admin (owner-only) — the same sections the instance nav carries,
+               so the admin surface is reachable from the KNOWLEDGE shell too:
+               the sidebar there is the workspace nav and /admin would otherwise
+               be unreachable without typing the URL. La configuración de la
+               instancia es administración (`/admin/instance`), así que entra
+               acá; antes colgaba de un `can_config` que ya no existe. --%>
           <div :if={@is_owner} class="border-t border-base-300 my-1"></div>
           <div
             :if={@is_owner}
@@ -833,6 +791,13 @@ defmodule DranWeb.Layouts do
           >
             {gettext("Admin")}
           </div>
+          <.menu_item
+            :if={@is_owner}
+            href={~p"/admin/instance"}
+            icon="hero-cog-6-tooth"
+            label={gettext("Instance settings")}
+            active={@active == "admin_instance"}
+          />
           <.menu_item
             :if={@is_owner}
             href={~p"/admin/users"}

@@ -210,7 +210,7 @@ defmodule DranWeb.E2EAuthTest do
 
       # Workspace page: the admin sees the instance settings link.
       {:ok, _view, html} = Phoenix.LiveViewTest.live(conn, ~p"/notes")
-      assert html =~ ~p"/settings/instance"
+      assert html =~ ~p"/admin/instance"
       assert html =~ ~p"/activity"
 
       # The workspace home carries the account links.
