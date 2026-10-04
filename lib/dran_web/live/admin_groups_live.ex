@@ -14,8 +14,11 @@ defmodule DranWeb.AdminGroupsLive do
   `resource_empty_state/1` por CONTADOR. El renombrado, que antes era una
   puerta sin UI, se administra desde la fila.
 
-  El panel de miembros queda EN la página (no es un modal): es el port del
-  bloque «Add users» del panel de miembros del workspace.
+  El panel de miembros es el modal compacto del molde (C7.1, `<.modal>`):
+  el port del bloque «Add users» del panel del workspace, pero en diálogo —
+  con la lista, los candidatos y las dos puertas de alta adentro, el bloque
+  tapaba la página y estiraba la lista hacia abajo. El cuerpo se acota al
+  viewport y scrollea adentro.
   """
 
   use DranWeb, :live_view
@@ -188,8 +191,10 @@ defmodule DranWeb.AdminGroupsLive do
 
   def handle_event("delete_group", _params, socket), do: {:noreply, socket}
 
-  # Membership is managed inline per group row. id "0" closes the panel.
-  def handle_event("manage_members", %{"id" => "0"}, socket) do
+  # La membresía se administra en el modal de cada fila (§C11: el modal se
+  # cierra por assign). `close_members_panel` es el `on_close` del molde: lo
+  # disparan la ✕, Escape y el click-away.
+  def handle_event("close_members_panel", _params, socket) do
     {:noreply, assign(socket, :members_group, nil)}
   end
 
@@ -457,176 +462,181 @@ defmodule DranWeb.AdminGroupsLive do
           />
         </div>
 
-        <%!-- Members panel — mismo molde que el bloque "Add users" del panel de
-               miembros del workspace: lista de miembros con avatar y ✕, y abajo
-               las DOS puertas para agregar (correo conocido + buscador sobre la
-               lista de usuarios). --%>
-        <div :if={@members_group} id="group-members-panel" class="surface-2 rounded-2xl p-5 space-y-4">
-          <div class="flex items-center justify-between">
-            <h2 class="text-heading">
-              {gettext("Members of")} <span class="text-primary">{@members_group.name}</span>
-            </h2>
-            <button phx-click="manage_members" phx-value-id="0" class="btn btn-ghost btn-sm">
-              {gettext("Close")}
-            </button>
-          </div>
+        <%!-- Miembros: el modal compacto del molde (C7.1) — mismo bloque "Add
+               users" del panel del workspace, pero en diálogo. Los ids no
+               cambian (el modal hereda el id del panel), así que todo lo que se
+               apuntaba adentro sigue apuntando igual; lo que cambia es que el
+               grupo ya no se administra EN la página. El cuerpo se acota al
+               viewport con scroll adentro: una lista larga de miembros (o de
+               candidatos) no puede estirar el diálogo más allá de la pantalla. --%>
+        <.modal
+          :if={@members_group}
+          id="group-members-panel"
+          title={gettext("Members of %{name}", name: @members_group.name)}
+          on_close="close_members_panel"
+          max_w="max-w-2xl"
+        >
+          <div
+            id="group-members-body"
+            class="space-y-4 max-h-[calc(100vh-10rem)] overflow-y-auto"
+          >
+            <%!-- Current members --%>
+            <div>
+              <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-1">
+                {gettext("Members")} ({length(@members)})
+              </h3>
 
-          <%!-- Current members --%>
-          <div>
-            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-1">
-              {gettext("Members")} ({length(@members)})
-            </h3>
-
-            <p :if={@members == []} class="text-sm text-base-content/50 text-center py-4">
-              {gettext("No members yet.")}
-            </p>
-
-            <div :if={@members != []} class="space-y-2">
-              <div
-                :for={member <- @members}
-                id={"group-member-#{member.id}"}
-                class="flex items-center justify-between gap-3 rounded-xl border border-base-content/10 px-3 py-2.5"
-              >
-                <div class="min-w-0 flex items-center gap-3">
-                  <div class="size-8 rounded-full bg-base-content/10 flex items-center justify-center text-xs font-semibold">
-                    {String.slice(member.name || member.email || "?", 0, 1)}
-                  </div>
-                  <div class="min-w-0">
-                    <p class="text-sm font-medium truncate">{member.email}</p>
-                    <p :if={member.name} class="text-xs text-base-content/60 truncate">
-                      {member.name}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  phx-click="remove_member"
-                  phx-value-group_id={@members_group.id}
-                  phx-value-user_id={member.id}
-                  data-confirm={gettext("Remove %{user} from this group?", user: member.email)}
-                  class="btn btn-ghost btn-xs btn-circle text-error"
-                  title={gettext("Remove from group")}
-                >
-                  <.icon name="hero-x-mark" class="size-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <%!-- Add users --%>
-          <div class="border-t border-base-content/10 pt-5">
-            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-3">
-              {gettext("Add users")}
-            </h3>
-
-            <p class="text-xs text-base-content/60 mb-3">
-              {gettext(
-                "Add an existing account to this group. People must already have a Dran account — there is no invitation email, membership is granted as soon as you add them."
-              )}
-            </p>
-
-            <%!-- Add by email (works for anyone, no need to search first) --%>
-            <.form
-              for={@invite_form}
-              id="group-invite-form"
-              phx-submit="invite_member"
-              class="flex flex-wrap items-end gap-3 mb-4"
-            >
-              <div class="flex-1 min-w-56">
-                <.input
-                  field={@invite_form[:email]}
-                  type="email"
-                  label={gettext("Email")}
-                  placeholder="ana@example.com"
-                />
-              </div>
-              <button
-                type="submit"
-                class="btn btn-primary btn-sm mb-2 transition-colors active:scale-95"
-                phx-disable-with={gettext("Adding…")}
-              >
-                <.icon name="hero-plus" class="size-4" />
-                {gettext("Add")}
-              </button>
-            </.form>
-
-            <form id="group-user-search-form" phx-change="search_members" class="relative">
-              <.icon
-                name="hero-magnifying-glass"
-                class="absolute left-3 top-2.5 size-4 text-base-content/50"
-              />
-              <input
-                type="text"
-                name="q"
-                value={@member_search}
-                placeholder={gettext("Search users by email or name...")}
-                class="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </form>
-
-            <div class="mt-3 space-y-2">
-              <% member_ids = MapSet.new(@members, & &1.id)
-              q = String.downcase(@member_search || "")
-
-              candidates =
-                Enum.reject(@all_users, &MapSet.member?(member_ids, &1.id))
-
-              filtered =
-                candidates
-                |> Enum.filter(fn user ->
-                  q == "" or
-                    String.contains?(String.downcase(user.email || ""), q) or
-                    (user.name && String.contains?(String.downcase(user.name), q))
-                end)
-                |> Enum.take(5) %>
-
-              <div
-                :if={filtered == [] and @member_search != ""}
-                class="text-sm text-base-content/50 py-3 text-center"
-              >
-                {gettext("No users match your search.")}
-              </div>
-
-              <p
-                :if={candidates == []}
-                class="text-sm text-base-content/50 text-center py-3"
-              >
-                {gettext("Everyone on this instance is already in this group.")}
+              <p :if={@members == []} class="text-sm text-base-content/50 text-center py-4">
+                {gettext("No members yet.")}
               </p>
 
-              <div
-                :for={user <- filtered}
-                id={"group-candidate-#{user.id}"}
-                class="flex items-center justify-between gap-3 rounded-xl border border-base-content/10 px-3 py-2.5"
-              >
-                <div class="min-w-0 flex items-center gap-3">
-                  <div class="size-8 rounded-full bg-base-content/10 flex items-center justify-center text-xs font-semibold">
-                    {String.slice(user.name || user.email || "?", 0, 1)}
-                  </div>
-                  <div class="min-w-0">
-                    <p class="text-sm font-medium truncate">{user.email}</p>
-                    <p :if={user.name} class="text-xs text-base-content/60 truncate">
-                      {user.name}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  id={"group-add-#{user.id}"}
-                  phx-click="add_member"
-                  phx-value-group_id={@members_group.id}
-                  phx-value-user_id={user.id}
-                  class="btn btn-ghost btn-xs gap-1"
+              <div :if={@members != []} class="space-y-2">
+                <div
+                  :for={member <- @members}
+                  id={"group-member-#{member.id}"}
+                  class="flex items-center justify-between gap-3 rounded-xl border border-base-content/10 px-3 py-2.5"
                 >
-                  <.icon name="hero-plus" class="size-3.5" />
+                  <div class="min-w-0 flex items-center gap-3">
+                    <div class="size-8 rounded-full bg-base-content/10 flex items-center justify-center text-xs font-semibold">
+                      {String.slice(member.name || member.email || "?", 0, 1)}
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium truncate">{member.email}</p>
+                      <p :if={member.name} class="text-xs text-base-content/60 truncate">
+                        {member.name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    phx-click="remove_member"
+                    phx-value-group_id={@members_group.id}
+                    phx-value-user_id={member.id}
+                    data-confirm={gettext("Remove %{user} from this group?", user: member.email)}
+                    class="btn btn-ghost btn-xs btn-circle text-error"
+                    title={gettext("Remove from group")}
+                  >
+                    <.icon name="hero-x-mark" class="size-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <%!-- Add users --%>
+            <div class="border-t border-base-content/10 pt-5">
+              <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-3">
+                {gettext("Add users")}
+              </h3>
+
+              <p class="text-xs text-base-content/60 mb-3">
+                {gettext(
+                  "Add an existing account to this group. People must already have a Dran account — there is no invitation email, membership is granted as soon as you add them."
+                )}
+              </p>
+
+              <%!-- Add by email (works for anyone, no need to search first) --%>
+              <.form
+                for={@invite_form}
+                id="group-invite-form"
+                phx-submit="invite_member"
+                class="flex flex-wrap items-end gap-3 mb-4"
+              >
+                <div class="flex-1 min-w-56">
+                  <.input
+                    field={@invite_form[:email]}
+                    type="email"
+                    label={gettext("Email")}
+                    placeholder="ana@example.com"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-sm mb-2 transition-colors active:scale-95"
+                  phx-disable-with={gettext("Adding…")}
+                >
+                  <.icon name="hero-plus" class="size-4" />
                   {gettext("Add")}
                 </button>
+              </.form>
+
+              <form id="group-user-search-form" phx-change="search_members" class="relative">
+                <.icon
+                  name="hero-magnifying-glass"
+                  class="absolute left-3 top-2.5 size-4 text-base-content/50"
+                />
+                <input
+                  type="text"
+                  name="q"
+                  value={@member_search}
+                  placeholder={gettext("Search users by email or name...")}
+                  class="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-base-300 bg-base-100 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </form>
+
+              <div class="mt-3 space-y-2">
+                <% member_ids = MapSet.new(@members, & &1.id)
+                q = String.downcase(@member_search || "")
+
+                candidates =
+                  Enum.reject(@all_users, &MapSet.member?(member_ids, &1.id))
+
+                filtered =
+                  candidates
+                  |> Enum.filter(fn user ->
+                    q == "" or
+                      String.contains?(String.downcase(user.email || ""), q) or
+                      (user.name && String.contains?(String.downcase(user.name), q))
+                  end)
+                  |> Enum.take(5) %>
+
+                <div
+                  :if={filtered == [] and @member_search != ""}
+                  class="text-sm text-base-content/50 py-3 text-center"
+                >
+                  {gettext("No users match your search.")}
+                </div>
+
+                <p
+                  :if={candidates == []}
+                  class="text-sm text-base-content/50 text-center py-3"
+                >
+                  {gettext("Everyone on this instance is already in this group.")}
+                </p>
+
+                <div
+                  :for={user <- filtered}
+                  id={"group-candidate-#{user.id}"}
+                  class="flex items-center justify-between gap-3 rounded-xl border border-base-content/10 px-3 py-2.5"
+                >
+                  <div class="min-w-0 flex items-center gap-3">
+                    <div class="size-8 rounded-full bg-base-content/10 flex items-center justify-center text-xs font-semibold">
+                      {String.slice(user.name || user.email || "?", 0, 1)}
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium truncate">{user.email}</p>
+                      <p :if={user.name} class="text-xs text-base-content/60 truncate">
+                        {user.name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    id={"group-add-#{user.id}"}
+                    phx-click="add_member"
+                    phx-value-group_id={@members_group.id}
+                    phx-value-user_id={user.id}
+                    class="btn btn-ghost btn-xs gap-1"
+                  >
+                    <.icon name="hero-plus" class="size-3.5" />
+                    {gettext("Add")}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </.modal>
 
         <%!-- Alta y renombrado: el MISMO modal del molde, abierto por estado de
                URL (`?new=true` / `?edit=<id>`) y con el botón Guardar en el

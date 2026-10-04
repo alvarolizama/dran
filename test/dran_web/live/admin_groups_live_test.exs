@@ -183,7 +183,8 @@ defmodule DranWeb.AdminGroupsLiveTest do
     refute modal =~ ~s| h-[calc(100vh-3rem)]|
   end
 
-  test "el panel de miembros sigue abriendo en la página", %{conn: conn} do
+  test "el modal de miembros: abre desde la fila y se cierra con el molde",
+       %{conn: conn} do
     conn = owner_conn(conn)
     group = group_fixture("Con miembros")
 
@@ -196,8 +197,20 @@ defmodule DranWeb.AdminGroupsLiveTest do
 
     view |> element("#group-members-#{group.id}") |> render_click()
 
-    assert has_element?(view, "#group-members-panel")
+    # El bloque es el modal compacto del molde (C7.1), no un panel en la
+    # página: overlay con el cierre del molde (✕ · Escape · click-away) y el
+    # título con el grupo. El `id` es el del viejo panel — todo lo que apuntaba
+    # adentro sigue apuntando igual.
+    assert has_element?(view, "#group-members-panel[phx-window-keydown='close_members_panel']")
+    assert has_element?(view, "#group-members-panel button[phx-click='close_members_panel']")
+    assert has_element?(view, "#group-members-panel", "Members of")
     assert has_element?(view, "#group-members-panel", "Con miembros")
+
+    # Y el cuerpo se acota al viewport con el scroll adentro: una lista larga de
+    # miembros (o de candidatos) no puede estirar el diálogo fuera de la pantalla.
+    cuerpo = view |> element("#group-members-body") |> render()
+    assert cuerpo =~ "max-h-[calc(100vh-10rem)]"
+    assert cuerpo =~ "overflow-y-auto"
 
     view
     |> form("#group-invite-form", %{"invite" => %{"email" => user.email}})
@@ -210,5 +223,13 @@ defmodule DranWeb.AdminGroupsLiveTest do
     |> render_click()
 
     refute has_element?(view, "#group-member-#{user.id}")
+
+    # La ✕ cierra el modal y la página queda (las filas siguen ahí).
+    view
+    |> element("#group-members-panel button[phx-click='close_members_panel']")
+    |> render_click()
+
+    refute has_element?(view, "#group-members-panel")
+    assert has_element?(view, "#group-row-#{group.id}")
   end
 end

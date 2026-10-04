@@ -1069,7 +1069,11 @@ Implementación real del patrón **Commons C8** en Dran:
   que filtra la lista LOCAL de usuarios y pinta candidatos en filas con un *Add*
   propio (`Enum.take(5)`, los ya miembros excluidos; sin coincidencias =
   «No users match your search.»). El filtro **sobrevive** al alta y al quitar:
-  los handlers refrescan los datos, nunca reabren el panel.
+  los handlers refrescan los datos, nunca reabren el panel. En `/admin/groups`
+  el bloque va adentro del **modal compacto** del molde (`<.modal>`, §C7.1): la
+  lista, los candidatos y las dos puertas juntas tapaban la página, así que ahí
+  el bloque es un diálogo con el cuerpo acotado al viewport (`max-h` + scroll
+  adentro). El panel del workspace lo mantiene EN su pestaña *Users*.
 - Los colores de chip/icono/badge de un resultado **salen del dato del tipo**
   (`Workspace.page_type_color/2`), nunca de una tabla de casos por slug (§T8).
 

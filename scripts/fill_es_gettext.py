@@ -139,7 +139,7 @@ ES = {
     "Log of the recent changes to this workspace's pages.": "Registro de los cambios recientes en las páginas de este workspace.",
     "Log out": "Cerrar sesión",
     "Mark as stale": "Marcar como obsoleto",
-    "Members of": "Miembros de",
+    "Members of %{name}": "Miembros de %{name}",
     "Membership updated": "Membresía actualizada",
     "Memory": "Memoria",
     "Memory not found": "Memoria no encontrada",

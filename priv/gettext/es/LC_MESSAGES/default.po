@@ -101,7 +101,7 @@ msgstr "Todas las páginas"
 msgid "Are you sure? This cannot be undone."
 msgstr "¿Estás seguro? No se puede deshacer."
 
-#: lib/dran_web/components/resource_components.ex:163
+#: lib/dran_web/components/resource_components.ex:178
 #: lib/dran_web/live/cluster_live.ex:163
 #: lib/dran_web/live/cluster_live.ex:219
 #: lib/dran_web/live/goal_live.ex:146
@@ -120,11 +120,11 @@ msgstr "Volver"
 msgid "Backlog"
 msgstr "Pendientes"
 
-#: lib/dran_web/components/resource_components.ex:125
-#: lib/dran_web/components/resource_components.ex:201
-#: lib/dran_web/components/resource_components.ex:206
+#: lib/dran_web/components/resource_components.ex:132
+#: lib/dran_web/components/resource_components.ex:216
+#: lib/dran_web/components/resource_components.ex:221
 #: lib/dran_web/components/task_components.ex:65
-#: lib/dran_web/live/admin_groups_live.ex:642
+#: lib/dran_web/live/admin_groups_live.ex:652
 #: lib/dran_web/live/admin_users_live.ex:436
 #: lib/dran_web/live/goal_live.ex:414
 #: lib/dran_web/live/plan_live.ex:338
@@ -157,7 +157,7 @@ msgstr "Conceptos"
 msgid "Content"
 msgstr "Contenido"
 
-#: lib/dran_web/live/admin_groups_live.ex:641
+#: lib/dran_web/live/admin_groups_live.ex:651
 #: lib/dran_web/live/goal_live.ex:413
 #: lib/dran_web/live/goal_live.ex:446
 #: lib/dran_web/live/pages_live.ex:151
@@ -237,10 +237,10 @@ msgstr "En progreso"
 msgid "Metadata"
 msgstr "Metadatos"
 
-#: lib/dran_web/components/resource_components.ex:293
-#: lib/dran_web/components/resource_components.ex:303
-#: lib/dran_web/components/resource_components.ex:345
-#: lib/dran_web/components/resource_components.ex:352
+#: lib/dran_web/components/resource_components.ex:308
+#: lib/dran_web/components/resource_components.ex:318
+#: lib/dran_web/components/resource_components.ex:360
+#: lib/dran_web/components/resource_components.ex:367
 #, elixir-autogen, elixir-format
 msgid "New"
 msgstr "Nuevo"
@@ -290,8 +290,8 @@ msgstr "Referencias"
 msgid "Relations"
 msgstr "Relaciones"
 
-#: lib/dran_web/components/resource_components.ex:134
-#: lib/dran_web/live/admin_groups_live.ex:641
+#: lib/dran_web/components/resource_components.ex:141
+#: lib/dran_web/live/admin_groups_live.ex:651
 #: lib/dran_web/live/admin_models_live.ex:304
 #: lib/dran_web/live/admin_system_live.ex:186
 #: lib/dran_web/live/admin_users_live.ex:443
@@ -351,7 +351,7 @@ msgid "Type"
 msgstr "Tipo"
 
 #: lib/dran_web/components/page_components.ex:126
-#: lib/dran_web/components/resource_components.ex:507
+#: lib/dran_web/components/resource_components.ex:522
 #: lib/dran_web/live/activity_live.ex:237
 #: lib/dran_web/live/goal_live.ex:396
 #: lib/dran_web/live/plan_live.ex:321
@@ -746,7 +746,7 @@ msgstr "caracteres"
 msgid "ms"
 msgstr "ms"
 
-#: lib/dran_web/live/admin_groups_live.ex:404
+#: lib/dran_web/live/admin_groups_live.ex:409
 #: lib/dran_web/live/settings_live.ex:301
 #: lib/dran_web/live/settings_live.ex:305
 #, elixir-autogen, elixir-format
@@ -846,7 +846,7 @@ msgstr "Notas de reunión"
 msgid "Mid"
 msgstr "Medio"
 
-#: lib/dran_web/live/admin_groups_live.ex:661
+#: lib/dran_web/live/admin_groups_live.ex:672
 #: lib/dran_web/live/admin_users_live.ex:251
 #: lib/dran_web/live/admin_users_live.ex:378
 #: lib/dran_web/live/settings_live.ex:231
@@ -1336,7 +1336,7 @@ msgstr "Creadores:"
 msgid "Delete this user?"
 msgstr "¿Eliminar este usuario?"
 
-#: lib/dran_web/live/admin_groups_live.ex:540
+#: lib/dran_web/live/admin_groups_live.ex:549
 #: lib/dran_web/live/admin_users_live.ex:250
 #: lib/dran_web/live/admin_users_live.ex:375
 #: lib/dran_web/live/workspace_settings_live.ex:1328
@@ -1422,7 +1422,7 @@ msgstr "Cluster"
 msgid "Cluster Context"
 msgstr "Contexto del cluster"
 
-#: lib/dran_web/live/admin_groups_live.ex:432
+#: lib/dran_web/live/admin_groups_live.ex:437
 #: lib/dran_web/live/admin_users_live.ex:299
 #: lib/dran_web/live/goal_live.ex:171
 #: lib/dran_web/live/goal_live.ex:314
@@ -1454,7 +1454,7 @@ msgstr "No hay resultados para graficar. Prueba otra búsqueda."
 msgid "API key regenerated — copy the new token now"
 msgstr "API key regenerada — copia el nuevo token ahora"
 
-#: lib/dran_web/live/admin_groups_live.ex:408
+#: lib/dran_web/live/admin_groups_live.ex:413
 #: lib/dran_web/live/settings_live.ex:309
 #, elixir-autogen, elixir-format
 msgid "Copied!"
@@ -1715,7 +1715,7 @@ msgstr "No se encontraron páginas."
 msgid "No pages start with this letter."
 msgstr "Ninguna página empieza por esta letra."
 
-#: lib/dran_web/live/admin_groups_live.ex:588
+#: lib/dran_web/live/admin_groups_live.ex:597
 #: lib/dran_web/live/workspace_settings_live.ex:1384
 #, elixir-autogen, elixir-format
 msgid "No users match your search."
@@ -1797,13 +1797,13 @@ msgstr "Administra usuarios y su acceso a contextos."
 msgid "Manage users, assign workspaces, copy tokens."
 msgstr "Manage users, assign workspaces, copy tokens."
 
-#: lib/dran_web/components/resource_components.ex:589
+#: lib/dran_web/components/resource_components.ex:604
 #: lib/dran_web/live/workspace_settings_live.ex:595
 #, elixir-autogen, elixir-format
 msgid "Private"
 msgstr "Privado"
 
-#: lib/dran_web/components/resource_components.ex:587
+#: lib/dran_web/components/resource_components.ex:602
 #, elixir-autogen, elixir-format
 msgid "Public"
 msgstr "Público"
@@ -1879,8 +1879,8 @@ msgstr "Ajustes de cuenta"
 
 #: lib/dran_web/components/share_dialog.ex:65
 #: lib/dran_web/components/share_dialog.ex:80
-#: lib/dran_web/live/admin_groups_live.ex:550
-#: lib/dran_web/live/admin_groups_live.ex:624
+#: lib/dran_web/live/admin_groups_live.ex:559
+#: lib/dran_web/live/admin_groups_live.ex:633
 #: lib/dran_web/live/workspace_settings_live.ex:1346
 #: lib/dran_web/live/workspace_settings_live.ex:1408
 #, elixir-autogen, elixir-format
@@ -1892,7 +1892,7 @@ msgstr "Agregar"
 msgid "Add property"
 msgstr "Añadir propiedad"
 
-#: lib/dran_web/live/admin_groups_live.ex:520
+#: lib/dran_web/live/admin_groups_live.ex:529
 #: lib/dran_web/live/workspace_settings_live.ex:1308
 #, elixir-autogen, elixir-format
 msgid "Add users"
@@ -1980,14 +1980,14 @@ msgstr "Vincular cuenta de Google"
 msgid "Link or unlink your Google account."
 msgstr "Vincula o desvincula tu cuenta de Google."
 
-#: lib/dran_web/live/admin_groups_live.ex:421
-#: lib/dran_web/live/admin_groups_live.ex:477
+#: lib/dran_web/live/admin_groups_live.ex:426
+#: lib/dran_web/live/admin_groups_live.ex:486
 #: lib/dran_web/live/workspace_settings_live.ex:1243
 #, elixir-autogen, elixir-format
 msgid "Members"
 msgstr "Miembros"
 
-#: lib/dran_web/live/admin_groups_live.ex:292
+#: lib/dran_web/live/admin_groups_live.ex:297
 #: lib/dran_web/live/workspace_settings_live.ex:437
 #, elixir-autogen, elixir-format
 msgid "Membership updated"
@@ -2047,7 +2047,7 @@ msgstr "Eliminar propiedad"
 msgid "Role updated"
 msgstr "Rol actualizado"
 
-#: lib/dran_web/live/admin_groups_live.ex:563
+#: lib/dran_web/live/admin_groups_live.ex:572
 #: lib/dran_web/live/workspace_settings_live.ex:1361
 #, elixir-autogen, elixir-format
 msgid "Search users by email or name..."
@@ -2073,7 +2073,7 @@ msgstr "Desvinculando…"
 msgid "Value"
 msgstr "Valor"
 
-#: lib/dran_web/components/resource_components.ex:639
+#: lib/dran_web/components/resource_components.ex:654
 #: lib/dran_web/live/goal_live.ex:388
 #: lib/dran_web/live/plan_live.ex:313
 #, elixir-autogen, elixir-format
@@ -2090,7 +2090,7 @@ msgstr "Workspace guardado"
 msgid "Your name"
 msgstr "Tu nombre"
 
-#: lib/dran_web/components/resource_components.ex:244
+#: lib/dran_web/components/resource_components.ex:259
 #: lib/dran_web/components/task_components.ex:136
 #: lib/dran_web/live/goal_live.ex:538
 #: lib/dran_web/live/plan_live.ex:414
@@ -2098,9 +2098,8 @@ msgstr "Tu nombre"
 msgid "Body"
 msgstr "Cuerpo"
 
-#: lib/dran_web/components/resource_components.ex:97
+#: lib/dran_web/components/resource_components.ex:104
 #: lib/dran_web/components/share_dialog.ex:47
-#: lib/dran_web/live/admin_groups_live.ex:470
 #, elixir-autogen, elixir-format
 msgid "Close"
 msgstr "Cerrar"
@@ -2141,7 +2140,7 @@ msgstr "Workers autónomos"
 msgid "Chat / workers"
 msgstr "Chat / workers"
 
-#: lib/dran_web/components/resource_components.ex:114
+#: lib/dran_web/components/resource_components.ex:121
 #, elixir-autogen, elixir-format
 msgid "Details"
 msgstr "Detalles"
@@ -2399,7 +2398,7 @@ msgstr "Ingresa una nueva contraseña"
 msgid "Enter your current password"
 msgstr "Ingresa tu contraseña actual"
 
-#: lib/dran_web/components/resource_components.ex:550
+#: lib/dran_web/components/resource_components.ex:565
 #: lib/dran_web/live/memory_live.ex:324
 #: lib/dran_web/live/task_board_live.ex:126
 #, elixir-autogen, elixir-format
@@ -2737,7 +2736,7 @@ msgstr "Nunca"
 
 #: lib/dran_web/components/markdown_editor_components.ex:289
 #: lib/dran_web/components/markdown_editor_components.ex:305
-#: lib/dran_web/components/resource_components.ex:825
+#: lib/dran_web/components/resource_components.ex:840
 #: lib/dran_web/live/goal_live.ex:552
 #, elixir-autogen, elixir-format
 msgid "None"
@@ -2807,7 +2806,7 @@ msgstr[1] "%{count} campos válidos"
 msgid "%{percent}% used · %{total}"
 msgstr "%{percent}% usado · %{total}"
 
-#: lib/dran_web/live/admin_groups_live.ex:547
+#: lib/dran_web/live/admin_groups_live.ex:556
 #: lib/dran_web/live/workspace_settings_live.ex:922
 #: lib/dran_web/live/workspace_settings_live.ex:1343
 #, elixir-autogen, elixir-format
@@ -3120,23 +3119,23 @@ msgstr "Token de admin del API (heredado) para acceso de agentes a toda la insta
 msgid "%{email} now has access to this workspace"
 msgstr "%{email} ya tiene acceso a este workspace"
 
-#: lib/dran_web/live/admin_groups_live.ex:275
+#: lib/dran_web/live/admin_groups_live.ex:280
 #: lib/dran_web/live/workspace_settings_live.ex:492
 #, elixir-autogen, elixir-format
 msgid "Could not add the user"
 msgstr "No se pudo agregar al usuario"
 
-#: lib/dran_web/live/admin_groups_live.ex:129
+#: lib/dran_web/live/admin_groups_live.ex:132
 #, elixir-autogen, elixir-format
 msgid "Could not create the group."
 msgstr "No se pudo crear el grupo."
 
-#: lib/dran_web/live/admin_groups_live.ex:184
+#: lib/dran_web/live/admin_groups_live.ex:187
 #, elixir-autogen, elixir-format
 msgid "Could not delete the group."
 msgstr "No se pudo eliminar el grupo."
 
-#: lib/dran_web/live/admin_groups_live.ex:159
+#: lib/dran_web/live/admin_groups_live.ex:162
 #, elixir-autogen, elixir-format
 msgid "Could not rename the group."
 msgstr "No se pudo renombrar el grupo."
@@ -3152,7 +3151,7 @@ msgstr "No se pudo renombrar el grupo."
 msgid "Could not share."
 msgstr "No se pudo compartir."
 
-#: lib/dran_web/live/admin_groups_live.ex:439
+#: lib/dran_web/live/admin_groups_live.ex:444
 #, elixir-autogen, elixir-format
 msgid "Delete this group? Its shares are removed too."
 msgstr "¿Eliminar este grupo? Sus comparticiones también se eliminan."
@@ -3167,20 +3166,20 @@ msgstr "Da acceso a este workspace a una cuenta existente. La persona ya debe te
 msgid "Group"
 msgstr "Grupo"
 
-#: lib/dran_web/live/admin_groups_live.ex:123
+#: lib/dran_web/live/admin_groups_live.ex:126
 #, elixir-autogen, elixir-format
 msgid "Group created."
 msgstr "Grupo creado."
 
-#: lib/dran_web/live/admin_groups_live.ex:181
+#: lib/dran_web/live/admin_groups_live.ex:184
 #, elixir-autogen, elixir-format
 msgid "Group deleted — its shares were removed too."
 msgstr "Grupo eliminado — sus comparticiones también se eliminaron."
 
 #: lib/dran_web/components/layouts.ex:608
 #: lib/dran_web/components/layouts.ex:795
-#: lib/dran_web/live/admin_groups_live.ex:36
-#: lib/dran_web/live/admin_groups_live.ex:353
+#: lib/dran_web/live/admin_groups_live.ex:39
+#: lib/dran_web/live/admin_groups_live.ex:358
 #: lib/dran_web/live/admin_live.ex:55
 #, elixir-autogen, elixir-format
 msgid "Groups"
@@ -3194,7 +3193,7 @@ msgstr "Grupos"
 msgid "Instance settings"
 msgstr "Configuración de la instancia"
 
-#: lib/dran_web/components/resource_components.ex:700
+#: lib/dran_web/components/resource_components.ex:715
 #, elixir-autogen, elixir-format
 msgid "Item visibility"
 msgstr "Visibilidad del elemento"
@@ -3203,11 +3202,6 @@ msgstr "Visibilidad del elemento"
 #, elixir-autogen, elixir-format
 msgid "Leave it empty to keep the current one. Set it to give access back to an account that cannot sign in."
 msgstr "Déjala vacía para conservar la actual. Escríbela para devolver el acceso a una cuenta que no puede iniciar sesión."
-
-#: lib/dran_web/live/admin_groups_live.ex:467
-#, elixir-autogen, elixir-format
-msgid "Members of"
-msgstr "Miembros de"
 
 #: lib/dran_web/live/admin_users_live.ex:396
 #, elixir-autogen, elixir-format
@@ -3219,7 +3213,7 @@ msgstr "Mínimo 8 caracteres. Compártela con la persona: es con ella que inicia
 msgid "Named lists of users used as share targets."
 msgstr "Listas con nombre de usuarios que se usan como destino al compartir."
 
-#: lib/dran_web/live/admin_groups_live.ex:266
+#: lib/dran_web/live/admin_groups_live.ex:271
 #: lib/dran_web/live/workspace_settings_live.ex:482
 #, elixir-autogen, elixir-format
 msgid "No account with that email exists on this instance. Only existing users can be added."
@@ -3230,7 +3224,7 @@ msgstr "No existe ninguna cuenta con ese correo en esta instancia. Solo se puede
 msgid "No instance"
 msgstr "Sin instancia"
 
-#: lib/dran_web/live/admin_groups_live.ex:481
+#: lib/dran_web/live/admin_groups_live.ex:490
 #, elixir-autogen, elixir-format
 msgid "No members yet."
 msgstr "Aún no hay miembros."
@@ -3245,7 +3239,7 @@ msgstr "Todavía no se ha compartido con nadie."
 msgid "Only the people you add from the Users tab can open this workspace, and it never appears in anyone else's list. There is no public, discoverable tier."
 msgstr "Solo las personas que agregues desde la pestaña Usuarios pueden abrir este workspace, y nunca aparece en la lista de nadie más. No hay un nivel público ni descubrible."
 
-#: lib/dran_web/components/resource_components.ex:670
+#: lib/dran_web/components/resource_components.ex:685
 #, elixir-autogen, elixir-format
 msgid "Private: only you. Public: everyone on this instance. Shared: only the people you invite."
 msgstr "Privado: solo tú. Público: todo el mundo en esta instancia. Compartido: solo las personas que invites."
@@ -3274,7 +3268,7 @@ msgstr "Rol"
 msgid "Share"
 msgstr "Compartir"
 
-#: lib/dran_web/live/admin_groups_live.ex:361
+#: lib/dran_web/live/admin_groups_live.ex:366
 #, elixir-autogen, elixir-format
 msgid "Share content with several people at once — a group is a list of users used as a share target."
 msgstr "Comparte contenido con varias personas a la vez — un grupo es una lista de usuarios que se usa como destino al compartir."
@@ -3294,7 +3288,7 @@ msgstr "Compartir con un grupo…"
 msgid "Share with a user…"
 msgstr "Compartir con un usuario…"
 
-#: lib/dran_web/components/resource_components.ex:588
+#: lib/dran_web/components/resource_components.ex:603
 #, elixir-autogen, elixir-format
 msgid "Shared"
 msgstr "Compartido"
@@ -3325,7 +3319,7 @@ msgstr "Ese usuario ya tiene acceso a este workspace."
 msgid "User"
 msgstr "Usuario"
 
-#: lib/dran_web/live/admin_groups_live.ex:379
+#: lib/dran_web/live/admin_groups_live.ex:384
 #, elixir-autogen, elixir-format
 msgid "members"
 msgstr "miembros"
@@ -3392,7 +3386,7 @@ msgstr "Todas las tasks"
 msgid "Board"
 msgstr "Tablero"
 
-#: lib/dran_web/live/admin_groups_live.ex:400
+#: lib/dran_web/live/admin_groups_live.ex:405
 #, elixir-autogen, elixir-format
 msgid "Copy the group slug"
 msgstr "Copiar el slug del grupo"
@@ -3444,7 +3438,7 @@ msgstr "¿Eliminar este usuario?"
 msgid "Delete this task?"
 msgstr "¿Eliminar este usuario?"
 
-#: lib/dran_web/components/resource_components.ex:468
+#: lib/dran_web/components/resource_components.ex:483
 #: lib/dran_web/components/task_components.ex:173
 #: lib/dran_web/live/goal_live.ex:384
 #: lib/dran_web/live/goal_live.ex:556
@@ -3585,7 +3579,7 @@ msgstr "Planes"
 msgid "Priority"
 msgstr "Prioridad"
 
-#: lib/dran_web/components/resource_components.ex:447
+#: lib/dran_web/components/resource_components.ex:462
 #: lib/dran_web/live/goal_live.ex:329
 #: lib/dran_web/live/plan_live.ex:253
 #, elixir-autogen, elixir-format
@@ -3704,7 +3698,7 @@ msgstr "Tachar paso"
 msgid "A task needs a title."
 msgstr "Una task necesita un título."
 
-#: lib/dran_web/components/resource_components.ex:552
+#: lib/dran_web/components/resource_components.ex:567
 #: lib/dran_web/live/task_board_live.ex:128
 #, elixir-autogen, elixir-format
 msgid "All statuses"
@@ -3772,67 +3766,67 @@ msgstr "Vistas"
 msgid "Goals & Plans"
 msgstr "Objetivos y planes"
 
-#: lib/dran_web/components/resource_components.ex:517
+#: lib/dran_web/components/resource_components.ex:532
 #, elixir-autogen, elixir-format
 msgid "Due first"
 msgstr "Por vencer"
 
-#: lib/dran_web/components/resource_components.ex:572
+#: lib/dran_web/components/resource_components.ex:587
 #, elixir-autogen, elixir-format
 msgid "No matches for this filter."
 msgstr "Sin resultados con este filtro."
 
-#: lib/dran_web/components/resource_components.ex:493
+#: lib/dran_web/components/resource_components.ex:508
 #, elixir-autogen, elixir-format
 msgid "On hold"
 msgstr "En pausa"
 
-#: lib/dran_web/components/resource_components.ex:562
+#: lib/dran_web/components/resource_components.ex:577
 #, elixir-autogen, elixir-format
 msgid "Order by"
 msgstr "Ordenar por"
 
-#: lib/dran_web/components/resource_components.ex:518
+#: lib/dran_web/components/resource_components.ex:533
 #, elixir-autogen, elixir-format
 msgid "Recently updated"
 msgstr "Actualizado hace poco"
 
-#: lib/dran_web/components/resource_components.ex:519
+#: lib/dran_web/components/resource_components.ex:534
 #, elixir-autogen, elixir-format
 msgid "Title A-Z"
 msgstr "Título A-Z"
 
-#: lib/dran_web/components/resource_components.ex:645
+#: lib/dran_web/components/resource_components.ex:660
 #, elixir-autogen, elixir-format
 msgid "Who can read it"
 msgstr "Quién puede leerlo"
 
-#: lib/dran_web/live/admin_groups_live.ex:259
+#: lib/dran_web/live/admin_groups_live.ex:264
 #, elixir-autogen, elixir-format
 msgid "%{email} is now a member of this group"
 msgstr "%{email} ya es miembro de este grupo"
 
-#: lib/dran_web/live/admin_groups_live.ex:524
+#: lib/dran_web/live/admin_groups_live.ex:533
 #, elixir-autogen, elixir-format
 msgid "Add an existing account to this group. People must already have a Dran account — there is no invitation email, membership is granted as soon as you add them."
 msgstr "Agrega a este grupo una cuenta existente. La persona ya debe tener una cuenta de Dran — no hay correo de invitación: la membresía entra en cuanto la agregas."
 
-#: lib/dran_web/live/admin_groups_live.ex:595
+#: lib/dran_web/live/admin_groups_live.ex:604
 #, elixir-autogen, elixir-format
 msgid "Everyone on this instance is already in this group."
 msgstr "Todos en esta instancia ya están en este grupo."
 
-#: lib/dran_web/live/admin_groups_live.ex:507
+#: lib/dran_web/live/admin_groups_live.ex:516
 #, elixir-autogen, elixir-format
 msgid "Remove %{user} from this group?"
 msgstr "¿Quitar a %{user} de este grupo?"
 
-#: lib/dran_web/live/admin_groups_live.ex:509
+#: lib/dran_web/live/admin_groups_live.ex:518
 #, elixir-autogen, elixir-format
 msgid "Remove from group"
 msgstr "Quitar del grupo"
 
-#: lib/dran_web/live/admin_groups_live.ex:272
+#: lib/dran_web/live/admin_groups_live.ex:277
 #, elixir-autogen, elixir-format
 msgid "That user is already in this group."
 msgstr "Ese usuario ya está en este grupo."
@@ -3848,22 +3842,22 @@ msgstr "No se pudo cambiar la visibilidad"
 msgid "Could not link that page."
 msgstr "No se pudo compartir."
 
-#: lib/dran_web/components/resource_components.ex:823
+#: lib/dran_web/components/resource_components.ex:838
 #, elixir-autogen, elixir-format
 msgid "From the graph"
 msgstr "Del grafo"
 
-#: lib/dran_web/components/resource_components.ex:700
+#: lib/dran_web/components/resource_components.ex:715
 #, elixir-autogen, elixir-format
 msgid "Inherited from its goal"
 msgstr "Heredado de su goal"
 
-#: lib/dran_web/components/resource_components.ex:784
+#: lib/dran_web/components/resource_components.ex:799
 #, elixir-autogen, elixir-format
 msgid "Link"
 msgstr "Enlaces"
 
-#: lib/dran_web/components/resource_components.ex:780
+#: lib/dran_web/components/resource_components.ex:795
 #, elixir-autogen, elixir-format
 msgid "Link a page…"
 msgstr "Vincular una página…"
@@ -3873,12 +3867,12 @@ msgstr "Vincular una página…"
 msgid "No active plans"
 msgstr "No hay páginas archivadas"
 
-#: lib/dran_web/components/resource_components.ex:750
+#: lib/dran_web/components/resource_components.ex:765
 #, elixir-autogen, elixir-format
 msgid "No related pages yet."
 msgstr "Todavía no hay páginas relacionadas."
 
-#: lib/dran_web/components/resource_components.ex:778
+#: lib/dran_web/components/resource_components.ex:793
 #, elixir-autogen, elixir-format
 msgid "Page"
 msgstr "página"
@@ -3894,12 +3888,12 @@ msgstr "Página vinculada."
 msgid "Pages"
 msgstr "páginas"
 
-#: lib/dran_web/components/resource_components.ex:739
+#: lib/dran_web/components/resource_components.ex:754
 #, elixir-autogen, elixir-format
 msgid "Related pages"
 msgstr "Relacionados:"
 
-#: lib/dran_web/components/resource_components.ex:824
+#: lib/dran_web/components/resource_components.ex:839
 #, elixir-autogen, elixir-format
 msgid "Suggested"
 msgstr "Sugeridas"
@@ -3919,7 +3913,7 @@ msgstr "Tu estado"
 msgid "facts you can read"
 msgstr "hechos que puedes leer"
 
-#: lib/dran_web/components/resource_components.ex:705
+#: lib/dran_web/components/resource_components.ex:720
 #, elixir-autogen, elixir-format
 msgid "inherited"
 msgstr "heredado"
@@ -4143,43 +4137,43 @@ msgstr "Tus agentes ya pueden usar este servicio."
 msgid "connections visible"
 msgstr "conexiones visibles"
 
-#: lib/dran_web/live/admin_groups_live.ex:453
+#: lib/dran_web/live/admin_groups_live.ex:458
 #, elixir-autogen, elixir-format
 msgid "A group is a list of users you can share content with in one step."
 msgstr "Un grupo es una lista de usuarios con los que puedes compartir contenido en un paso."
 
-#: lib/dran_web/live/admin_groups_live.ex:455
+#: lib/dran_web/live/admin_groups_live.ex:460
 #, elixir-autogen, elixir-format
 msgid "Create group"
 msgstr "Crear grupo"
 
-#: lib/dran_web/live/admin_groups_live.ex:153
+#: lib/dran_web/live/admin_groups_live.ex:156
 #, elixir-autogen, elixir-format
 msgid "Group renamed."
 msgstr "Grupo renombrado."
 
-#: lib/dran_web/live/admin_groups_live.ex:357
-#: lib/dran_web/live/admin_groups_live.ex:637
+#: lib/dran_web/live/admin_groups_live.ex:362
+#: lib/dran_web/live/admin_groups_live.ex:647
 #, elixir-autogen, elixir-format
 msgid "New group"
 msgstr "Nuevo grupo"
 
-#: lib/dran_web/live/admin_groups_live.ex:451
+#: lib/dran_web/live/admin_groups_live.ex:456
 #, elixir-autogen, elixir-format
 msgid "No groups yet"
 msgstr "Todavía no hay grupos"
 
-#: lib/dran_web/live/admin_groups_live.ex:637
+#: lib/dran_web/live/admin_groups_live.ex:647
 #, elixir-autogen, elixir-format
 msgid "Rename group"
 msgstr "Renombrar grupo"
 
-#: lib/dran_web/live/admin_groups_live.ex:430
+#: lib/dran_web/live/admin_groups_live.ex:435
 #, elixir-autogen, elixir-format
 msgid "Rename this group"
 msgstr "Renombrar este grupo"
 
-#: lib/dran_web/live/admin_groups_live.ex:662
+#: lib/dran_web/live/admin_groups_live.ex:673
 #, elixir-autogen, elixir-format
 msgid "e.g. Design team"
 msgstr "p. ej. Equipo de diseño"
@@ -4191,17 +4185,17 @@ msgid_plural "%{count} steps"
 msgstr[0] "%{count} paso"
 msgstr[1] "%{count} pasos"
 
-#: lib/dran_web/components/resource_components.ex:598
+#: lib/dran_web/components/resource_components.ex:613
 #, elixir-autogen, elixir-format
 msgid "Day"
 msgstr "Día"
 
-#: lib/dran_web/components/resource_components.ex:600
+#: lib/dran_web/components/resource_components.ex:615
 #, elixir-autogen, elixir-format
 msgid "Month"
 msgstr "Mes"
 
-#: lib/dran_web/components/resource_components.ex:601
+#: lib/dran_web/components/resource_components.ex:616
 #, elixir-autogen, elixir-format
 msgid "Quarter"
 msgstr "Trimestre"
@@ -4212,7 +4206,7 @@ msgstr "Trimestre"
 msgid "Related"
 msgstr "Relacionados"
 
-#: lib/dran_web/components/resource_components.ex:597
+#: lib/dran_web/components/resource_components.ex:612
 #, elixir-autogen, elixir-format
 msgid "Someday"
 msgstr "Algún día"
@@ -4225,12 +4219,17 @@ msgstr "Algún día"
 msgid "Unknown"
 msgstr "Desconocido"
 
-#: lib/dran_web/components/resource_components.ex:599
+#: lib/dran_web/components/resource_components.ex:614
 #, elixir-autogen, elixir-format
 msgid "Week"
 msgstr "Semana"
 
-#: lib/dran_web/components/resource_components.ex:602
+#: lib/dran_web/components/resource_components.ex:617
 #, elixir-autogen, elixir-format
 msgid "Year"
 msgstr "Año"
+
+#: lib/dran_web/live/admin_groups_live.ex:475
+#, elixir-autogen, elixir-format
+msgid "Members of %{name}"
+msgstr "Miembros de %{name}"
