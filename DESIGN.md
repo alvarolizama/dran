@@ -841,12 +841,15 @@ sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
   **búsqueda** (`#sidebar-search-form`, GET a `/search`, con la pista `⌘K`) y al
   `user_footer`. La caja de búsqueda se renderiza **sólo en el shell de
   conocimiento**: las páginas de instancia pasan `workspace_slug: nil`.
-- **Nav de workspace:** bloque de vistas — Home · Graph · Journey — y **Memory en
-  su propio bloque** (el nav separa bloques con su `gap`, así que entre Journey y
-  Memory queda un hueco: Memory son hechos de los workers, no una vista de
-  páginas) + grupo *Knowledge base* (tipos de página + Clusters). **Ninguna acción
-  de workspace en el nav**: Activity y Workspace settings viven en el menú de
-  usuario.
+- **Nav de workspace:** tres sub-secciones etiquetadas, en este orden —
+  *Views* (Home · Graph · Journey · Board), *Goals & Plans* («Objetivos y
+  planes»: el PARA QUÉ y el CÓMO — objetivos y planes de vida, no sólo trabajo)
+  y *Knowledge base* (tipos de página · Clusters · Memory: lo que los workers
+  guardan es contenido almacenado, no trabajo, así que cierra el knowledge
+  base). Cada bloque es un `<details>` etiquetado (`data-nav-block` = `views` ·
+  `goals-plans` · `knowledge-base`), y el nav los separa con su `gap`. **Ninguna
+  acción de workspace en el nav**: Activity y Workspace settings viven en el
+  menú de usuario.
 - **Nav de instancia (`nav={:instance}`):** **Home arriba** (`hero-home`,
   `active_nav="home"` — antes decía «Workspaces» y el destino es el home de
   conocimiento); grupo *Account* (Profile, API keys); grupo *Admin* (Users,
@@ -887,6 +890,7 @@ sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
 |---|---|
 | `DranWeb.ResourceComponents.resource_modal/1` | modal **casi full-screen** (`h-[calc(100vh-3rem)]`, `max-w-5xl`) — implementación Dran del patrón **C7.2** (§T3.1) |
 | `DranWeb.ResourceComponents.resource_header/1` · `form_actions/1` · `markdown_body_field/1` | header con back-link, fila cancelar/guardar, campo body con editor |
+| `DranWeb.ResourceComponents.resource_list_header/1` · `resource_empty_state/1` · `resource_card/1` · `resource_filters/1` | **el estándar de la LISTA**: header (título + CTA), vacío, tarjeta y filtros. La tarjeta pinta SOLO las fichas del molde — estado (etiqueta + color), progreso, vencimiento (en rojo si pasó y no está cerrado) y destino, con `actualizado` a la derecha; los filtros (**estado** + **orden**) viven en la URL (`?status=`/`?order=`, el orden default no se escribe) como los del board. `/goals` y `/plans` son este molde; una ficha nueva se agrega UNA vez, acá (§T3.2) |
 | `DranWeb.MarkdownEditorComponents.markdown_editor/1` | editor TipTap |
 | `DranWeb.PageListComponents.page_list/1` · `page_card/1` · `type_badge_label/1` | lista de páginas (agrupada o plana), card de página y badge de tipo |
 | `DranWeb.PageComponents.backlinks_section/1` | backlinks de una página |
@@ -915,6 +919,121 @@ sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
   y **click-away**, todos → `on_close`.
 - El botón **Guardar vive FUERA del `<form>`** (footer) y lo apunta con
   `form={@form_id}` → `form_id` debe coincidir con el `id` del `<.form>` (§C7.2).
+
+#### T3.2 El estándar de la LISTA (`resource_list_header` · `resource_card` · `resource_empty_state` · `resource_filters`)
+
+Un índice de recursos — `/goals`, `/plans` y (para header/card/vacío) `/notes` —
+es el mismo molde, y el molde vive en `ResourceComponents`:
+
+```heex
+<.resource_list_header title={gettext("Goals")} new_event="new_goal" new_id="goal-new" />
+
+<.resource_filters prefix="goals" status={@filters.status}
+  statuses={Enum.map(@statuses, &{&1, status_label(&1)})}
+  order={@filters.order} orders={order_options()} total={@goal_count} />
+
+<div id="goals" phx-update="stream" class={["space-y-2", @goal_count == 0 && "hidden"]}>
+  <div :for={{dom_id, {goal, progress}} <- @streams.goals} id={dom_id}>
+    <.goal_card goal={goal} progress={progress} />
+  </div>
+</div>
+```
+
+- **Las fichas de la tarjeta son del molde, no de la superficie.** `resource_card`
+  recibe `progress`, `due_on`/`overdue?` y `visibility`, y pinta progreso,
+  vencimiento y la píldora del destino — así goals y plans no vuelven a divergir
+  (antes: uno con horizonte, el otro con progreso). El slot `footer` es para la
+  ficha PROPIA de la superficie (el horizonte del goal), con el mismo estilo.
+  Anclas de test: `data-chip="progress"` / `data-chip="due"` y
+  `<card-id>-visibility`.
+- **Vencido** es `overdue?/1`: fecha pasada y estado NO cerrado (`done`/`archived`)
+  — un goal terminado no se pinta en rojo. El color sale de la ficha, no del
+  llamador.
+- **Estado**: `status_label/1` (`on_hold` → «On hold», no «On_hold») y
+  `status_class/1` — el MISMO pill en la tarjeta y en el detalle.
+- **Filtros = URL**, como el board: el form dispara `phx-change="filter"` y la
+  LiveView hace `push_patch` a una query de **campos en orden fijo**
+  (`@query_fields ~w(status order new)`, `URI.encode_query/1`, `board_path/2` es
+  el mismo molde). `filters_from/1` descarta lo que no está en el vocabulario
+  (`params["status"] in @statuses`, `order in Dran.ListOrder.orders()`) y el
+  default (`"due"`) NO se escribe en la URL. El orden lo aplica el contexto
+  (`list_goals/1`, `list_plans/1` → `Dran.ListOrder.clause/1`, con `due` =
+  `asc_nulls_last`: lo sin fecha va al final).
+- **El vacío por filtro no es el vacío de la colección**: el `empty_state` (que
+  ofrece crear) sólo aparece sin filtro puesto (`is_nil(@filters.status)`); con
+  filtro y cero filas lo dice la barra («Sin resultados con este filtro.»).
+- **Postgres agrega, no Elixir**: el progreso de la lista de goals sale de
+  `Goals.progress_map/1` (una consulta agrupada con `FILTER (WHERE …)`), no de
+  `progress/1` por fila — el detalle sí usa `progress/1`.
+
+#### T3.3 El destino en el alta: en el header del modal, junto a la ✕
+
+`<.resource_scope_field>` es el ÚNICO control del destino (`private | public |
+shared`, un radio por pill, el activo lo pinta el CSS con `has-[:checked]`). En
+el **alta** vive en el `header` del `<.resource_modal>` — al lado de la ✕, no en
+el body — y en la **edición en página** se queda dentro del form:
+
+```heex
+<.resource_modal id="plan-resource-modal" form_id="plan-form" …>
+  <:header>
+    <.resource_scope_field form={@form} id="plan-visibility-picker"
+      form_id="plan-form" compact />
+  </:header>
+  <.plan_form form={@form} … with_scope={false} />
+</.resource_modal>
+```
+
+- El header está **fuera del `<form>`**: los radios lo apuntan con el atributo
+  HTML `form={@form_id}` (el mismo truco del botón Guardar del footer, §T3.1) —
+  sin eso el valor no viaja en el submit.
+- `compact` quita rótulo y leyenda (los tres pills se explican solos; el tooltip
+  es «Who can read it»). El form del body se llama con `with_scope={false}` para
+  no pintar el control dos veces.
+- El `phx-update="ignore"` del wrapper sigue siendo obligatorio: los forms de
+  pages se re-renderizan al validar y sin él el servidor pisaría la elección.
+
+#### T3.4 El `summary` es de la máquina: ningún form lo pide
+
+En pages, goals y plans el `summary` lo escriben los agentes y workers (REST +
+augmentation) — o queda vacío: **no hay input en ningún form**, ni en el alta ni
+en la edición. El campo sigue en el `cast` del changeset (esa es la puerta de la
+máquina), y como el form no lo manda, editar desde la UI **nunca lo borra**: el
+`cast` no toca lo que no viaja. Se LEE donde va: subtítulo del detalle, tarjeta
+del índice y panel de atributos de la página («Summary · Auto»).
+
+Las colecciones (listas guardadas) son la excepción: su `summary` es una
+descripción que escribe la persona (`smart_collection_live`).
+
+#### T3.5 La task en el detalle del goal: la lista no cambia estados
+
+La lista de tasks de `/goals/<id>` es de LECTURA: agrupa por estado (el
+encabezado del grupo lo dice) y cada fila sólo ofrece **Editar**. El estado NO
+tiene select en la fila — el que había iteraba `@statuses`, los estados del
+**goal** (`draft · active · on_hold · done · archived`), no los de la task
+(`backlog · todo · in_progress · done · cancelled`): mostraba una columna que no
+existía y al tocarlo el dominio lo rechazaba por inválido.
+
+El estado se cambia en el **modal de edición**, y ese modal es UNO SOLO para las
+dos superficies: `DranWeb.TaskComponents` (`task_modal/1` + `task_form/1`) lo
+monta en el detalle del goal y en el board, así que la task se edita igual en los
+dos lados. Campos: título · **cuerpo** · estado · prioridad · fecha · pasos (los
+pasos se editan en la edición — una task nueva nace sin ellos) y el borrado en el
+footer del mismo modal. El **cuerpo** usa el editor markdown de la casa
+(`markdown_body_field`, el mismo de goals y plans, sin autosave: en un modal se
+guarda con el submit) y viaja como `task[body]`. Lo único que aporta cada
+superficie: el board pasa `goal_options` en el ALTA (ahí el goal es la decisión
+de dónde nace la task) y el detalle no (el suyo es la ruta).
+
+Guardar tiene UN caso de uso, `Tasks.save_edit/3`: valida primero (estado y
+contenido, sin escribir), y después escribe cada campo por su puerta — los pasos
+con el `lock_version` del form (RMW: un form viejo no escribe NADA), el contenido
+por `Tasks.update_task/2` y el estado por `Tasks.move_task/2` con el lock fresco
+(elige la columna y mantiene las posiciones de ambas). Los ids de los campos son
+`<prefix>-<campo>`: `goal-task-*` / `goal-task-edit-<id>-*` en el detalle y
+`task-*` / `task-edit-<id>-*` en el board.
+
+En el board el drag & drop sigue siendo la puerta del estado en el tablero; el
+modal lo ofrece también porque el molde es el mismo.
 
 ### T4. Pickers y buscadores: implementación de referencia
 

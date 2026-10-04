@@ -327,7 +327,8 @@ defmodule DranWeb.Layouts do
 
   @doc """
   Renders the grouped sidebar navigation for the second brain.
-  Links are grouped by category (Dashboard, Planning, Knowledge, Configs).
+  Links are grouped in labelled sub-sections (Views, Goals & Plans,
+  Knowledge base).
   Each labelled group is a collapsible `<details>` section.
   Pass `active` with the nav key of the current page to highlight it.
   Pass `counts` with optional badge data: `%{dashboard: n, todos: n}`.
@@ -346,9 +347,10 @@ defmodule DranWeb.Layouts do
 
   def sidebar_nav(assigns) do
     # Unified workspace sidebar: when a workspace_slug is present the nav shows
-    # the always-visible entries (Inicio/Grafo/Journey) in one block, Memory in
-    # its own block (the nav separates blocks with a gap), and the page types
-    # under a labelled "Knowledge base" group; without a workspace
+    # THREE labelled sub-sections — the page views (Inicio/Grafo/Journey/Board),
+    # "Goals & Plans" (the PARA QUÉ and the CÓMO: life or personal objectives,
+    # not only work) and everything stored under "Knowledge base" (page types,
+    # Clusters, Memory) — and nothing else; without a workspace
     # (dashboard/admin/account) the nav is empty and only the footer icons show.
     slug = assigns[:workspace_slug]
 
@@ -453,16 +455,27 @@ defmodule DranWeb.Layouts do
                icon: "hero-squares-2x2",
                path: base <> "/clusters",
                badge: counts[:clusters] || 0
-             }
+             },
+           # Memory: hechos atómicos de los workers. No lleva gate — no es un
+           # feature gestionable (no está en @features de WorkspaceSettingsLive),
+           # así que siempre está visible. Cierra el «Knowledge base» (debajo de
+           # Clusters, decisión del owner 2026-10-03): lo que los workers
+           # guardan es contenido almacenado, no trabajo.
+           %{
+             key: "memory",
+             label: gettext("Memory"),
+             icon: "hero-cpu-chip",
+             path: base <> "/memory",
+             badge: counts[:memory] || 0
+           }
          ])
       |> Enum.reject(&(!&1))
 
-    # Sin etiqueta (siempre visibles): Inicio, Grafo y Journey comparten bloque;
-    # **Memory va en su propio bloque** para que el nav deje el hueco de 1rem
-    # entre ambos (los bloques del nav se separan con el `gap-4` del contenedor).
-    # Memory no es una vista de páginas — son hechos de los workers — así que no
-    # debe leerse como continuación del timeline. Activity y Workspace settings
-    # viven en el menú de usuario (#user-menu), no en el nav.
+    # Sub-sección 1/3 — VISTAS: Inicio, Grafo, Journey y Board son las vistas
+    # del cerebro. Memory no es una vista de páginas — son hechos de los workers
+    # — así que no va acá: cierra el «Knowledge base» (ver `page_type_items`).
+    # Activity y Workspace settings viven en el menú de usuario (#user-menu), no
+    # en el nav.
     view_items =
       [
         %{key: "home", label: gettext("Home"), icon: "hero-home", path: home_path(base)},
@@ -484,21 +497,34 @@ defmodule DranWeb.Layouts do
       ]
       |> Enum.reject(&(!&1))
 
-    # Memory no es un feature gestionable (no está en @features de
-    # WorkspaceSettingsLive), así que no lleva gate — siempre visible.
-    memory_items = [
+    # Sub-sección 2/3 — OBJETIVOS Y PLANES: el PARA QUÉ (Goals) y el CÓMO
+    # (Plans) bajo su propio rótulo. No se llama «trabajo»: son objetivos y
+    # planes de vida, personales o no (decisión del owner 2026-10-03). Memory
+    # tampoco va acá: los hechos de los workers son contenido almacenado y
+    # cierran «Knowledge base». El hueco del nav (los bloques se separan con el
+    # `gap-4` del contenedor) queda ANTES de «Knowledge base».
+    work_items = [
       %{
-        key: "memory",
-        label: gettext("Memory"),
-        icon: "hero-cpu-chip",
-        path: base <> "/memory",
-        badge: counts[:memory] || 0
+        key: "goals",
+        label: gettext("Goals"),
+        icon: "hero-flag",
+        path: base <> "/goals"
+      },
+      %{
+        key: "plans",
+        label: gettext("Plans"),
+        icon: "hero-clipboard-document-list",
+        path: base <> "/plans"
       }
     ]
 
+    # Las tres sub-secciones del nav, en orden: vistas → objetivos y planes →
+    # knowledge base. Todas llevan rótulo: el nav se lee como secciones y no
+    # como una lista plana. Knowledge base es 3/3 y agrupa los tipos de página,
+    # Clusters y Memory.
     [
-      %{key: "views", label: nil, items: view_items},
-      %{key: "memory", label: nil, items: memory_items},
+      %{key: "views", label: gettext("Views"), items: view_items},
+      %{key: "goals-plans", label: gettext("Goals & Plans"), items: work_items},
       %{key: "knowledge-base", label: gettext("Knowledge base"), items: page_type_items}
     ]
   end

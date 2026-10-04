@@ -11,7 +11,8 @@ defmodule DranWeb.PageComponents do
   import DranWeb.MarkdownEditorComponents,
     only: [meta_fields: 1, tag_input: 1]
 
-  import DranWeb.ResourceComponents, only: [markdown_body_field: 1]
+  import DranWeb.ResourceComponents,
+    only: [markdown_body_field: 1, resource_scope_field: 1, resource_visibility_pill: 1]
 
   alias Dran.Actors
   alias Dran.Knowledge
@@ -109,19 +110,7 @@ defmodule DranWeb.PageComponents do
                 <.icon name={PageTypes.icon(@page.page_type)} class="size-3" />
                 {PageTypes.label(@page.page_type)}
               </span>
-              <span
-                :if={@page.visibility && @page.visibility != "private"}
-                class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300/60 text-base-content/60"
-                title={gettext("Item visibility")}
-              >
-                <.icon
-                  name={
-                    if @page.visibility == "public", do: "hero-globe-alt", else: "hero-user-group"
-                  }
-                  class="size-3"
-                />
-                {visibility_label(@page.visibility)}
-              </span>
+              <.resource_visibility_pill visibility={@page.visibility} />
               <span class="inline-flex items-center gap-1 text-caption text-base-content/50">
                 <.icon name="hero-calendar" class="size-3" />
                 {gettext("Created")} {format_date(@page.inserted_at)}
@@ -871,83 +860,6 @@ defmodule DranWeb.PageComponents do
   end
 
   @doc """
-  Visibility selector for page forms (W4): private (default) | public |
-  shared. `shared` only reads through explicit grants — the share dialog
-  manages them after the page exists.
-  """
-  attr :form, :any, required: true
-
-  def visibility_field(assigns) do
-    ~H"""
-    <div>
-      <span class="block text-sm font-medium text-base-content/70 mb-1.5">
-        {gettext("Visibility")}
-      </span>
-      <div class="flex flex-wrap gap-2" id="page-visibility-picker" phx-update="ignore">
-        <label
-          for={@form[:visibility].id <> "-private"}
-          class={[
-            "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border cursor-pointer transition-colors duration-150",
-            if(Phoenix.HTML.Form.input_value(@form, :visibility) == "private",
-              do: "border-primary bg-primary/10 text-primary font-medium",
-              else: "border-base-300 text-base-content/70 hover:bg-base-200/50"
-            )
-          ]}
-        >
-          <.icon name="hero-lock-closed" class="size-3.5" />
-          {gettext("Private")}
-        </label>
-        <label
-          for={@form[:visibility].id <> "-public"}
-          class={[
-            "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border cursor-pointer transition-colors duration-150",
-            if(Phoenix.HTML.Form.input_value(@form, :visibility) == "public",
-              do: "border-primary bg-primary/10 text-primary font-medium",
-              else: "border-base-300 text-base-content/70 hover:bg-base-200/50"
-            )
-          ]}
-        >
-          <.icon name="hero-globe-alt" class="size-3.5" />
-          {gettext("Public")}
-        </label>
-        <label
-          for={@form[:visibility].id <> "-shared"}
-          class={[
-            "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border cursor-pointer transition-colors duration-150",
-            if(Phoenix.HTML.Form.input_value(@form, :visibility) == "shared",
-              do: "border-primary bg-primary/10 text-primary font-medium",
-              else: "border-base-300 text-base-content/70 hover:bg-base-200/50"
-            )
-          ]}
-        >
-          <.icon name="hero-user-group" class="size-3.5" />
-          {gettext("Shared")}
-        </label>
-      </div>
-      <input
-        type="hidden"
-        name="page[visibility]"
-        value={Phoenix.HTML.Form.input_value(@form, :visibility) || "private"}
-      />
-      <input
-        :for={level <- ~w(private public shared)}
-        type="radio"
-        id={@form[:visibility].id <> "-" <> level}
-        name="page[visibility]"
-        value={level}
-        checked={Phoenix.HTML.Form.input_value(@form, :visibility) == level}
-        class="hidden"
-      />
-      <p class="text-xs text-base-content/50 mt-1.5">
-        {gettext(
-          "Private: only you. Public: everyone on this instance. Shared: only the people you invite."
-        )}
-      </p>
-    </div>
-    """
-  end
-
-  @doc """
   Shared inline edit form for page detail views — two-column layout with the
   title + markdown editor on the left and an attributes sidebar on the right
   (summary, tags, meta fields). Replaces the per-LiveView copy-pasted form
@@ -989,7 +901,7 @@ defmodule DranWeb.PageComponents do
           class="text-lg font-medium"
         />
 
-        <.visibility_field form={@form} />
+        <.resource_scope_field form={@form} id="page-visibility-picker" />
 
         <.markdown_body_field
           id={@editor_id}
@@ -1017,6 +929,10 @@ defmodule DranWeb.PageComponents do
   attr :editor_id, :string, required: true
   attr :tag_suggestions, :list, default: nil
   attr :cancel_path, :string, default: nil
+
+  attr :with_scope, :boolean,
+    default: true,
+    doc: "false cuando el modal ya muestra el destino en su header"
 
   def page_new_form(assigns) do
     suggestions =
@@ -1066,7 +982,9 @@ defmodule DranWeb.PageComponents do
           />
         </div>
 
-        <.visibility_field form={@form} />
+        <%!-- El destino: el MISMO control que la edición (private | public | shared).
+        En el alta vive en el header del modal (`:header`), junto a la ✕. --%>
+        <.resource_scope_field :if={@with_scope} form={@form} id="page-visibility-picker" />
 
         <.markdown_body_field
           id={@editor_id}
@@ -1079,10 +997,4 @@ defmodule DranWeb.PageComponents do
     </div>
     """
   end
-
-  # Visibility labels (gettext needs literals).
-  defp visibility_label("public"), do: gettext("Public")
-  defp visibility_label("shared"), do: gettext("Shared")
-  defp visibility_label("private"), do: gettext("Private")
-  defp visibility_label(other), do: other
 end

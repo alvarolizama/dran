@@ -1,16 +1,15 @@
 #!/bin/sh
 # Dran container entrypoint.
 #
-# Runs Dran.Release.setup/0 (create DB if missing → migrate → seed the default
-# context → production seed → backfill personal workspaces) before starting the
-# Phoenix release. On a fresh database it creates the schema and the default
-# context. On subsequent deploys it short-circuits (DB already exists) and only
-# runs pending migrations.
+# Runs Dran.Release.setup/0 (create DB if missing → migrate → seed the instance
+# row) before starting the Phoenix release. On a fresh database it creates the
+# schema and the instance row. On subsequent deploys it short-circuits (DB
+# already exists) and only runs pending migrations.
 #
-# The production seed (priv/repo/seeds_prod.exs) is OPT-IN: it creates the
-# instance owner only when DRAN_ADMIN_PASSWORD is set. Without it the first
-# visitor gets the /setup screen. Demo content is NEVER seeded by a release —
-# Dran.Release.seed_demo/0 refuses to run outside dev.
+# setup/0 creates NO account: the instance owner comes from the first-run /setup
+# screen, never from an environment variable (this entrypoint reads none).
+# Demo content is NEVER seeded by a release — Dran.Release.seed_demo/0 refuses
+# to run outside dev.
 #
 # Env vars:
 #   SKIP_MIGRATIONS=1   bypass setup entirely (one-off task containers).
@@ -43,7 +42,7 @@ fi
 if [ "$SKIP_MIGRATIONS" = "1" ]; then
   echo "[entrypoint] SKIP_MIGRATIONS=1, skipping setup."
 else
-  echo "[entrypoint] running setup (create DB → migrate → seed → backfill)..."
+  echo "[entrypoint] running setup (create DB → migrate → seed the instance row)..."
   bin/dran eval "Dran.Release.setup"
 fi
 

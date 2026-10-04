@@ -72,11 +72,15 @@ defmodule DranWeb.PagesLiveTest do
           meta: %{"kind" => "technical"}
         })
 
-      {:ok, view, html} = live(conn, ~p"/notes")
+      {:ok, view, _html} = live(conn, ~p"/notes")
 
       assert has_element?(view, "[data-testid='page-card-#{plan.slug}']", t("Note"))
       assert has_element?(view, "[data-testid='page-card-#{technical.slug}']", t("Note"))
-      refute html =~ t("Plan")
+      # El badge muestra el TIPO (Nota), nunca el `kind` muerto. La refutación se
+      # afirma sobre la TARJETA, no sobre la página entera: desde el contrato de
+      # superficies el nav dice «Plans» (la categoría nueva del plan), así que un
+      # `refute html =~ "Plan"` global ya no distingue nada.
+      refute has_element?(view, "[data-testid='page-card-#{plan.slug}']", t("Plan"))
     end
 
     test "no kind filter dropdown is rendered (the vocabulary is gone)", %{conn: conn, ws: ws} do

@@ -7,6 +7,9 @@ defmodule DranWeb.PageListComponents do
   use Gettext, backend: DranWeb.Gettext
   import DranWeb.CoreComponents, only: [icon: 1]
 
+  import DranWeb.ResourceComponents,
+    only: [resource_card: 1, resource_empty_state: 1, resource_list_header: 1]
+
   alias Dran.Workspace
   alias DranWeb.PageTypes
 
@@ -118,11 +121,12 @@ defmodule DranWeb.PageListComponents do
   def page_list(assigns) do
     ~H"""
     <div class="p-6">
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h1 class="text-title">
-          {if @page_type, do: ui_plural(@context, @page_type), else: gettext("All Pages")}
-        </h1>
-        <div class="flex gap-2">
+      <.resource_list_header
+        title={if @page_type, do: ui_plural(@context, @page_type), else: gettext("All Pages")}
+        new_path={"/#{ui_path(@context, @page_type)}?new=true"}
+        new_testid="new-page-button"
+      >
+        <:actions>
           <.link
             :if={@page_type}
             navigate={
@@ -152,15 +156,8 @@ defmodule DranWeb.PageListComponents do
               do: if(@page_type, do: ui_plural(@context, @page_type), else: gettext("All Pages")),
               else: gettext("Archived")} ({if @show_archived, do: @total_count, else: @total_archived})
           </button>
-          <.link
-            patch={"/#{ui_path(@context, @page_type)}?new=true"}
-            class="btn btn-primary btn-sm"
-            data-testid="new-page-button"
-          >
-            <.icon name="hero-plus" class="w-4 h-4" /> {gettext("New")}
-          </.link>
-        </div>
-      </div>
+        </:actions>
+      </.resource_list_header>
 
       <%= if @show_archived do %>
         <%!-- Switch ON: show only archived pages --%>
@@ -245,30 +242,14 @@ defmodule DranWeb.PageListComponents do
         </div>
       <% else %>
         <%!-- Switch OFF: show only active pages --%>
-        <div
+        <.resource_empty_state
           :if={@pages == []}
-          data-testid="empty-state"
-          class="py-20 text-center space-y-4"
-        >
-          <div class="flex justify-center">
-            <div class="size-20 rounded-full bg-base-200 flex items-center justify-center">
-              <.icon
-                name={if @page_type, do: ui_icon(@context, @page_type), else: "hero-sparkles"}
-                class="size-10 text-base-content/40"
-              />
-            </div>
-          </div>
-          <div class="space-y-1">
-            <h3 class="text-lg font-semibold">{empty_state(@page_type).title}</h3>
-            <p class="text-sm text-base-content/50">{empty_state(@page_type).description}</p>
-          </div>
-          <.link
-            patch={"/#{ui_path(@context, @page_type)}?new=true"}
-            class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
-          >
-            <.icon name="hero-plus" class="w-4 h-4" /> {empty_state(@page_type).cta}
-          </.link>
-        </div>
+          icon={if @page_type, do: ui_icon(@context, @page_type), else: "hero-sparkles"}
+          title={empty_state(@page_type).title}
+          description={empty_state(@page_type).description}
+          cta={empty_state(@page_type).cta}
+          new_path={"/#{ui_path(@context, @page_type)}?new=true"}
+        />
 
         <div class="space-y-2">
           <.page_card
@@ -307,57 +288,37 @@ defmodule DranWeb.PageListComponents do
 
   defp page_card(assigns) do
     ~H"""
-    <div
-      class="surface-2 lift hover:border-primary/40 p-4 rounded-xl"
-      data-testid={"page-card-" <> @page.slug}
+    <.resource_card
+      icon={ui_icon(@context, @page.page_type)}
+      title={@page.title}
+      href={show_path(@context, @page, @workspace_slug)}
+      badge={type_badge_label(@context, @page)}
+      summary={@page.summary}
+      meta={@page.updated_at && Calendar.strftime(@page.updated_at, "%b %d")}
+      testid={"page-card-" <> @page.slug}
     >
-      <div class="flex items-center gap-3">
-        <span class="size-8 rounded-md bg-primary/10 flex items-center justify-center">
-          <.icon name={ui_icon(@context, @page.page_type)} class="size-4 text-primary" />
-        </span>
+      <:footer>
         <.link
-          navigate={show_path(@context, @page, @workspace_slug)}
-          class="font-medium leading-snug flex-1 hover:text-primary transition-colors"
+          :for={tag <- Enum.take(@page.tags || [], 5)}
+          navigate={"/search?q=#{URI.encode_www_form(tag)}"}
+          class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
         >
-          {@page.title}
+          {tag}
         </.link>
-        <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/60">
-          {type_badge_label(@context, @page)}
-        </span>
-      </div>
-      <p :if={@page.summary} class="text-sm text-base-content/60 line-clamp-2 mt-2">
-        {@page.summary}
-      </p>
-      <div class="flex items-center justify-between mt-2">
-        <div class="flex items-center gap-2">
-          <div class="flex gap-1">
-            <.link
-              :for={tag <- Enum.take(@page.tags || [], 5)}
-              navigate={"/search?q=#{URI.encode_www_form(tag)}"}
-              class="px-1.5 py-0.5 text-xs rounded bg-base-300 hover:bg-primary/10 hover:text-primary transition-colors"
-            >
-              {tag}
-            </.link>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-2 shrink-0">
-          <span :if={@page.updated_at} class="text-caption">
-            {Calendar.strftime(@page.updated_at, "%b %d")}
-          </span>
-          <button
-            type="button"
-            phx-click="archive_page"
-            phx-value-slug={@page.slug}
-            title={gettext("Archive")}
-            class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors"
-            data-testid={"archive-btn-" <> @page.slug}
-          >
-            <.icon name="hero-archive-box" class="size-4" />
-          </button>
-        </div>
-      </div>
-    </div>
+      </:footer>
+      <:footer_actions>
+        <button
+          type="button"
+          phx-click="archive_page"
+          phx-value-slug={@page.slug}
+          title={gettext("Archive")}
+          class="p-1 rounded-lg text-base-content/40 hover:text-error hover:bg-error/10 transition-colors"
+          data-testid={"archive-btn-" <> @page.slug}
+        >
+          <.icon name="hero-archive-box" class="size-4" />
+        </button>
+      </:footer_actions>
+    </.resource_card>
     """
   end
 end

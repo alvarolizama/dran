@@ -1,26 +1,24 @@
 defmodule Dran.ReleaseTest do
   @moduledoc """
-  The production-seed contract: `seed/0` evaluates the production seed, never
-  the demo dataset.
+  The seeding contract: a release seeds the **instance row** and nothing else.
 
-  Pointing `seed/0` at `priv/repo/seeds.exs` is the mistake that sows demo data
-  — accounts whose passwords are published in this repository — into a
-  production deploy. The path is pinned here, and the demo entry point refuses
-  to run inside a release.
-
-  Family standard: `BOOTSTRAP.md` (the production seed does not exist in the
-  scaffold) and `SPEC-docker.md` §Entrypoint.
+  There is no env-driven bootstrap account any more — the owner is born in the
+  first-run `/setup` screen (`DranWeb.SessionController.setup/2`), so no
+  credential ever travels through an environment variable. The demo dataset
+  (`priv/repo/seeds.exs`, content only, no accounts) stays behind
+  `seed_demo/0`, which refuses to run inside a release.
   """
 
   # It mutates MIX_ENV, which is global state.
   use ExUnit.Case, async: false
 
-  test "seed/0 evaluates the production seed, never the demo dataset" do
-    seeds_file = Dran.Release.seeds_file()
-
-    assert seeds_file =~ "seeds_prod.exs"
-    refute seeds_file =~ ~r{/seeds\.exs$}
-    assert File.exists?(seeds_file), "#{seeds_file} does not exist"
+  test "there is no env-driven production seed any more" do
+    # Not a style check: this is the guard against the bootstrap account coming
+    # back through an env var (it left with priv/repo/seeds_prod.exs). The owner
+    # is created by DranWeb.SessionController.setup/2 on the first-run screen.
+    refute function_exported?(Dran.Release, :seed, 0)
+    refute function_exported?(Dran.Release, :seeds_file, 0)
+    refute File.exists?(Application.app_dir(:dran, "priv/repo/seeds_prod.exs"))
   end
 
   test "seed_demo/0 refuses to run inside a release" do

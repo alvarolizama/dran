@@ -33,6 +33,40 @@ defmodule Dran.SharingTest do
     {:ok, ws: ws, owner: owner, reader: reader, page: page}
   end
 
+  describe "grant/4 — el grant NO puede ser un no-op" do
+    test "compartir con una persona deja la fila `shared` y el invitado la LEE",
+         %{ws: ws, reader: reader, page: page} do
+      assert page.visibility == "private"
+      refute Sharing.shared_with?("page", page.id, reader.id)
+
+      assert {:ok, :shared, updated} = Sharing.grant(page, :page, {:user, reader.id})
+      assert updated.visibility == "shared"
+      assert Sharing.shared_with?("page", page.id, reader.id)
+
+      # Lo que importa: el grant ahora VALE. Antes se insertaba con la fila en
+      # `private` y la política de lectura lo descartaba (grant inerte).
+      visible = Knowledge.list_pages(workspace_id: ws.id, scope: {:reader, reader.id})
+      assert page.id in Enum.map(visible, & &1.id)
+    end
+
+    test "compartir con un grupo también fija `shared`, y el miembro la lee",
+         %{ws: ws, reader: reader, page: page} do
+      {:ok, group} = Sharing.create_group(%{name: "Grant #{uniq()}"})
+      {:ok, _} = Sharing.add_group_member(group, reader.id)
+
+      assert {:ok, :shared, updated} = Sharing.grant(page, :page, {:group, group.id})
+      assert updated.visibility == "shared"
+
+      visible = Knowledge.list_pages(workspace_id: ws.id, scope: {:reader, reader.id})
+      assert page.id in Enum.map(visible, & &1.id)
+    end
+
+    test "un target inválido no toca nada", %{page: page} do
+      assert {:error, _} = Sharing.grant(page, :page, {:nope, 1})
+      assert Dran.Repo.get!(Dran.Knowledge.Page, page.id).visibility == "private"
+    end
+  end
+
   describe "groups" do
     test "create derives the slug and membership is idempotent", %{reader: reader} do
       {:ok, group} = Sharing.create_group(%{name: "Equipo Producto"})

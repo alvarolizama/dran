@@ -248,7 +248,6 @@ Dran's own variables, alongside those:
 | `UPLOADS_DIR` | where uploads are stored (default `priv/static/uploads`) — mount a volume there in production |
 | `UPLOADS_MAX_SIZE` | max upload size in bytes (default 100 MiB) |
 | `DRAN_INFERENCE_API_URL` / `_API_KEY` | any OpenAI-compatible endpoint; powers embeddings, summaries, semantic search and the workers — without it Dran still works, minus those features |
-| `DRAN_ADMIN_PASSWORD` / `_EMAIL` / `_NAME` | opt-in instance owner, created on boot by the production seed (see [Production](#production)) |
 | `WORKER_MAX_STEPS` / `WORKER_PER_STEP_TIMEOUT` | worker step budget |
 | `SKIP_MIGRATIONS` / `DRAN_RESET` | entrypoint switches (see [Production](#production)) |
 
@@ -294,14 +293,15 @@ MIX_ENV=prod mix compile && MIX_ENV=prod mix release   # start with bin/server
 |---|---|
 | **Ports** | `PORT` (the real listen) must match the platform's **Ports Exposes**; `PHX_PORT` is only the port used in generated URLs (443 with TLS). `EXPOSE` does not change the listen, which is why the image does not use it |
 | **Healthcheck** | the image ships a `HEALTHCHECK` on **`GET /health`** — a bare `200` that touches no database, so it passes while the boot warms the connection pool. Point the proxy at `/health` expecting 200, **never at `/`**: `/` redirects to `/login` (302) and a proxy configured for 200 reports a healthy container as down → 502. Mind the window before the listener exists: the entrypoint migrates first, so a proxy that gives up sooner will 502 during a deploy |
-| **Migrations** | the entrypoint runs `Dran.Release.setup/0` (create → migrate → seed the instance row → production seed) on **every** deploy, before serving. A failed migration aborts the boot and the deploy rolls back. `SKIP_MIGRATIONS=1` skips it (one-off task containers) |
-| **First account** | without `DRAN_ADMIN_PASSWORD` the boot creates **nobody**, and the first visitor gets the `/setup` screen — whoever arrives first can claim the instance. Close that window with `DRAN_ADMIN_PASSWORD` (8+ characters, `DRAN_ADMIN_EMAIL` optional) or by deploying behind a network boundary. There is never a fallback password in this repository |
+| **Migrations** | the entrypoint runs `Dran.Release.setup/0` (create → migrate → seed the instance row) on **every** deploy, before serving. A failed migration aborts the boot and the deploy rolls back. `SKIP_MIGRATIONS=1` skips it (one-off task containers) |
+| **First account** | the boot creates **nobody**: the first visitor gets the `/setup` screen, and whoever arrives first claims the instance as owner. Claim it yourself right after the first deploy, or keep the instance behind a network boundary — there is no `DRAN_ADMIN_*` variable to pre-create it with, and never a fallback account or password in this repository |
 | **HTTPS** | `force_ssl` is **compile-time**: behind a VPN with no TLS terminator, build with `--build-arg DISABLE_FORCE_SSL=1` **and** run with `PHX_SCHEME=http` |
 | **Uploads** | Dran stores uploads, so mount a persistent volume at `UPLOADS_DIR`. The directory is in `.dockerignore` — being in `.gitignore` is not enough, the build context is a different thing, and `COPY priv priv` would bake local uploads into the image |
 | **Reset** | `DRAN_RESET=1` is **destructive**: it drops the whole schema (every workspace with its content, every user, key and setting) and rebuilds it empty, leaving the instance at `/setup`. It runs on **every** container start while it is set — unset it as soon as the first boot finishes |
 
-Demo content is never seeded by a release: `priv/repo/seeds_prod.exs` creates the
-owner (opt-in) and `Dran.Release.seed_demo/0` refuses to run outside dev.
+No account is ever seeded by a release: `Dran.Release.setup/0` seeds the
+instance row only, the owner is born in the first-run `/setup` screen, and
+`Dran.Release.seed_demo/0` refuses to run outside dev.
 
 ## Tests and gates
 

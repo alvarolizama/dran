@@ -114,11 +114,20 @@ defmodule Dran.Workspace do
   # its `path` would build links the router never resolves to it (dead links /
   # a `/settings` path colliding with the workspace-admin route). Rejecting
   # them keeps the declared path routable.
+  #
+  # W (contract de superficies): `goals`, `tasks` y `plans` entran a la lista —
+  # las tres tienen ruta propia y ganan sobre `/:type`, así que un tipo custom
+  # con ese path sería inalcanzable (el mismo modo de falla que las demás).
   @reserved_path_segments MapSet.new(~w(
     collections clusters reports search activity journey graph memory
     collection letter settings api dev login session auth health docs admin
-    notes entities concepts references
+    notes entities concepts references goals tasks plans
   ))
+
+  # Slugs de ENTIDADES de primera clase: tienen tabla y superficie propias, así
+  # que no se declaran como tipo de página (ver
+  # `validate_custom_types_not_first_class/2`).
+  @first_class_type_slugs ~w(plan)
 
   @doc """
   The workspace's declared custom page types, normalized.
@@ -286,6 +295,7 @@ defmodule Dran.Workspace do
       |> validate_custom_types_path_format(normalized)
       |> validate_custom_types_path_not_reserved(normalized)
       |> validate_custom_types_not_builtin(normalized)
+      |> validate_custom_types_not_first_class(normalized)
     else
       add_error(
         changeset,
@@ -426,6 +436,30 @@ defmodule Dran.Workspace do
         changeset,
         :workspace_page_types,
         "cannot redefine built-in page type: #{Enum.join(collisions, ", ")}"
+      )
+    end
+  end
+
+  # Los slugs de las ENTIDADES de primera clase tampoco son declarables como
+  # tipo de página: `plan` es una tabla con dueño y visibilidad propios (como
+  # `goals`), no una página. Declarar un tipo custom `plan` volvería a partir el
+  # vocabulario en dos — y el tipo declarado no tendría ni la tabla ni el
+  # checklist reales (decisión del owner, 2026-10-03).
+  defp validate_custom_types_not_first_class(changeset, entries) do
+    collisions =
+      entries
+      |> Enum.map(& &1["slug"])
+      |> Enum.reject(&is_nil/1)
+      |> Enum.filter(&(&1 in @first_class_type_slugs))
+      |> Enum.uniq()
+
+    if collisions == [] do
+      changeset
+    else
+      add_error(
+        changeset,
+        :workspace_page_types,
+        "cannot declare a first-class entity as a page type: #{Enum.join(collisions, ", ")}"
       )
     end
   end

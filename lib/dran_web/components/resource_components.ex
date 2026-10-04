@@ -44,6 +44,7 @@ defmodule DranWeb.ResourceComponents do
   attr :submit_disabled, :boolean, default: false
   attr :cancel_label, :string, default: nil
   attr :max_w, :string, default: "max-w-5xl"
+  slot :header
   slot :sidebar
   slot :left
   slot :inner_block, required: true
@@ -67,8 +68,9 @@ defmodule DranWeb.ResourceComponents do
           @max_w
         ]}
       >
-        <%!-- Header --%>
-        <div class="flex items-center justify-between px-5 py-3.5 border-b border-base-300 shrink-0">
+        <%!-- Header: `flex-wrap` porque en pantallas angostas el control del
+        header (el destino) baja de línea en vez de desbordar el modal. --%>
+        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 py-3.5 border-b border-base-300 shrink-0">
           <div class="flex items-center gap-2.5 min-w-0">
             <span
               :if={@pill}
@@ -78,14 +80,24 @@ defmodule DranWeb.ResourceComponents do
             </span>
             <h3 class="text-base font-semibold truncate">{@title}</h3>
           </div>
-          <button
-            type="button"
-            phx-click={@on_close}
-            class="btn btn-ghost btn-xs btn-circle shrink-0"
-            aria-label={gettext("Close")}
+          <%!-- El slot `header` es para un control que vive junto a la ✕ — el
+          destino del recurso. Queda FUERA del `<form>` del body, así que sus
+          inputs lo apuntan con el atributo HTML `form={@form_id}` (el mismo
+          truco del botón Guardar del footer). --%>
+          <div
+            id={"#{@id}-header-actions"}
+            class="flex items-center gap-2 shrink-0 min-w-0"
           >
-            <.icon name="hero-x-mark" class="size-4" />
-          </button>
+            {render_slot(@header)}
+            <button
+              type="button"
+              phx-click={@on_close}
+              class="btn btn-ghost btn-xs btn-circle shrink-0"
+              aria-label={gettext("Close")}
+            >
+              <.icon name="hero-x-mark" class="size-4" />
+            </button>
+          </div>
         </div>
 
         <%!-- Body: main + sidebar --%>
@@ -240,6 +252,416 @@ defmodule DranWeb.ResourceComponents do
         min_height={@min_height}
       />
     </div>
+    """
+  end
+
+  @doc """
+  Header of a resource LIST — the standard every collection surface shares.
+
+  Title on the left (`text-title`), actions on the right, and the primary CTA
+  («New») last. The CTA opens the create modal through URL state: pass
+  `new_path` (`"?new=true"`) and it renders the standard patch link, or
+  `new_event` when the surface owns the event (`phx-click`).
+
+  Extra actions (a smart-collection link, an archived toggle) go in the
+  `actions` slot, which renders BEFORE the CTA — the same order pages uses.
+  """
+  attr :title, :string, required: true
+  attr :new_path, :string, default: nil
+  attr :new_event, :string, default: nil
+  attr :new_id, :string, default: nil
+  attr :new_label, :string, default: nil
+  attr :new_testid, :string, default: nil
+  slot :actions
+
+  def resource_list_header(assigns) do
+    ~H"""
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h1 class="text-title">{@title}</h1>
+      <div class="flex gap-2">
+        {render_slot(@actions)}
+        <.link
+          :if={@new_path && !@new_event}
+          patch={@new_path}
+          id={@new_id}
+          class="btn btn-primary btn-sm"
+          data-testid={@new_testid}
+        >
+          <.icon name="hero-plus" class="w-4 h-4" /> {@new_label || gettext("New")}
+        </.link>
+        <button
+          :if={@new_event}
+          type="button"
+          phx-click={@new_event}
+          id={@new_id}
+          class="btn btn-primary btn-sm"
+          data-testid={@new_testid}
+        >
+          <.icon name="hero-plus" class="w-4 h-4" /> {@new_label || gettext("New")}
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  The standard EMPTY STATE of a list: the circle with the type icon, the title,
+  the description and the CTA that opens the create modal (`?new=true`).
+
+  `data-testid="empty-state"` is the stable hook — the caller decides WHEN it
+  renders (a stream is not enumerable, so the parent tracks the count).
+  """
+  attr :icon, :string, required: true
+  attr :title, :string, required: true
+  attr :description, :string, default: nil
+  attr :cta, :string, default: nil
+  attr :new_path, :string, required: true
+
+  def resource_empty_state(assigns) do
+    ~H"""
+    <div data-testid="empty-state" class="py-20 text-center space-y-4">
+      <div class="flex justify-center">
+        <div class="size-20 rounded-full bg-base-200 flex items-center justify-center">
+          <.icon name={@icon} class="size-10 text-base-content/40" />
+        </div>
+      </div>
+      <div class="space-y-1">
+        <h3 class="text-lg font-semibold">{@title}</h3>
+        <p :if={@description} class="text-sm text-base-content/50">{@description}</p>
+      </div>
+      <.link
+        patch={@new_path}
+        class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
+      >
+        <.icon name="hero-plus" class="w-4 h-4" /> {@cta || gettext("New")}
+      </.link>
+    </div>
+    """
+  end
+
+  @doc """
+  The standard CARD of a resource list: `surface-2 lift` shell, icon tile,
+  title link, type badge, summary, and a footer row (left slot + right slot
+  with the meta date and the actions).
+
+  Pages' cards and goals/plans' cards ARE this component — one molde, so a
+  change here lands in every collection.
+  """
+  attr :icon, :string, required: true
+  attr :title, :string, required: true
+  attr :href, :string, required: true
+  attr :badge, :string, default: nil
+  attr :badge_class, :string, default: "bg-base-300 text-base-content/60"
+  attr :summary, :string, default: nil
+  attr :meta, :string, default: nil
+  attr :testid, :string, default: nil
+  attr :id, :string, default: nil
+
+  attr :progress, :map,
+    default: nil,
+    doc: "progreso derivado (%{done:, total:, percent:}); el chip lo lee"
+
+  attr :due_on, :any, default: nil, doc: "vencimiento (%Date{}); se pinta en rojo si ya pasó"
+  attr :overdue?, :boolean, default: false
+  attr :visibility, :string, default: nil, doc: "el destino; la píldora se oculta en privado"
+
+  slot :footer
+  slot :footer_actions
+  slot :actions
+
+  def resource_card(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class="surface-2 lift hover:border-primary/40 p-4 rounded-xl"
+      data-testid={@testid}
+    >
+      <div class="flex items-center gap-3">
+        <span class="size-8 rounded-md bg-primary/10 flex items-center justify-center">
+          <.icon name={@icon} class="size-4 text-primary" />
+        </span>
+        <.link
+          navigate={@href}
+          class="font-medium leading-snug flex-1 hover:text-primary transition-colors"
+        >
+          {@title}
+        </.link>
+        <span
+          :if={@badge}
+          class={["text-[11px] font-medium px-2 py-0.5 rounded-full", @badge_class]}
+        >
+          {@badge}
+        </span>
+        {render_slot(@actions)}
+      </div>
+      <p :if={@summary} class="text-sm text-base-content/60 line-clamp-2 mt-2">
+        {@summary}
+      </p>
+      <div
+        :if={@footer != [] || @meta || @progress || @due_on || @visibility}
+        class="flex items-center justify-between gap-3 mt-2"
+      >
+        <div class="flex flex-wrap items-center gap-1.5 min-w-0">
+          <.progress_chip :if={@progress} progress={@progress} />
+          <.due_chip :if={@due_on} due_on={@due_on} overdue?={@overdue?} />
+          <.resource_visibility_pill visibility={@visibility} id={@id && "#{@id}-visibility"} />
+          {render_slot(@footer)}
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span :if={@meta} class="text-caption">{@meta}</span>
+          {render_slot(@footer_actions)}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # ── Las fichas del molde ───────────────────────────────────────────────────
+  #
+  # Progreso, vencimiento y destino son las que TODO listado muestra: si cada
+  # superficie las pintara por su cuenta, goals y plans volverían a divergir
+  # (goal con horizonte, plan con progreso). Viven acá, en el molde.
+  attr :progress, :map, required: true
+
+  defp progress_chip(assigns) do
+    ~H"""
+    <span
+      data-chip="progress"
+      class="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300/60 text-base-content/60"
+      title={gettext("Progress")}
+    >
+      <span class="w-10 h-1 rounded-full bg-base-300 overflow-hidden">
+        <span class="block h-1 rounded-full bg-primary" style={"width: #{@progress.percent}%"}></span>
+      </span>
+      {@progress.done}/{@progress.total}
+    </span>
+    """
+  end
+
+  attr :due_on, :any, required: true, doc: "%Date{} del vencimiento"
+  attr :overdue?, :boolean, default: false
+
+  defp due_chip(assigns) do
+    ~H"""
+    <span
+      data-chip="due"
+      class={[
+        "inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full",
+        if(@overdue?, do: "bg-red-100 text-red-700", else: "bg-base-300/60 text-base-content/60")
+      ]}
+      title={gettext("Due on")}
+    >
+      <.icon name="hero-calendar" class="size-3" />
+      {Calendar.strftime(@due_on, "%b %d")}
+    </span>
+    """
+  end
+
+  @doc """
+  ¿El recurso está vencido?
+
+  Vencido = tiene fecha pasada y NO está cerrado: un goal o un plan `done`
+  (o `archived`) no se pinta en rojo, ya no se persigue.
+  """
+  def overdue?(%{status: status, due_on: %Date{} = due_on}) do
+    status not in ~w(done archived) and Date.compare(due_on, Date.utc_today()) == :lt
+  end
+
+  def overdue?(_), do: false
+
+  @doc """
+  La etiqueta humana de un estado de goal/plan. `on_hold` es «On hold», no
+  «On_hold»: los estados son los mismos en las dos tablas, así que la
+  traducción también.
+  """
+  def status_label("on_hold"), do: gettext("On hold")
+  def status_label(status), do: status |> to_string() |> String.capitalize()
+
+  @doc "El color del pill de estado — el mismo en la tarjeta y en el detalle."
+  def status_class(status) when status in ~w(active done), do: "bg-green-100 text-green-700"
+  def status_class("draft"), do: "bg-base-200 text-base-content/70"
+  def status_class("on_hold"), do: "bg-yellow-100 text-yellow-700"
+  def status_class(_), do: "bg-base-300 text-base-content/60"
+
+  @doc """
+  El sello de «actualizado» del pie de la tarjeta — el mismo texto en toda
+  lista (`Updated · Oct 03`), no una fecha suelta que hay que interpretar.
+  """
+  def updated_meta(%DateTime{} = at),
+    do: gettext("Updated") <> " · " <> Calendar.strftime(at, "%b %d")
+
+  def updated_meta(_), do: nil
+
+  @doc """
+  Las opciones del filtro de orden — el mismo juego en toda lista, derivadas de
+  `Dran.ListOrder.orders/0` (el vocabulario que el contexto entiende).
+  """
+  def order_options do
+    labels = %{
+      "due" => gettext("Due first"),
+      "updated" => gettext("Recently updated"),
+      "title" => gettext("Title A-Z")
+    }
+
+    Enum.map(Dran.ListOrder.orders(), &{&1, labels[&1]})
+  end
+
+  @doc """
+  La barra de filtros de un índice — el MISMO molde en /goals y /plans.
+
+  El estado vive en la URL (como los filtros del board): el form dispara
+  `phx-change="filter"` y la LiveView responde con un `push_patch`. Acá no se
+  valida nada: un valor fuera de `@statuses`/`@orders` lo descarta el caller
+  (`filters_from/1`), que es quien conoce el vocabulario.
+  """
+  attr :prefix, :string, required: true, doc: "prefijo de los ids: goals, plans"
+  attr :status, :string, default: nil
+  attr :statuses, :list, required: true, doc: "pares {valor, etiqueta}"
+  attr :order, :string, required: true
+  attr :orders, :list, required: true, doc: "pares {valor, etiqueta}"
+
+  attr :total, :integer,
+    default: nil,
+    doc: "filas que devolvió el filtro (sólo para decir «sin resultados»)"
+
+  def resource_filters(assigns) do
+    ~H"""
+    <form id={"#{@prefix}-filters"} phx-change="filter" class="flex flex-wrap items-center gap-2 mb-4">
+      <select
+        name="status"
+        id={"#{@prefix}-status-filter"}
+        class="select select-sm select-bordered"
+        aria-label={gettext("Filter by status")}
+      >
+        <option value="" selected={is_nil(@status)}>{gettext("All statuses")}</option>
+        <option :for={{value, label} <- @statuses} value={value} selected={@status == value}>
+          {label}
+        </option>
+      </select>
+
+      <select
+        name="order"
+        id={"#{@prefix}-order-filter"}
+        class="select select-sm select-bordered"
+        aria-label={gettext("Order by")}
+      >
+        <option :for={{value, label} <- @orders} value={value} selected={@order == value}>
+          {label}
+        </option>
+      </select>
+
+      <%!-- El vacío por FILTRO no es el vacío de la colección: sin resultados
+      se dice qué pasa y cómo volver, no se ofrece crear. --%>
+      <span :if={@status && @total == 0} class="text-caption text-base-content/50">
+        {gettext("No matches for this filter.")}
+      </span>
+    </form>
+    """
+  end
+
+  # ── El destino (scope): UN control y UNA píldora ───────────────────────────
+  #
+  # El destino de un recurso (quién puede leerlo) se declara y se muestra con
+  # estos componentes en TODAS las superficies — pages, goals, plans y memory.
+  # El vocabulario de la fila es `private | public | shared`, y el control lo
+  # declara con el nombre de campo del form que lo monta (pages:
+  # `page[visibility]`, goals: `goal[visibility]`, …).
+
+  @doc "The three levels of the destination, translated."
+  def visibility_label("public"), do: gettext("Public")
+  def visibility_label("shared"), do: gettext("Shared")
+  def visibility_label("private"), do: gettext("Private")
+  def visibility_label(other), do: other
+
+  @doc "The icon of a level: a lock, the globe, or the group."
+  def scope_icon("public"), do: "hero-globe-alt"
+  def scope_icon("shared"), do: "hero-user-group"
+  def scope_icon(_), do: "hero-lock-closed"
+
+  @doc """
+  The destination CONTROL: three buttons (private / public / shared), the hidden
+  input the form submits, and the hidden radios that carry the value.
+
+  Field name and id come from `@form[:visibility]`, so each surface keeps its own
+  param (`page[visibility]`, `goal[visibility]`, …); `id` overrides the picker's
+  DOM id, which defaults to `<field_id>-picker`.
+  """
+  attr :form, :any, required: true
+  attr :id, :string, default: nil
+  attr :label, :string, default: nil
+
+  attr :form_id, :string,
+    default: nil,
+    doc: "id del `<form>` cuando el control vive FUERA de él (el header del modal)"
+
+  attr :compact, :boolean,
+    default: false,
+    doc: "sin rótulo ni leyenda: sólo los tres pills (para el header del modal)"
+
+  def resource_scope_field(assigns) do
+    ~H"""
+    <div>
+      <span :if={!@compact} class="block text-sm font-medium text-base-content/70 mb-1.5">
+        {@label || gettext("Visibility")}
+      </span>
+      <div
+        class="flex flex-wrap gap-2"
+        id={@id || "#{@form[:visibility].id}-picker"}
+        phx-update="ignore"
+        title={if @compact, do: gettext("Who can read it"), else: nil}
+      >
+        <%!-- El radio VIVE DENTRO de su label: cliquear el pill lo marca (HTML
+        puro) y el estado activo lo pinta el CSS con `has-[:checked]`, sin JS y
+        sin round-trip. El wrapper sigue con `phx-update="ignore"` porque los
+        forms de pages re-renderizan al validar: sin él, el servidor pisaría la
+        elección del usuario a cada tecla. --%>
+        <label
+          :for={level <- ~w(private public shared)}
+          class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border cursor-pointer transition-colors duration-150 border-base-300 text-base-content/70 hover:bg-base-200/50 has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary has-[:checked]:font-medium"
+        >
+          <input
+            type="radio"
+            id={"#{@form[:visibility].id}-#{level}"}
+            name={@form[:visibility].name}
+            value={level}
+            checked={Phoenix.HTML.Form.input_value(@form, :visibility) == level}
+            form={@form_id}
+            class="sr-only"
+          />
+          <.icon name={scope_icon(level)} class="size-3.5" />
+          {visibility_label(level)}
+        </label>
+      </div>
+      <p :if={!@compact} class="text-xs text-base-content/50 mt-1.5">
+        {gettext(
+          "Private: only you. Public: everyone on this instance. Shared: only the people you invite."
+        )}
+      </p>
+    </div>
+    """
+  end
+
+  @doc """
+  The destination PILL of a detail view: icon + translated label, and NOTHING
+  when the level is `private` (the default is not announced). The raw column
+  value is never printed.
+  """
+  attr :visibility, :string, default: nil
+  attr :id, :string, default: nil
+  attr :testid, :string, default: nil
+
+  def resource_visibility_pill(assigns) do
+    ~H"""
+    <span
+      :if={@visibility && @visibility != "private"}
+      id={@id}
+      data-testid={@testid}
+      class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300/60 text-base-content/60"
+      title={gettext("Item visibility")}
+    >
+      <.icon name={scope_icon(@visibility)} class="size-3" />
+      {visibility_label(@visibility)}
+    </span>
     """
   end
 end

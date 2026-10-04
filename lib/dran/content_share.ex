@@ -2,10 +2,12 @@ defmodule Dran.ContentShare do
   @moduledoc """
   A read grant on one content row (W2).
 
-  `resource_type` is one of `page`, `memory`, `collection` or `report` and
-  `resource_id` is the row's UUID. Exactly one of `user_id` / `user_group_id`
-  is set (CHECK constraint in the DB). Shares grant READ access only —
-  writing stays with the owner (contract ?03, default applied read-only).
+  `resource_type` is one of `page`, `memory`, `collection`, `report`, `event`,
+  `goal` or `plan` (the vocabulary is `resource_types/0` and the changeset is the
+  single gate for it — a new content domain adds itself HERE, not in the callers'
+  guards) and `resource_id` is the row's UUID. Exactly one of `user_id` /
+  `user_group_id` is set (CHECK constraint in the DB). Shares grant READ access
+  only — writing stays with the owner (contract ?03, default applied read-only).
   """
 
   use Ecto.Schema
@@ -14,7 +16,7 @@ defmodule Dran.ContentShare do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @resource_types ~w(page memory collection report event)
+  @resource_types ~w(page memory collection report event goal plan)
   @visibility ~w(private public shared)
 
   schema "content_shares" do

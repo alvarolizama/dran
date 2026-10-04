@@ -251,13 +251,15 @@ custom classes must fully style the input
 - LiveView streams *do not support counting or empty states*. If you need to display a count, you must track it using a separate assign. For empty states, you can use Tailwind classes:
 
       <div id="tasks" phx-update="stream">
-        <div class="hidden only:block">No tasks yet</div>
+        <div id="tasks-empty" class="hidden only:block">No tasks yet</div>
         <div :for={{id, task} <- @streams.tasks} id={id}>
           {task.name}
         </div>
       </div>
 
   The above only works if the empty state is the only HTML block alongside the stream for-comprehension.
+  **Every child of a `phx-update="stream"` container needs an `id` — the empty state included.**
+  Without it the render raises `setting phx-update to stream requires setting an ID on each child` (LiveView 1.2.3).
 
 - When updating an assign that should change content inside any streamed item(s), you MUST re-stream the items
   along with the updated assign:
@@ -289,6 +291,8 @@ custom classes must fully style the input
       </div>
 
 - **Never** use the deprecated `phx-update="append"` or `phx-update="prepend"` for collections
+
+- **Documented exception — status-grouped boards.** The task board (`TaskBoardLive`) renders COLUMNS from grouped assigns (`Map.get(@board, status, [])`) instead of one stream per column. A stream is not enumerable, so a status grouping cannot be sliced out of one; the collection is bounded to the goals/tasks the reader may already read, and the grouping is derived, never appended to. Every other collection still uses streams — this exception is not a precedent for a plain list.
 
 ### LiveView JavaScript interop
 

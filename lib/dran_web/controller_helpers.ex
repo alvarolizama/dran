@@ -19,6 +19,41 @@ defmodule DranWeb.ControllerHelpers do
     end)
   end
 
+  # ── Respuestas de error (contrato de superficies, W2) ─────────────────────
+  #
+  # Un recurso FUERA del scope de lectura es 404, nunca 403: la existencia no se
+  # filtra (la misma postura que las páginas). El 409 es del bloqueo optimista
+  # (una mano perdió la carrera) y el 422 del destino `scope` que no se puede
+  # honrar — nunca un fallback silencioso.
+
+  @doc "404 con el envelope del API (recurso fuera del scope = inexistente)."
+  def not_found(conn, detail \\ "not found") do
+    conn
+    |> Plug.Conn.put_status(:not_found)
+    |> Phoenix.Controller.json(%{errors: %{detail: detail}})
+  end
+
+  @doc "422 con errores por campo, o con un `detail` suelto."
+  def unprocessable(conn, errors) when is_map(errors) do
+    conn
+    |> Plug.Conn.put_status(:unprocessable_entity)
+    |> Phoenix.Controller.json(%{errors: errors})
+  end
+
+  @doc "409: la escritura perdió la carrera del `lock_version`."
+  def conflict(conn, detail) do
+    conn
+    |> Plug.Conn.put_status(:conflict)
+    |> Phoenix.Controller.json(%{errors: %{detail: detail}})
+  end
+
+  @doc "400: a la ruta le falta un dato del request."
+  def bad_request(conn, detail) do
+    conn
+    |> Plug.Conn.put_status(:bad_request)
+    |> Phoenix.Controller.json(%{errors: %{detail: detail}})
+  end
+
   @doc """
   Invoke `fun` with the connection and the INSTANCE context
   (single-workspace model, W5): the legacy `workspace_slug` argument is

@@ -160,4 +160,70 @@ defmodule DranWeb.InstanceShellTest do
     refute has_element?(view, "a[href='/journey']")
     refute has_element?(view, "#sidebar-search-form")
   end
+
+  # P13 (contrato de superficies): el nav de OBJETIVOS Y PLANES agrupa Goals y
+  # Plans en un bloque, Memory cierra «Knowledge base» (debajo de Clusters) y
+  # `/goals` deja de ser una URL sin puerta. Los bloques son los del contenedor
+  # del nav (`data-nav-block`), no texto suelto: el orden se afirma sobre el DOM.
+  describe "nav de objetivos y planes (Goals, Plans) + Memory en Knowledge base" do
+    test "Goals y Plans van juntos, en orden, y el knowledge base viene después", %{conn: conn} do
+      conn = owner_conn(conn, "shell_owner@test.dev")
+      {:ok, view, _html} = live(conn, ~p"/plans")
+
+      html = render(view)
+
+      # Orden de bloques: views → goals-plans → knowledge-base.
+      positions =
+        for key <- ~w(views goals-plans knowledge-base) do
+          case :binary.match(html, ~s(data-nav-block="#{key}")) do
+            {pos, _len} -> {key, pos}
+            :nomatch -> flunk("falta el bloque #{key} en el nav")
+          end
+        end
+
+      assert positions == Enum.sort_by(positions, &elem(&1, 1))
+
+      # La sub-sección de objetivos y planes lleva los dos, en ese orden, y la
+      # memoria no cuelga de ella: cierra el knowledge base.
+      assert html =~ ~r/data-nav-block="goals-plans".*href="\/goals".*href="\/plans"/s
+
+      work_block =
+        html
+        |> String.split(~s(data-nav-block="goals-plans"), parts: 2)
+        |> List.last()
+        |> String.split(~s(data-nav-block="knowledge-base"), parts: 2)
+        |> List.first()
+
+      assert work_block =~ ~s(href="/goals")
+      assert work_block =~ ~s(href="/plans")
+      refute work_block =~ ~s(href="/memory")
+
+      # Memory cierra el knowledge base, después de Clusters.
+      kb_block =
+        html
+        |> String.split(~s(data-nav-block="knowledge-base"), parts: 2)
+        |> List.last()
+        |> String.split("</nav>", parts: 2)
+        |> List.first()
+
+      {clusters_pos, _} = :binary.match(kb_block, ~s(href="/clusters"))
+      {memory_pos, _} = :binary.match(kb_block, ~s(href="/memory"))
+
+      assert clusters_pos < memory_pos
+
+      # La puerta a /goals existe (antes la ruta vivía sin entrada en el nav).
+      assert has_element?(view, "aside a[href='/goals']")
+    end
+
+    test "el knowledge base sigue después del hueco", %{conn: conn} do
+      conn = owner_conn(conn, "shell_owner@test.dev")
+      {:ok, view, _html} = live(conn, ~p"/notes")
+
+      html = render(view)
+      {work_pos, _} = :binary.match(html, ~s(data-nav-block="goals-plans"))
+      {kb_pos, _} = :binary.match(html, ~s(data-nav-block="knowledge-base"))
+
+      assert work_pos < kb_pos
+    end
+  end
 end

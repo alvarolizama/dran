@@ -128,9 +128,15 @@ error, never a silent drop or a silent dedupe:
   would make the type unreachable or shadow a real page — the full set is
   `collections clusters reports search activity journey graph memory collection
   letter settings api dev login session auth health docs admin` plus the
-  built-in paths `notes entities concepts references`.
+  built-in paths `notes entities concepts references` and the first-class
+  categories `goals tasks plans`.
 - A slug that repeats a built-in type (`note`, `entity`, `concept`,
   `reference`) is rejected — built-ins cannot be redefined.
+- **`plan` is not declarable at all.** A plan is a first-class ENTITY (table
+  `plans`, with `owner_user_id` + `visibility` like a goal), not a page type —
+  neither a built-in nor a custom one. Its category is `/plans` and its steps
+  are an ordered checklist (the same jsonb shape as a task's `checklist`). Both
+  the slug `plan` and the path `plans` are refused: one vocabulary, not two.
 - The list must be a list of objects.
 
 The `icon` is **normalized, not validated**: a value without the `hero-`

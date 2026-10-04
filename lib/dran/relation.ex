@@ -4,9 +4,10 @@ defmodule Dran.Relation do
   `source` → `target`.
 
   Relations are **polymorphic**: `source_type` / `target_type` indicate which
-  table the `source_id` / `target_id` point to — "page", "collection", or
-  "memory". App-level validation in `changeset/2`
-  ensures each endpoint resolves to a real row of the declared type.
+  table the `source_id` / `target_id` point to — `"page"`, `"collection"`,
+  `"memory"`, `"goal"`, `"task"` or `"plan"`. App-level validation in
+  `changeset/2` ensures each endpoint resolves to a real row of the declared
+  type.
 
   ## Relation types (manual)
   - `related` — generic connection (default)
@@ -43,7 +44,7 @@ defmodule Dran.Relation do
              :inserted_at
            ]}
   @relation_types ~w(related contradicts supersedes part_of embeds semantic mentions works_in has_tier based_in written_in built_with informs)
-  @node_types ~w(page collection memory goal task)
+  @node_types ~w(page collection memory goal task plan)
 
   schema "relations" do
     field :source_id, :binary_id
@@ -130,6 +131,7 @@ defmodule Dran.Relation do
   defp endpoint_module("memory"), do: Dran.Memory
   defp endpoint_module("goal"), do: Dran.Goals.Goal
   defp endpoint_module("task"), do: Dran.Tasks.Task
+  defp endpoint_module("plan"), do: Dran.Plans.Plan
   defp endpoint_module(_), do: nil
 
   # ── Edge cleanup ──────────────────────────────────────────────────────────

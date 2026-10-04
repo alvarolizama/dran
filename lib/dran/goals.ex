@@ -35,18 +35,21 @@ defmodule Dran.Goals do
   Lista goals con scope de lectura.
 
   Opts: `:scope` (default `:all` para callers internos), `:owner_user_id`,
+  `:status`, `:order` (vocabulario de `Dran.ListOrder`, default `:title`),
   `:archived`, `:limit`.
   """
   def list_goals(opts \\ []) do
     scope = Keyword.get(opts, :scope, :all)
     owner_user_id = Keyword.get(opts, :owner_user_id)
+    status = Keyword.get(opts, :status)
+    order = Keyword.get(opts, :order, :title)
     archived = Keyword.get(opts, :archived, false)
     limit = Keyword.get(opts, :limit, 200)
 
     query =
       from(g in Goal,
         where: g.archived == ^archived,
-        order_by: [asc: g.title],
+        order_by: ^Dran.ListOrder.clause(order),
         limit: ^limit
       )
 
@@ -54,6 +57,8 @@ defmodule Dran.Goals do
       if is_integer(owner_user_id),
         do: where(query, [g], g.owner_user_id == ^owner_user_id),
         else: query
+
+    query = if status, do: where(query, [g], g.status == ^status), else: query
 
     query
     |> Dran.ContentVisibility.filter(scope, :goal)
@@ -80,10 +85,25 @@ defmodule Dran.Goals do
     end
   end
 
-  @doc "Trae un goal por slug dentro del namespace de su dueño (sin scope)."
+  @doc "Trae un goal por slug dentro del namespace de su dueño (sin scope). La variante con `scope:` (aridad 2, opts lista) filtra por la política única."
   def get_goal_by_slug(slug, owner_user_id)
       when is_binary(slug) and is_integer(owner_user_id) do
     Repo.one(from g in Goal, where: g.slug == ^slug and g.owner_user_id == ^owner_user_id)
+  end
+
+  # Variante con `scope:` — el uuid es la dirección canónica y el slug atajo
+  # legible (Constraint 14). El filtro sale de la política única: un slug de un
+  # goal ajeno privado NO se resuelve (sin fuga de existencia). Varios dueños
+  # pueden compartir un slug, así que se toma el primero legible.
+  def get_goal_by_slug(slug, opts) when is_binary(slug) and is_list(opts) do
+    scope = Keyword.get(opts, :scope, :all)
+
+    Goal
+    |> where([g], g.slug == ^slug)
+    |> order_by([g], asc: g.inserted_at)
+    |> Dran.ContentVisibility.filter(scope, :goal)
+    |> Repo.all()
+    |> List.first()
   end
 
   @doc "Children directos de un goal."
@@ -91,6 +111,24 @@ defmodule Dran.Goals do
 
   def list_children(goal_id) when is_binary(goal_id) do
     Repo.all(from g in Goal, where: g.parent_goal_id == ^goal_id, order_by: [asc: g.title])
+  end
+
+  @doc """
+  Children directos de un goal, con scope de lectura.
+
+  Un hijo ajeno privado no se lista: la jerarquía no abre una segunda puerta a
+  contenido que el lector no puede leer (misma política única que `list_goals/1`).
+  """
+  def list_children(%Goal{} = goal, opts), do: list_children(goal.id, opts)
+
+  def list_children(goal_id, opts) when is_binary(goal_id) and is_list(opts) do
+    scope = Keyword.get(opts, :scope, :all)
+
+    Goal
+    |> where([g], g.parent_goal_id == ^goal_id)
+    |> order_by([g], asc: g.title)
+    |> Dran.ContentVisibility.filter(scope, :goal)
+    |> Repo.all()
   end
 
   @doc "Changeset para formularios."
@@ -215,20 +253,45 @@ defmodule Dran.Goals do
   def progress(goal_id) when is_binary(goal_id), do: progress(goal_id, nil)
 
   def progress(goal_id, manual) when is_binary(goal_id) do
-    total =
-      Repo.one(
-        from t in Task,
-          where: t.goal_id == ^goal_id and t.archived == false,
-          select: count(t.id)
-      )
+    {total, done} = task_counts([goal_id]) |> Map.get(goal_id, {0, 0})
+    build_progress(total, done, manual)
+  end
 
-    done =
-      Repo.one(
-        from t in Task,
-          where: t.goal_id == ^goal_id and t.archived == false and t.status == "done",
-          select: count(t.id)
-      )
+  @doc """
+  Progreso de una LISTA de goals, en UNA consulta agregada.
 
+  `progress/1` es correcto para el detalle y un N+1 en el índice: acá los
+  conteos se agrupan por `goal_id` (el `done` sale de `FILTER (WHERE …)`) y se
+  respeta el `progress_manual` de cada goal. Devuelve `%{goal_id => progreso}`
+  con una entrada para CADA goal de la lista — el que no tiene tasks reporta
+  `0/0`, igual que en el detalle.
+  """
+  def progress_map(goals) when is_list(goals) do
+    counts = task_counts(Enum.map(goals, & &1.id))
+
+    Map.new(goals, fn goal ->
+      {total, done} = Map.get(counts, goal.id, {0, 0})
+      {goal.id, build_progress(total, done, goal.progress_manual)}
+    end)
+  end
+
+  def progress_map(_), do: %{}
+
+  # `{goal_id => {total, done}}` de las tasks VIVAS (archived == false) de esos
+  # goals. Una sola vuelta a la base, sin importar cuántos goals haya.
+  defp task_counts([]), do: %{}
+
+  defp task_counts(goal_ids) do
+    Repo.all(
+      from t in Task,
+        where: t.goal_id in ^goal_ids and t.archived == false,
+        group_by: t.goal_id,
+        select: {t.goal_id, count(t.id), filter(count(t.id), t.status == "done")}
+    )
+    |> Map.new(fn {goal_id, total, done} -> {goal_id, {total, done}} end)
+  end
+
+  defp build_progress(total, done, manual) do
     derived = if total == 0, do: 0, else: round(done * 100 / total)
 
     %{
@@ -240,8 +303,7 @@ defmodule Dran.Goals do
     }
   end
 
-  defp empty_progress(manual),
-    do: %{done: 0, total: 0, derived_percent: 0, manual: manual, percent: manual || 0}
+  defp empty_progress(manual), do: build_progress(0, 0, manual)
 
   # ── Internals ─────────────────────────────────────────────────────────────
 

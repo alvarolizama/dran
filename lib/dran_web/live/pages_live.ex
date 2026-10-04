@@ -150,12 +150,24 @@ defmodule DranWeb.PagesLive do
         form_id="page-new-form-#{@page_type}"
         submit_label={gettext("Create")}
       >
+        <%!-- El destino vive junto a la ✕: los radios apuntan al form del body
+        con el atributo HTML `form` (el header está fuera del `<form>`). --%>
+        <:header>
+          <.resource_scope_field
+            form={@form}
+            id="page-visibility-picker"
+            form_id={"page-new-form-#{@page_type}"}
+            compact
+          />
+        </:header>
+
         <.page_new_form
           form={@form}
           page_type={@page_type}
           workspace_id={@workspace_id}
           editor_id={"#{@page_type}-new-editor"}
           cancel_path={@back_path}
+          with_scope={false}
         />
       </.resource_modal>
     </Layouts.app>
@@ -369,11 +381,11 @@ defmodule DranWeb.PagesLive do
 
   def handle_event("share_with_user", %{"user_id" => user_id}, %{assigns: %{page: page}} = socket)
       when user_id != "" do
-    case Dran.Sharing.share_with_user("page", page.id, String.to_integer(user_id)) do
-      {:ok, :shared} ->
+    case Dran.Sharing.grant(page, :page, {:user, String.to_integer(user_id)}) do
+      {:ok, :shared, updated} ->
         {:noreply,
          socket
-         |> assign(:shares, Dran.Sharing.list_shares("page", page.id))
+         |> assign(page: updated, shares: Dran.Sharing.list_shares("page", page.id))
          |> put_flash(:info, gettext("Shared."))}
 
       {:error, _} ->
@@ -389,11 +401,11 @@ defmodule DranWeb.PagesLive do
         %{assigns: %{page: page}} = socket
       )
       when group_id != "" do
-    case Dran.Sharing.share_with_group("page", page.id, String.to_integer(group_id)) do
-      {:ok, :shared} ->
+    case Dran.Sharing.grant(page, :page, {:group, String.to_integer(group_id)}) do
+      {:ok, :shared, updated} ->
         {:noreply,
          socket
-         |> assign(:shares, Dran.Sharing.list_shares("page", page.id))
+         |> assign(page: updated, shares: Dran.Sharing.list_shares("page", page.id))
          |> put_flash(:info, gettext("Shared."))}
 
       {:error, _} ->

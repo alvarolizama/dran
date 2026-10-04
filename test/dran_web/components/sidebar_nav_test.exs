@@ -5,6 +5,12 @@ defmodule DranWeb.SidebarNavTest do
 
   defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
 
+  # El rótulo tal como aparece en el HTML renderizado: HEEx escapa el `&`, así
+  # que «Goals & Plans» llega al DOM como «Goals &amp; Plans».
+  defp rendered_msgid(msgid) do
+    msgid |> t() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+  end
+
   alias DranWeb.Layouts
 
   describe "sidebar_nav (instance pages — no workspace)" do
@@ -52,6 +58,21 @@ defmodule DranWeb.SidebarNavTest do
       p
     end
 
+    # El HTML del bloque que ABRE en `from` y cierra donde empieza `to`.
+    defp slice(html, from, to) do
+      html
+      |> String.split(from, parts: 2)
+      |> List.last()
+      |> String.split(to, parts: 2)
+      |> List.first()
+    end
+
+    # Los marcadores, en el orden dado (el DOM manda, no el texto suelto).
+    defp in_order?(html, strs) do
+      positions = Enum.map(strs, &pos(html, &1))
+      positions == Enum.sort(positions)
+    end
+
     # Posiciones de cada header de grupo (`<summary>`) en orden de DOM.
     defp summary_positions(html) do
       Regex.scan(~r/<summary/, html, return: :index)
@@ -66,30 +87,36 @@ defmodule DranWeb.SidebarNavTest do
       |> Enum.map(&(&1 |> String.replace(~r/<[^>]*>/, "") |> String.trim()))
     end
 
-    test "no Objetivos/Workflows links remain outside any group" do
+    test "las tres sub-secciones llevan rótulo y las vistas van juntas, en orden" do
       html = workspace_nav()
 
-      # Memory moved out of its own group: it now sits with the always-visible
-      # entries, so Knowledge base is the only labelled group left.
-      assert group_labels(html) == [t("Knowledge base")]
+      # El nav ya no tiene bloques planos: cada bloque es una sub-sección con su
+      # rótulo, en orden de DOM.
+      assert group_labels(html) == [
+               t("Views"),
+               rendered_msgid("Goals & Plans"),
+               t("Knowledge base")
+             ]
 
-      [first_summary | _rest] = summary_positions(html)
+      views_block = slice(html, ~s(data-nav-block="views"), ~s(data-nav-block="goals-plans"))
 
-      home_pos = pos(html, ~s(href="/"))
-      graph_pos = pos(html, ~s(href="/graph"))
-      journey_pos = pos(html, ~s(href="/journey"))
-      memory_pos = pos(html, ~s(href="/memory"))
-      refute html =~ ~s(href="/goals")
-      refute html =~ ~s(href="/workflows")
+      # Inicio → Grafo → Journey → Board, todos dentro de la sub-sección.
+      assert in_order?(views_block, [
+               ~s(href="/"),
+               ~s(href="/graph"),
+               ~s(href="/journey"),
+               ~s(href="/tasks")
+             ])
 
-      # Inicio → Grafo → Journey → Memory, todos antes del primer grupo
-      assert home_pos < graph_pos
-      assert graph_pos < journey_pos
-      assert journey_pos < memory_pos
-      assert memory_pos < first_summary
+      refute views_block =~ ~s(href="/workflows")
+
+      # Los objetivos y planes (Goals/Plans) y la memoria NO cuelgan de las vistas.
+      refute views_block =~ ~s(href="/goals")
+      refute views_block =~ ~s(href="/plans")
+      refute views_block =~ ~s(href="/memory")
     end
 
-    test "Clusters sits below Referencias inside Knowledge base" do
+    test "Clusters y Memory cierran Knowledge base, en ese orden" do
       html = workspace_nav()
 
       labels = group_labels(html)
@@ -98,18 +125,31 @@ defmodule DranWeb.SidebarNavTest do
 
       assert refs_pos = pos(html, ~s(href="/references"))
       assert clusters_pos = pos(html, ~s(href="/clusters"))
+      assert memory_pos = pos(html, ~s(href="/memory"))
 
-      # clusters sigue dentro de Knowledge base: después de references.
+      # clusters y Memory siguen dentro de Knowledge base: después de references.
       assert refs_pos < clusters_pos
+      assert clusters_pos < memory_pos
       assert Enum.at(summaries, kb_index) < refs_pos
+
+      # Ninguno abre sub-sección propia: el nav tiene tres, no cuatro.
+      assert length(summaries) == 3
     end
 
-    test "Inicio stays outside any group" do
+    test "Inicio abre la sub-sección de vistas" do
       html = workspace_nav()
+
+      views_pos = pos(html, ~s(data-nav-block="views"))
       [first_summary | _rest] = summary_positions(html)
 
-      home_pos = pos(html, ~s(href="/"))
-      assert home_pos < first_summary
+      # El rótulo de la sub-sección (su `<summary>`) abre el bloque, y el
+      # primer enlace es Inicio.
+      assert views_pos < first_summary
+
+      {home_pos, _len} =
+        :binary.match(html, ~s(href="/"), scope: {views_pos, byte_size(html) - views_pos})
+
+      assert first_summary < home_pos
     end
 
     test "active key highlights the right link" do
@@ -122,32 +162,45 @@ defmodule DranWeb.SidebarNavTest do
       assert anchor =~ "bg-primary/15 text-primary"
     end
 
-    test "Memory abre su propio bloque: el hueco del nav queda entre Journey y Memory" do
+    test "Goals y Plans van juntos y el hueco queda antes de Knowledge base" do
       html = workspace_nav()
 
       views_pos = pos(html, ~s(data-nav-block="views"))
-      memory_block_pos = pos(html, ~s(data-nav-block="memory"))
-      journey_pos = pos(html, ~s(href="/journey"))
-      memory_pos = pos(html, ~s(href="/memory"))
+      work_pos = pos(html, ~s(data-nav-block="goals-plans"))
+      kb_pos = pos(html, ~s(data-nav-block="knowledge-base"))
 
-      # Bloques hermanos dentro del nav (que los separa con gap-4): primero las
-      # vistas, después Memory, y el grupo Knowledge base al final.
-      assert views_pos < journey_pos
-      assert journey_pos < memory_block_pos
-      assert memory_block_pos < memory_pos
-      assert memory_pos < pos(html, "<summary")
+      # Bloques hermanos, en orden: vistas → objetivos y planes → Knowledge base. El
+      # hueco del nav es el borde antes del knowledge base (los bloques se separan
+      # con el gap-4 del contenedor).
+      assert views_pos < work_pos
+      assert work_pos < kb_pos
 
-      # Memory no comparte bloque con las vistas.
-      {summary_pos, _len} =
-        :binary.match(html, "<summary",
-          scope: {memory_block_pos, byte_size(html) - memory_block_pos}
-        )
+      work_block =
+        slice(html, ~s(data-nav-block="goals-plans"), ~s(data-nav-block="knowledge-base"))
 
-      memory_block = binary_part(html, memory_block_pos, summary_pos - memory_block_pos)
+      # Los dos, y en ese orden.
+      assert in_order?(work_block, [~s(href="/goals"), ~s(href="/plans")])
 
-      assert memory_block =~ ~s(href="/memory")
-      refute memory_block =~ ~s(href="/journey")
-      refute memory_block =~ ~s(href="/graph")
+      # La sub-sección de objetivos y planes lleva SU rótulo (uno solo) y ni las
+      # vistas ni los tipos de página se cuelan dentro.
+      assert length(summary_positions(work_block)) == 1
+      assert work_block =~ rendered_msgid("Goals & Plans")
+      refute work_block =~ t("Views")
+      refute work_block =~ t("Knowledge base")
+      refute work_block =~ ~s(href="/journey")
+      refute work_block =~ ~s(href="/graph")
+      refute work_block =~ ~s(href="/tasks")
+      # Memory no vive acá: cierra Knowledge base.
+      refute work_block =~ ~s(href="/memory")
+
+      # Ninguno de los dos abre bloque propio; el knowledge base sigue después,
+      # con su propia sub-sección etiquetada y Memory al final.
+      refute html =~ ~s(data-nav-block="memory")
+
+      kb_block = slice(html, ~s(data-nav-block="knowledge-base"), "</nav>")
+      assert length(summary_positions(kb_block)) == 1
+      assert kb_block =~ t("Knowledge base")
+      assert kb_block =~ ~s(href="/memory")
     end
   end
 

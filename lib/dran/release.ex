@@ -5,9 +5,8 @@ defmodule Dran.Release do
 
   All public functions are safe to call from a release container:
 
-    * `setup/0`         — create DB (if missing) → migrate → seed the instance row → production seed. Idempotent.
+    * `setup/0`         — create DB (if missing) → migrate → seed the instance row. Idempotent, and it creates NO account.
     * `migrate/0`       — run pending migrations.
-    * `seed/0`          — run priv/repo/seeds_prod.exs (opt-in first owner). Safe on every deploy.
     * `seed_demo/0`     — run priv/repo/seeds.exs (full demo content). Dev/demo only: it refuses to run inside a release.
     * `seed_context/0`  — create the instance row only. Safe for prod.
     * `rollback/2`      — roll a single repo back to a given version.
@@ -24,9 +23,11 @@ defmodule Dran.Release do
   @start_timeout 30_000
 
   @doc """
-  Idempotent first-run setup: create the database if it does not exist,
-  run any pending migrations, seed the instance row and run the production seed
-  (opt-in first owner).
+  Idempotent first-run setup: create the database if it does not exist, run any
+  pending migrations and seed the instance row.
+
+  It creates **no account** — the owner comes from the first-run `/setup` screen
+  (`DranWeb.SessionController.setup/2`), never from an environment variable.
 
   Safe to invoke on every deploy — it short-circuits when the database
   already exists, and migrations are themselves idempotent.
@@ -39,7 +40,6 @@ defmodule Dran.Release do
     create()
     migrate()
     seed_context()
-    seed()
     :ok
   end
 
@@ -135,39 +135,10 @@ defmodule Dran.Release do
   end
 
   @doc """
-  Run the **production seed**, `priv/repo/seeds_prod.exs`, inside an active repo
-  connection.
-
-  The file is OPT-IN and idempotent: it creates the instance owner only when
-  `DRAN_ADMIN_PASSWORD` is set, and without that variable it creates nothing —
-  the first account comes in through `/setup`. `setup/0` calls it on every
-  deploy, so it must stay safe against a database that already has data.
-
-  Never point it at `priv/repo/seeds.exs`: that is the development demo dataset
-  and it creates content with public passwords. `seed_demo/0` is the only way in
-  and it refuses to run inside a release.
-
-  `Ecto.Migrator.with_repo/2` starts the repo (and only the repo) for the
-  duration of the run: during `bin/dran eval` the supervision tree is not up.
-  """
-  def seed do
-    eval_seed_file(seeds_file())
-  end
-
-  @doc """
-  Absolute path of the seed `seed/0` evaluates.
-
-  Public so a test can assert it points at the production seed and not at the
-  development one — confusing the two is what sows demo data in production.
-  """
-  @spec seeds_file() :: String.t()
-  def seeds_file, do: Application.app_dir(@app, "priv/repo/seeds_prod.exs")
-
-  @doc """
   Run the **demo** dataset, `priv/repo/seeds.exs`, inside an active repo
   connection.
 
-  Demo content (notes, concepts, relations, accounts with public passwords) is
+  Demo content (notes, concepts, relations — no accounts, no credentials) is
   for a development instance. It REFUSES to run inside a release: a release has
   no `MIX_ENV` and its config is `:prod`, so there is no legitimate case for
   seeding demo data through it.
@@ -178,7 +149,7 @@ defmodule Dran.Release do
   def seed_demo do
     if release?() do
       raise "refusing to run the demo seed (priv/repo/seeds.exs) inside a release: " <>
-              "use Dran.Release.seed/0 (priv/repo/seeds_prod.exs) instead"
+              "a release seeds only the instance row (Dran.Release.setup/0)"
     end
 
     eval_seed_file(Application.app_dir(@app, "priv/repo/seeds.exs"))

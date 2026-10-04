@@ -127,7 +127,7 @@ defmodule Dran.Sharing do
   returns the existing row.
   """
   def share_with_user(resource_type, resource_id, user_id)
-      when resource_type in ~w(page memory collection report event) and is_integer(user_id) do
+      when is_binary(resource_type) and is_integer(user_id) do
     %ContentShare{}
     |> ContentShare.changeset(%{
       resource_type: resource_type,
@@ -143,7 +143,7 @@ defmodule Dran.Sharing do
 
   @doc "Share `resource` with every member of a group (one share row)."
   def share_with_group(resource_type, resource_id, group_id)
-      when resource_type in ~w(page memory collection report event) and is_integer(group_id) do
+      when is_binary(resource_type) and is_integer(group_id) do
     %ContentShare{}
     |> ContentShare.changeset(%{
       resource_type: resource_type,
@@ -198,6 +198,44 @@ defmodule Dran.Sharing do
   # knowledge_pages 8 (todas `private`), memories 0, collections 0, reports 0.
   # No queda nada que backfillear; una migración inventada sería peor que
   # ninguna.
+
+  @doc """
+  Agrega un grant Y fija `visibility = "shared"` en la MISMA transacción.
+
+  Un grant con la fila en `private` es INERTE para la política de lectura
+  (`ContentVisibility.filter/3` exige `visibility == "shared"` Y el `EXISTS` del
+  share), así que agregarlo suelto —lo que hacían `share_with_user/3` y
+  `share_with_group/3` por separado— es una mentira silenciosa: el invitado no
+  lee y nadie se entera. Acá las dos cosas viajan juntas.
+
+  `target` es `{:user, id}` o `{:group, id}`; `resource_type` sale del
+  vocabulario de `resource_types/0`.
+  """
+  @spec grant(struct(), atom() | binary(), tuple()) ::
+          {:ok, :shared, struct()} | {:error, term()}
+  def grant(resource, resource_type, {:user, user_id}) when is_integer(user_id) do
+    grant_with(resource, resource_type, fn type, id -> share_with_user(type, id, user_id) end)
+  end
+
+  def grant(resource, resource_type, {:group, group_id}) when is_integer(group_id) do
+    grant_with(resource, resource_type, fn type, id -> share_with_group(type, id, group_id) end)
+  end
+
+  def grant(_resource, _resource_type, target),
+    do: {:error, "invalid grant target #{inspect(target)}: expected {:user, id} or {:group, id}"}
+
+  defp grant_with(resource, resource_type, share) do
+    Repo.transaction(fn ->
+      case share.(to_string(resource_type), resource.id) do
+        {:ok, :shared} -> put_visibility(resource, "shared")
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+    |> case do
+      {:ok, updated} -> {:ok, :shared, updated}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
   @doc """
   Traduce el destino de UNA escritura (`scope`) a la `visibility` de la fila

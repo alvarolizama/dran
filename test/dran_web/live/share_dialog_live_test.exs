@@ -122,6 +122,17 @@ defmodule DranWeb.ShareDialogLiveTest do
       {:ok, view, html} = live(conn, ~p"/notes?new=true")
 
       assert has_element?(view, "#page-visibility-picker")
+
+      # El control vive en el HEADER del modal, junto a la ✕: los radios lo
+      # apuntan con el atributo HTML `form` (el header está fuera del form).
+      assert has_element?(view, "#page-resource-modal-header-actions #page-visibility-picker")
+      refute has_element?(view, "#page-new-form-note #page-visibility-picker")
+
+      assert has_element?(
+               view,
+               "#page-resource-modal-header-actions input[name='page[visibility]'][form='page-new-form-note']"
+             )
+
       assert html =~ "Private"
       assert html =~ "Public"
       assert html =~ "Shared"

@@ -57,3 +57,8 @@ mise.toml
 .riel/
 .spike/
 __pycache__/
+
+# Artefactos locales de las sesiones: el cookie jar de curl (lleva credenciales
+# de la instancia) y el symlink que el runner de Hermes crea hacia /skills.
+sc.txt
+.hermes/

@@ -627,6 +627,7 @@ defmodule DranWeb.MarkdownEditorComponents do
       <div class="flex flex-col gap-1.5" data-checklist-rows>
         <div
           :for={{item, index} <- Enum.with_index(@items)}
+          id={"#{@id}-row-#{index}"}
           class="flex items-center gap-2"
           data-checklist-row
         >
