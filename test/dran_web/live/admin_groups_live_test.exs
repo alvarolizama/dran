@@ -212,6 +212,14 @@ defmodule DranWeb.AdminGroupsLiveTest do
     assert cuerpo =~ "max-h-[calc(100vh-10rem)]"
     assert cuerpo =~ "overflow-y-auto"
 
+    # La fila «Email + Add»: el submit va en un wrapper con el mismo cierre que
+    # el `<.input>` (`mb-4` = los 4px del fieldset + su `mb-3`) para que
+    # `items-end` deje los dos fondos a la misma altura — medido: con el `mb-2`
+    # a ojo el botón quedaba 8px más abajo.
+    fila = view |> element("#group-invite-form") |> render()
+    assert fila =~ ~s|class="mb-4"|
+    refute fila =~ "mb-2"
+
     view
     |> form("#group-invite-form", %{"invite" => %{"email" => user.email}})
     |> render_submit()

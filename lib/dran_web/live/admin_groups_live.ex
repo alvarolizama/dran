@@ -536,6 +536,12 @@ defmodule DranWeb.AdminGroupsLive do
               </p>
 
               <%!-- Add by email (works for anyone, no need to search first) --%>
+              <%!-- El `items-end` alinea FONDOS, y el `<.input>` cierra con el fieldset
+              del componente — 4px de padding abajo + `mb-3` = 16px por debajo
+              del input (medido: con el `mb-2` a ojo el botón quedaba 8px más
+              abajo). El wrapper del botón carga esos mismos 16px (`mb-4`) para
+              que los dos fondos caigan a la misma altura. Botón: el
+              `btn btn-primary btn-sm` que §C4.1 pide para un submit. --%>
               <.form
                 for={@invite_form}
                 id="group-invite-form"
@@ -550,14 +556,16 @@ defmodule DranWeb.AdminGroupsLive do
                     placeholder="ana@example.com"
                   />
                 </div>
-                <button
-                  type="submit"
-                  class="btn btn-primary btn-sm mb-2 transition-colors active:scale-95"
-                  phx-disable-with={gettext("Adding…")}
-                >
-                  <.icon name="hero-plus" class="size-4" />
-                  {gettext("Add")}
-                </button>
+                <div class="mb-4">
+                  <button
+                    type="submit"
+                    class="btn btn-primary btn-sm transition-colors active:scale-95"
+                    phx-disable-with={gettext("Adding…")}
+                  >
+                    <.icon name="hero-plus" class="size-4" />
+                    {gettext("Add")}
+                  </button>
+                </div>
               </.form>
 
               <form id="group-user-search-form" phx-change="search_members" class="relative">

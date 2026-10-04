@@ -1073,7 +1073,11 @@ Implementación real del patrón **Commons C8** en Dran:
   el bloque va adentro del **modal compacto** del molde (`<.modal>`, §C7.1): la
   lista, los candidatos y las dos puertas juntas tapaban la página, así que ahí
   el bloque es un diálogo con el cuerpo acotado al viewport (`max-h` + scroll
-  adentro). El panel del workspace lo mantiene EN su pestaña *Users*.
+  adentro). El panel del workspace lo mantiene EN su pestaña *Users*. La fila de
+  alta por correo (`#\*-invite-form`) va con `flex items-end` y el submit en un
+  wrapper con el cierre del `<.input>` (`mb-4` = los 4px del fieldset + su
+  `mb-3`) — medido: con el `mb-2` a ojo el botón quedaba 8px por debajo del
+  input. Es la regla de esta clase de fila (campo + submit inline).
 - Los colores de chip/icono/badge de un resultado **salen del dato del tipo**
   (`Workspace.page_type_color/2`), nunca de una tabla de casos por slug (§T8).
 
