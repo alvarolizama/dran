@@ -97,6 +97,24 @@ defmodule Dran.SharingTest do
 
       assert Sharing.group_ids_for(reader.id) == []
     end
+
+    test "add by email: la cuenta existente entra, lo desconocido se rechaza", %{reader: reader} do
+      {:ok, group} = Sharing.create_group(%{name: "Por correo #{uniq()}"})
+
+      # El email viene del formulario: espacios alrededor incluidos.
+      assert {:ok, _} = Sharing.add_group_member_by_email(group, "  #{reader.email} ")
+      assert Sharing.group_ids_for(reader.id) == [group.id]
+
+      # Repetir no duplica; se reporta.
+      assert {:error, :already_member} = Sharing.add_group_member_by_email(group, reader.email)
+
+      # Dran no invita por correo: sin cuenta, no hay membresía.
+      assert {:error, :user_not_found} =
+               Sharing.add_group_member_by_email(group, "nadie-#{uniq()}@example.com")
+
+      assert {:error, :user_not_found} = Sharing.add_group_member_by_email(group, "")
+      assert length(Sharing.list_group_members(group.id)) == 1
+    end
   end
 
   describe "shares" do

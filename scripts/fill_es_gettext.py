@@ -31,7 +31,6 @@ ES = {
     "Account settings": "Ajustes de cuenta",
     "Active": "Activo",
     "Add a custom page type": "Añadir un tipo de página personalizado",
-    "Add a user…": "Agregar un usuario…",
     "Add page type": "Añadir tipo de página",
     "Adding…": "Añadiendo…",
     "Admin: settings and members, plus content.": "Admin: ajustes y miembros, además del contenido.",
@@ -337,6 +336,20 @@ ES = {
     "Title A-Z": "Título A-Z",
     "Order by": "Ordenar por",
     "No matches for this filter.": "Sin resultados con este filtro.",
+    # Panel de miembros de /admin/groups: el MISMO molde "Add users" del panel
+    # del workspace (lista + dos puertas para agregar). El merge de gettext
+    # adivina "Remove from group" → "Quitar del workspace" (fuzzy, y gettext
+    # ignora lo fuzzy): esas dos entradas TIENEN que estar acá o la UI queda en
+    # inglés con un catálogo que parece traducido.
+    "Add an existing account to this group. People must already have a Dran account — there is no invitation email, membership is granted as soon as you add them.": "Agrega a este grupo una cuenta existente. La persona ya debe tener una cuenta de Dran — no hay correo de invitación: la membresía entra en cuanto la agregas.",
+    "Everyone on this instance is already in this group.": "Todos en esta instancia ya están en este grupo.",
+    "Remove %{user} from this group?": "¿Quitar a %{user} de este grupo?",
+    "Remove from group": "Quitar del grupo",
+    "That user is already in this group.": "Ese usuario ya está en este grupo.",
+    "%{email} is now a member of this group": "%{email} ya es miembro de este grupo",
+    # Estaba como identidad inglesa en el catálogo: el buscador del panel de
+    # miembros ahora lo dice en español.
+    "No users match your search.": "Ningún usuario coincide con tu búsqueda.",
 }
 
 STR = re.compile(r'"((?:[^"\\]|\\.)*)"')

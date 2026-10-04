@@ -62,6 +62,31 @@ defmodule Dran.Sharing do
     |> Repo.insert(on_conflict: :nothing, conflict_target: [:user_group_id, :user_id])
   end
 
+  @doc """
+  Agrega al grupo la cuenta con ese `email` — la puerta "agregar por correo"
+  del panel de miembros.
+
+  Igual que invitar a un workspace: la persona ya debe tener cuenta (no hay
+  correo de invitación ni estado pendiente), así que un email desconocido es
+  `{:error, :user_not_found}` y no crea nada. Un miembro existente devuelve
+  `{:error, :already_member}` en vez de duplicar o de fallar en silencio.
+  """
+  def add_group_member_by_email(%UserGroup{} = group, email) when is_binary(email) do
+    case email |> String.trim() |> Dran.Accounts.get_user_by_email() do
+      nil ->
+        {:error, :user_not_found}
+
+      user ->
+        if group_member?(group.id, user.id) do
+          {:error, :already_member}
+        else
+          add_group_member(group, user.id)
+        end
+    end
+  end
+
+  def add_group_member_by_email(_group, _email), do: {:error, :user_not_found}
+
   def remove_group_member(%UserGroup{} = group, user_id) do
     Repo.delete_all(
       from(m in UserGroupMember,

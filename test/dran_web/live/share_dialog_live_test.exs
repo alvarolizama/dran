@@ -161,7 +161,8 @@ defmodule DranWeb.ShareDialogLiveTest do
   end
 
   describe "/admin/groups" do
-    test "creates a group, adds and removes a member, deletes the group", %{conn: conn} do
+    test "creates a group, adds members through the two doors, removes one, deletes the group",
+         %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/admin/groups")
       assert html =~ "Groups"
 
@@ -174,36 +175,110 @@ defmodule DranWeb.ShareDialogLiveTest do
       assert html =~ "Equipo"
       group = hd(Sharing.list_groups())
 
-      # The member user must exist BEFORE the panel lists it in the select.
+      # The users must exist BEFORE the panel can list them.
       {:ok, reader2} =
-        Accounts.create_user(%{email: "sd-member-#{u()}@example.com", api_token: "t#{u()}"})
+        Accounts.create_user(%{
+          email: "sd-member-#{u()}@example.com",
+          name: "Miembro Buscado",
+          api_token: "t#{u()}"
+        })
 
-      # Open the members panel.
-      html = render_click(view, "manage_members", %{"id" => Integer.to_string(group.id)})
-      assert html =~ "group-add-member-form"
+      {:ok, invited} =
+        Accounts.create_user(%{email: "sd-invited-#{u()}@example.com", api_token: "t#{u()}"})
 
+      # Open the members panel: the member list plus the "Add users" block.
+      render_click(view, "manage_members", %{"id" => Integer.to_string(group.id)})
+      assert has_element?(view, "#group-members-panel")
+      assert has_element?(view, "#group-invite-form")
+      assert has_element?(view, "#group-user-search-form")
+
+      # The one-shot select is gone: adding is the search row or the email.
+      refute has_element?(view, "#group-add-member-form")
+
+      # The search filters the candidate list down to the matching account.
       view
-      |> form("#group-add-member-form", %{
+      |> form("#group-user-search-form", %{"q" => "Miembro Buscado"})
+      |> render_change()
+
+      assert has_element?(view, "#group-add-#{reader2.id}")
+      assert has_element?(view, "#group-candidate-#{reader2.id}")
+
+      # One click on the row adds them.
+      render_click(view, "add_member", %{
         "group_id" => Integer.to_string(group.id),
         "user_id" => Integer.to_string(reader2.id)
       })
-      |> render_submit()
 
-      html = render(view)
-      assert html =~ reader2.email
+      assert has_element?(view, "#group-member-#{reader2.id}")
       assert Sharing.group_ids_for(reader2.id) == [group.id]
 
-      # Remove the member.
+      # A member stops being a candidate — and the filter SURVIVES the add.
+      refute has_element?(view, "#group-candidate-#{reader2.id}")
+
+      # Second door: by email, for an account whose address you already know.
+      view
+      |> form("#group-invite-form", %{"invite" => %{"email" => invited.email}})
+      |> render_submit()
+
+      assert Sharing.group_ids_for(invited.id) == [group.id]
+      assert has_element?(view, "#group-member-#{invited.id}")
+
+      # Remove the searched member.
       render_click(view, "remove_member", %{
         "group_id" => Integer.to_string(group.id),
         "user_id" => Integer.to_string(reader2.id)
       })
 
       assert Sharing.group_ids_for(reader2.id) == []
+      refute has_element?(view, "#group-member-#{reader2.id}")
 
       # Delete the group.
       render_click(view, "delete_group", %{"id" => Integer.to_string(group.id)})
       assert Sharing.list_groups() == []
+    end
+
+    test "the email door fails closed: unknown account, then already a member", %{conn: conn} do
+      {:ok, group} = Sharing.create_group(%{name: "Sin cuenta #{u()}"})
+      {:ok, member} = Accounts.create_user(%{email: "sd-dup-#{u()}@example.com"})
+
+      {:ok, view, _html} = live(conn, ~p"/admin/groups")
+      render_click(view, "manage_members", %{"id" => Integer.to_string(group.id)})
+
+      # No account with that email: flash, and nothing is written.
+      html =
+        view
+        |> form("#group-invite-form", %{"invite" => %{"email" => "ghost-#{u()}@example.com"}})
+        |> render_submit()
+
+      assert html =~ "No account with that email exists on this instance."
+      assert Sharing.list_group_members(group.id) == []
+
+      # El correo vacío cae en el mismo fail-closed (el submit sin escribir nada).
+      html =
+        view
+        |> form("#group-invite-form", %{"invite" => %{"email" => "  "}})
+        |> render_submit()
+
+      assert html =~ "No account with that email exists on this instance."
+
+      # Y un evento sin `user_id` — el submit del select vacío que había antes —
+      # no agrega a nadie ni tira el proceso.
+      render_click(view, "add_member", %{})
+      assert Sharing.list_group_members(group.id) == []
+
+      # An account that IS a member already: reported, not duplicated.
+      {:ok, _} = Sharing.add_group_member(group, member.id)
+
+      html =
+        view
+        |> form("#group-invite-form", %{"invite" => %{"email" => member.email}})
+        |> render_submit()
+
+      assert html =~ "That user is already in this group."
+
+      assert Sharing.list_group_members(group.id) == [
+               %{id: member.id, email: member.email, name: member.name}
+             ]
     end
 
     test "non-admins are rejected by the admin pipeline", %{conn: conn} do

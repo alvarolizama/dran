@@ -124,6 +124,41 @@ Touching the molde lands in: `resource_components.ex`, BOTH LiveViews
 catalog (extract + `scripts/fill_es_gettext.py`) — every new label needs its
 Spanish string or `i18n_test` fails.
 
+## Agregar gente a un grupo (N valores con búsqueda) — el bloque "Add users" es UNO
+
+"Seguí el mismo patrón de UX para agregar usuarios en grupos" = replicar el
+bloque `Add users` del panel de miembros del workspace
+(`workspace_settings_live.ex`, `users_section/1`) en el otro panel; NO inventar un
+combobox ni cambiar el `select` por otro `select`. El molde es: lista de miembros
+arriba (avatar con inicial, email + nombre, `✕` con `data-confirm` y `title`) y
+abajo dos puertas — el correo conocido (`#*-invite-form`: `email` + Add con
+`phx-disable-with`) y el buscador (`#*-user-search-form`, `phx-change`) que filtra
+la lista LOCAL (`@all_users` menos los miembros, `Enum.take(5)`; vacío = «No users
+match your search.») y pinta cada candidato en una fila con su propio botón `Add`
+(`phx-click`, `phx-value-user_id`).
+
+Aterriza SIEMPRE en cuatro lugares: el LiveView del panel, SU test
+(`share_dialog_live_test.exs` para `/admin/groups`), el contexto si hace falta una
+puerta nueva (`Sharing.add_group_member_by_email/2`: la cuenta debe existir —
+`{:error, :user_not_found}` / `{:error, :already_member}` — con test en
+`test/dran/sharing_test.exs`) y el catálogo es (`mix gettext.extract --merge` +
+`scripts/fill_es_gettext.py`), más la entrada correspondiente en DESIGN §T4.
+
+Trampas medidas:
+
+- **El filtro tiene que SOBREVIVIR al alta y al quitar.** El handler viejo
+  refrescaba reusando `handle_event("manage_members", …)`, y eso limpia la
+  búsqueda: buscás «Ana», agregás, y la lista vuelve a los primeros 5. Refrescá
+  con un helper `assign_members/2` (miembros + `all_users`) y dejá el reset de la
+  búsqueda SOLO al abrir/cambiar de panel.
+- **`mix gettext.extract --merge` adivina las cadenas nuevas por parecido** y las
+  deja `fuzzy` (`"Remove from group"` → «Quitar del workspace»). Gettext IGNORA lo
+  fuzzy, así que sin la entrada en el dict `ES` del script la UI queda en inglés
+  con un catálogo que *parece* traducido — y `i18n_test` pasa igual, porque solo
+  exige un msgstr no vacío.
+- Al retirar un control, borrá su msgid del dict `ES` (`"Add a user…"` murió con el
+  select) y re-corré el script.
+
 ## Duplicated renderings ("estos quitarlos, solo usar los de abajo")
 
 When the comment points at one of TWO renderings of the same data (a plan's steps

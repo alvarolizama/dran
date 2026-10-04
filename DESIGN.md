@@ -1049,6 +1049,16 @@ Implementación real del patrón **Commons C8** en Dran:
   referencia de Dran; el `select-xs` del header de §C12.2 no aplica (§T2).
 - **Búsqueda de la sidebar:** `#sidebar-search-form` — form GET a `/search` con
   `name="q"` y la pista `⌘K`.
+- **Bloque "Add users" (N personas a un grupo o a un workspace):** el molde que
+  comparten `/admin/groups` (`admin_groups_live.ex`) y el panel de miembros del
+  workspace (`workspace_settings_live.ex`, pestaña *Users*). No es el combobox de
+  §C8.4: lista de miembros arriba (avatar + ✕ con `data-confirm`) y abajo **dos
+  puertas** — el correo conocido (`#\*-invite-form`: `email` + *Add*, fail-closed
+  si la cuenta no existe) y el buscador (`#\*-user-search-form`, `phx-change`)
+  que filtra la lista LOCAL de usuarios y pinta candidatos en filas con un *Add*
+  propio (`Enum.take(5)`, los ya miembros excluidos; sin coincidencias =
+  «No users match your search.»). El filtro **sobrevive** al alta y al quitar:
+  los handlers refrescan los datos, nunca reabren el panel.
 - Los colores de chip/icono/badge de un resultado **salen del dato del tipo**
   (`Workspace.page_type_color/2`), nunca de una tabla de casos por slug (§T8).
 
