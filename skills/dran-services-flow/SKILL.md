@@ -108,6 +108,47 @@ flowchart TD
 | `409` + `code: not_connected` + `connect_url` | the connection is not `ACTIVE` | show the link, then connect |
 | `wait` → `active: false` | the consent was never completed | re-emit a NEW link and say so |
 
+## Cuando «Connect» no hace nada en la superficie web
+
+Síntoma: en `/services` la tarjeta muestra el catálogo y el estado (`Not
+connected`), pero apretar **Connect** no lleva a ninguna parte — el socket se
+cae (la página queda sin responder o se recarga) y NO hay flash con `code:`.
+
+Causa vista (dran_dev, 2026-10-04): **el esquema de la base quedó desfasado** —
+`schema_migrations` tiene la versión de una migración aplicada y su tabla no
+existe. La lectura de la sesión (`Dran.Services.ensure_session/1` →
+`Session.get_by_user/1`) revienta con `Postgres 42P01 relation
+"service_sessions" does not exist` DENTRO del `handle_event`, así que no hay
+`{:error, reason}` que atrapar: el proceso del LiveView se muere.
+
+Diagnóstico (sin tocar código):
+
+```bash
+psql "$DATABASE_URL" -Atc "select count(*) from information_schema.tables where table_name='service_sessions';"  # esperado 1
+psql "$DATABASE_URL" -Atc "select count(*) from schema_migrations where version=20261004045120;"                 # 1 + tabla faltante = drift
+```
+
+Arreglo — borrar la fila huérfana y volver a migrar (la migración es aditiva: se
+re-crea la tabla, no se pierde nada):
+
+```bash
+psql "$DATABASE_URL" -Atc "delete from schema_migrations where version=20261004045120;"
+mix ecto.migrate
+```
+
+Verificación del camino real, sin credenciales de UI: un script con
+`MIX_ENV=dev mix run --no-start` que levante `Dran.Settings`
+(`Supervisor.start_link([Dran.Settings], …)` — la ETS la posee su Agent),
+`Dran.Repo` y `:req`, y llame `Dran.Services.ensure_session(1)` +
+`Dran.Services.connect_link(1, "gmail", "http://localhost:4000/services/callback")`
+→ esperado `{:ok, %{redirect_url: …, expires_in: 600}}`. (Sin el Endpoint
+levantado, `callback_url/0` no resuelve: pasá la callback a mano.) Para cerrar,
+comparar la lista de tablas de dev contra `dran_test` (migrada de cero):
+`comm -3` sin diferencias = no queda drift.
+
+**La suite no puede ver esto**: los tests migran su propia base y el vendor pasa
+por `Req.Test`. Es estado del entorno, no del handler — no busques el bug ahí.
+
 ## Pitfalls
 
 - **Inventing `dran_gmail_*` (or any per-service tool).** The catalog is data:
