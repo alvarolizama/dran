@@ -55,6 +55,9 @@ provides_tools:
   # Goals, tasks y planes (contrato de superficies, W2): el contenedor de trabajo,
   # la captura rápida y el checklist. Cada uno es un cliente delgado del REST
   # (/api/goals, /api/tasks, /api/plans, /api/capture, /api/checklist/toggle).
+  # `dran_list_groups` es el descubrimiento del destino: los grupos del dueño de
+  # la credencial ([{slug, name}]), para elegir uno por NOMBRE.
+  - dran_list_groups
   - dran_list_goals
   - dran_get_goal
   - dran_create_goal

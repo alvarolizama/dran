@@ -363,12 +363,15 @@ canónico; el slug, el atajo legible). Un recurso fuera del alcance del lector e
 | PUT | `/api/plans/:slug` | write | Actualizar campos (**nunca** el checklist: tiene su puerta) |
 | PUT | `/api/plans/:slug/checklist` | write | Reemplaza el array ordenado de pasos |
 | DELETE | `/api/plans/:slug` | write | Borrar el plan y sus aristas |
+| GET | `/api/groups` | read | Tus grupos: `[{slug, name}]` — las membresías del lector (elegir el destino por nombre) |
 | POST | `/api/checklist/toggle` | write | Tacha/destacha UN ítem: `{target: "plan"\|"task", id, index\|text}` |
 
 **El destino de una escritura** se declara con `scope` — `"private"` (default),
 `"public"` o `{"group": "<slug>"}` — y el servidor lo traduce a `visibility` +
 `content_shares` validando la membresía y fallando cerrado con `422`. No es
-estado de ninguna credencial y el cliente **nunca** declara lectura.
+estado de ninguna credencial y el cliente **nunca** declara lectura. El grupo se
+elige por **nombre** con `GET /api/groups` (`[{slug, name}]` de tus membresías):
+el slug es lo que después viaja en el `scope`.
 
 **El destino de una task** es su goal: la task NO declara visibilidad (la hereda
 por join). Moverla a un goal que el lector no puede leer es `404` y no mueve la

@@ -135,6 +135,12 @@ def _load_dran_config(hermes_home: str) -> dict:
     # nothing by it and the plugin sends it nowhere. Kept so old config files
     # load without edits.
     config["workspace"] = str(config.get("workspace") or DEFAULT_WORKSPACE).strip()
+    # El destino por defecto del perfil: los campos «Write scope» / «Group slug»
+    # del panel se guardan en el MISMO config.json que el runtime lee, así que
+    # acá se normalizan (vocabulario cerrado) y el cliente los usa en las ALTAS.
+    scope = str(config.get("scope") or "private").strip().lower()
+    config["scope"] = scope if scope in ("private", "public", "group") else "private"
+    config["scope_group"] = str(config.get("scope_group") or "").strip()
     config["auto_recall"] = bool(config.get("auto_recall", True))
     config["auto_capture"] = bool(config.get("auto_capture", True))
     try:
@@ -174,9 +180,15 @@ class _DranClient:
     """
 
     def __init__(self, base_url: str, api_key: str, workspace: str = "",
-                 agent_identity: str = "", timeout: float = REQUEST_TIMEOUT):
+                 agent_identity: str = "", timeout: float = REQUEST_TIMEOUT,
+                 default_scope: str = "private", default_group: str = ""):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        # El destino por defecto del PERFIL (panel: «Write scope» / «Group slug»).
+        # Lo usan SÓLO las altas: una edición sin `scope` no mueve el destino
+        # (el servidor sólo re-traduce cuando la petición lo declara).
+        self.default_scope = (default_scope or "private").strip().lower()
+        self.default_group = (default_group or "").strip()
         self.workspace = workspace
         self.agent_identity = agent_identity
         self.timeout = timeout
@@ -451,14 +463,36 @@ class _DranClient:
     # su slug) y NUNCA como estado del cliente. El uuid es la dirección canónica
     # y el slug el atajo legible: los dos viajan en el mismo segmento.
 
-    @staticmethod
-    def _goal_scope(scope: str = "", group: str = "") -> Any:
-        """El `scope` de la API: string, o `{"group": slug}` cuando hay grupo."""
+    def _goal_scope(self, scope: str = "", group: str = "", use_default: bool = False) -> Any:
+        """El `scope` de la API: string, o `{"group": slug}` cuando hay grupo.
+
+        La declaración de la HERRAMIENTA se toma como un todo: si trae `scope` o
+        `group`, eso manda y el default del perfil no se mezcla. El default
+        (`self.default_scope` / `self.default_group`, del panel) aplica SÓLO
+        cuando la herramienta no declara destino — y sólo en las ALTAS
+        (`use_default=True`). Un `group` declarado gana sobre el string, y un
+        grupo sin slug NO cae a `private` en silencio: viaja como está y el
+        servidor lo rechaza (422, W6/P20).
+        """
+        scope = (scope or "").strip()
         group = (group or "").strip()
+
+        if not scope and not group and use_default:
+            scope, group = self.default_scope, self.default_group
+
         if group:
             return {"group": group}
-        scope = (scope or "").strip()
         return scope or None
+
+    def list_groups(self) -> list:
+        """Los grupos del dueño de la credencial: `[{slug, name}]`.
+
+        Es lo que permite elegir el destino por NOMBRE (`GET /api/groups` devuelve
+        las membresías del lector, no el catálogo de la instancia) y después
+        escribir con `group=<slug>`.
+        """
+        data = self.request("GET", "/api/groups")
+        return data.get("data", []) if isinstance(data, dict) else []
 
     def list_goals(self, status: str = "", limit: int = 50) -> list:
         from urllib.parse import urlencode
@@ -721,6 +755,8 @@ class DranMemoryProvider(MemoryProvider):
             self._config["api_key"],
             self._config["workspace"],
             agent_identity=self._agent_identity,
+            default_scope=self._config["scope"],
+            default_group=self._config["scope_group"],
         )
         # The memory workspace is a LOCAL choice (dran_memory.json). The
         # background probe validates it against the server: if the key cannot
@@ -1165,6 +1201,8 @@ def _client_for(ctx) -> Optional[_DranClient]:
         config.get("base_url") or DEFAULT_BASE_URL,
         api_key,
         config.get("workspace") or DEFAULT_WORKSPACE,
+        default_scope=str(config.get("scope") or "private"),
+        default_group=str(config.get("scope_group") or ""),
     )
 
 
@@ -1447,7 +1485,13 @@ def _tool_schemas() -> List[Dict[str, Any]]:
         # (/api/goals, /api/tasks, /api/plans). El destino de una escritura se
         # declara con `scope` (`private` | `public`) o con `group` (el slug del
         # grupo donde el dueño es miembro) — se valida server-side y falla
-        # cerrado con 422.
+        # cerrado con 422. Sin destino en una ALTA se aplica el default del
+        # perfil («Write scope» / «Group slug» del panel).
+        {
+            "name": "dran_list_groups",
+            "description": "List the groups the agent's owner belongs to (name + slug). Use it to pick a destination BEFORE writing with group scope: the slug is what `group` takes.",
+            "parameters": {"type": "object", "properties": {}},
+        },
         {
             "name": "dran_list_goals",
             "description": "List the goals the agent's owner can read (own ∪ public ∪ shared), optionally filtered by status.",
@@ -1720,6 +1764,7 @@ def _tool_schemas() -> List[Dict[str, Any]]:
 # el dispatcher principal no crezca con 18 ramas, y cada una es un cliente
 # delgado de una ruta del REST.
 _WORK_TOOLS = frozenset({
+    "dran_list_groups",
     "dran_list_goals", "dran_get_goal", "dran_create_goal", "dran_update_goal",
     "dran_delete_goal",
     "dran_list_tasks", "dran_create_task", "dran_get_task", "dran_capture",
@@ -1914,8 +1959,9 @@ def _handle_work_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str:
     def fields(*keys: str) -> Dict[str, Any]:
         return {k: args[k] for k in keys if args.get(k) is not None and args.get(k) != ""}
 
-    def scope() -> Dict[str, Any]:
-        resolved = client._goal_scope(args.get("scope"), args.get("group"))
+    def scope(*, use_default: bool = False) -> Dict[str, Any]:
+        resolved = client._goal_scope(args.get("scope"), args.get("group"),
+                                      use_default=use_default)
         return {"scope": resolved} if resolved is not None else {}
 
     def conflict(exc: "urllib.error.HTTPError") -> str:
@@ -1923,6 +1969,13 @@ def _handle_work_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str:
                            "hint": "read it again and retry with the new lock_version"})
 
     try:
+        if tool_name == "dran_list_groups":
+            groups = client.list_groups()
+            return json.dumps({
+                "groups": [{"slug": g.get("slug"), "name": g.get("name")} for g in groups],
+                "hint": "para escribir en un grupo, pasá `group` con ese slug",
+            })
+
         if tool_name == "dran_list_goals":
             goals = client.list_goals(status=str(args.get("status") or ""),
                                       limit=int(args.get("limit") or 50))
@@ -1946,7 +1999,7 @@ def _handle_work_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str:
             data = client.create_goal(
                 title,
                 **fields("summary", "body", "horizon", "status", "due_on"),
-                **scope(),
+                **scope(use_default=True),
             )
             return json.dumps({"created": True, **_brief(data.get("data") or {})})
 
@@ -2046,7 +2099,7 @@ def _handle_work_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str:
             data = client.create_plan(
                 title,
                 **fields("summary", "body", "status", "due_on", "checklist"),
-                **scope(),
+                **scope(use_default=True),
             )
             return json.dumps({"created": True, **_brief(data.get("data") or {})})
 

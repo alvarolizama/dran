@@ -63,12 +63,15 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             key="scope",
             label="Write scope",
             kind=KIND_SELECT,
-            description="Default destination of this profile's writes — the "
-            "vocabulary of the intention (W6). The server translates it to "
-            "visibility + a share and validates group membership, failing "
-            "closed (422). private: only your account (default). public: "
-            "everyone on the instance. group: only the members of the group "
-            "whose slug you set below.",
+            description="Default destination of this profile's GOAL and PLAN "
+            "writes — the vocabulary of the intention (W6). A tool that declares "
+            "its own `scope`/`group` wins over this default, and edits never "
+            "move a destination. The server translates it to visibility + a "
+            "share and validates group membership, failing closed (422). "
+            "private: only your account (default). public: everyone on the "
+            "instance. group: only the members of the group whose slug you set "
+            "below (an empty or unknown slug fails closed, never private in "
+            "silence).",
             default="private",
             options=(
                 ProviderFieldOption(
@@ -93,9 +96,10 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             key="scope_group",
             label="Group slug",
             kind=KIND_TEXT,
-            description="Slug of the group this profile's writes go to when "
-            "Write scope is 'group'. List your groups with GET /api/groups — "
-            "the slug is the group's stable, copyable id (W7).",
+            description="Slug of the group this profile's goal and plan writes go to "
+            "when Write scope is 'group'. List your groups with GET /api/groups "
+            "(or the agent tool `dran_list_groups`) — the slug is the group's "
+            "stable, copyable id (W7). An unknown slug fails closed (422).",
             placeholder="e.g. research-team",
             inline=True,
             group="Write destination",

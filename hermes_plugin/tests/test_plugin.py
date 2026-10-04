@@ -108,6 +108,7 @@ def test_register_registers_memory_provider_and_tools(plugin):
         "dran_stats",
         # Goals, tasks y planes (contrato de superficies, W2) — en el orden en
         # que `_tool_schemas()` los declara.
+        "dran_list_groups",
         "dran_list_goals",
         "dran_get_goal",
         "dran_create_goal",
@@ -456,6 +457,7 @@ def test_create_page_accepts_a_custom_workspace_type(plugin):
 # (string del vocabulario, o el grupo anidado) — nunca como estado del cliente.
 
 _WORK_TOOL_CALLS = [
+    ("dran_list_groups", {}),
     ("dran_list_goals", {"status": "active"}),
     ("dran_get_goal", {"id": "s"}),
     ("dran_create_goal", {"title": "Meta", "scope": "public"}),
@@ -509,11 +511,12 @@ def _record_work_routes(plugin):
 
 
 def test_work_tools_hit_the_documented_routes(plugin):
-    """Las 18 tools golpean las rutas que el router sirve (una por verbo)."""
+    """Las 19 tools golpean las rutas que el router sirve (una por verbo)."""
     routes, answers = _record_work_routes(plugin)
     verbs = {(m, p) for m, p, _ in routes}
 
     for expected in [
+        ("GET", "/api/groups"),
         ("GET", "/api/goals?limit=50&status=active"),
         ("GET", "/api/goals/s"),
         ("GET", "/api/goals/s/tasks"),
@@ -570,6 +573,44 @@ def test_work_tools_send_the_scope_vocabulary_not_client_state(plugin):
     assert "scope" not in goal_update
 
 
+def test_profile_default_destination_applies_to_creates_only(plugin):
+    """El default del perfil («Write scope»/«Group slug») es REAL, no config muerta.
+
+    El argumento de la herramienta manda; el default aplica a las ALTAS de goal y
+    plan, y una EDICIÓN sin destino no manda `scope` (no re-declara la
+    visibilidad de algo que ya vive en otro lado).
+    """
+    def payload_for(default_scope, default_group, tool, args):
+        routes = []
+
+        def fake_request(m, path, payload=None, timeout=None):
+            routes.append((m, path, payload))
+            return {"data": {"id": "1", "slug": "s"}}
+
+        client = plugin._DranClient("http://dran.test", "k", "personal",
+                                    default_scope=default_scope,
+                                    default_group=default_group)
+        client.request = fake_request  # type: ignore[assignment]
+        out = json.loads(plugin._handle_work_tool(client, tool, args))
+        assert "error" not in out, out
+        return routes[0][2]
+
+    # Alta con default de grupo: nace compartido con ese grupo, sin que la tool
+    # lo declare.
+    assert payload_for("group", "equipo", "dran_create_goal",
+                       {"title": "Meta"})["scope"] == {"group": "equipo"}
+    assert payload_for("public", "", "dran_create_plan",
+                       {"title": "Plan"})["scope"] == "public"
+    # El argumento de la tool gana sobre el default del perfil.
+    assert payload_for("group", "equipo", "dran_create_goal",
+                       {"title": "Meta", "scope": "private"})["scope"] == "private"
+    assert payload_for("private", "", "dran_create_goal",
+                       {"title": "Meta", "group": "otro"})["scope"] == {"group": "otro"}
+    # Una edición no manda el campo: el destino declarado no se mueve.
+    assert "scope" not in payload_for("group", "equipo", "dran_update_goal",
+                                     {"id": "s", "title": "Otro"})
+
+
 def test_work_tools_reject_missing_arguments_without_calling_the_api(plugin):
     """Fail-closed en el cliente: sin título/id no hay llamada."""
     ctx = FakeCtx(config={"api_key": "k", "base_url": "http://dran.test",
@@ -604,7 +645,7 @@ def test_toggle_checklist_surfaces_a_stale_lock_as_a_conflict(plugin):
     import urllib.error
 
     class Conflict:
-        def _goal_scope(self, scope, group):
+        def _goal_scope(self, scope, group, **kw):
             return None
 
         def toggle_checklist(self, *a, **kw):

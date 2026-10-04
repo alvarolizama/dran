@@ -188,10 +188,16 @@ estas tools son el consumo del agente.
 El contenedor de trabajo y el plan, cada uno cliente delgado de una ruta del
 REST. El **destino de una escritura** se declara con `scope` (`private` —
 default — o `public`) o con `group` (el slug del grupo donde el dueño es
-miembro): el servidor valida la membresía y falla cerrado con 422.
+miembro): el servidor valida la membresía y falla cerrado con 422. En el **alta**
+de un goal o un plan, si la herramienta no declara destino se aplica el default
+del perfil (los campos *Write scope* / *Group slug* del panel); una **edición** no
+mueve el destino salvo que lo declare. Para elegir el grupo por nombre hay
+`dran_list_groups` (`GET /api/groups` → `[{slug, name}]` de tus membresías): el
+slug es lo que después viaja en `group`.
 
 | Tool | Ruta que golpea |
 |---|---|
+| `dran_list_groups` | `GET /api/groups` — tus grupos (membresías del lector) para elegir el destino por nombre |
 | `dran_list_goals` / `dran_get_goal` | `GET /api/goals`, `GET /api/goals/:id` (+ sus tasks) |
 | `dran_create_goal` / `dran_update_goal` / `dran_delete_goal` | `POST`, `PUT`, `DELETE /api/goals[/:id]` |
 | `dran_list_tasks` / `dran_get_task` | `GET /api/tasks`, `GET /api/tasks/:id` |
