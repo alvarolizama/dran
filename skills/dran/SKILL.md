@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, second-brain, tools, knowledge-graph]
-    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-workers-flow, dran-memory-flow, dran-work-flow]
+    related_skills: [dran-knowledge-flow, dran-relations-flow, dran-workers-flow, dran-memory-flow, dran-goal-flow, dran-plan-flow, dran-services-flow]
 ---
 
 # dran — plugin tools reference + suite router
@@ -34,9 +34,11 @@ flowchart TD
   Q -->|"run curator/link_gardener/\ngraph_rag"| X[dran-workers-flow]
   Q -->|"list/search/delete\nmemories"| M[dran-memory-flow]
 
-  Q -->|"goals, tasks, plans (work + checklist)"| W[dran-work-flow]
+  Q -->|"goals, tasks, the board,\ncapture, destination"| W[dran-goal-flow]
 
-  Q -->|"connect / use the user's own apps (mail, calendar, issues, chat, files)"| SVC["THIS SKILL\nservices section"]
+  Q -->|"plans and their checklist"| PL[dran-plan-flow]
+
+  Q -->|"connect / use the user's own apps\n(mail, calendar, issues, chat, files)"| SV[dran-services-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
@@ -87,35 +89,23 @@ flowchart TD
 
 ## Services (the user's apps)
 
-Dran connects the user's own apps (Gmail, calendar, GitHub, Slack…) so the
-agent can USE them — mail, calendar, issues and pull requests, messages,
-files. Five fixed tools, all thin clients over `/api/services`:
+Five fixed tools over `/api/services` for the user's OWN apps (mail, calendar,
+issues and pull requests, messages, files). The **catalog is data** — there is no
+per-service tool, and nothing here grows with the toolkits connected.
 
 | Tool | What it is for |
 | --- | --- |
 | `dran_services` | which services are exposed and which are connected for THIS reader, with the lifecycle state and the provider identity |
-| `dran_services_connect` | the hosted authorization link to paste for the user (it lives 10 minutes) |
-| `dran_services_tools` | discovery: one toolkit's tools, or a use case (`use_case`) |
+| `dran_services_connect` | the hosted authorization link to paste for the user (it lives ~10 minutes) |
+| `dran_services_tools` | discovery: one toolkit's tools, one tool's schema (`slug`), or a use case |
 | `dran_services_run` | execute a tool against the user's connection |
 | `dran_services_wait` | wait (short cap) until the connection is `ACTIVE` before running |
 
-The rules, which are not negotiable:
-
-- **The catalog is DATA, not a new tool per service.** You never get
-  `dran_gmail_*`: you ask `dran_services_tools` for the toolkit or the use
-  case, and the schemas for the slug you actually need. Nothing here grows
-  with the toolkits connected.
-- **The state is a lifecycle read from the server** (`INITIATED` → `ACTIVE` /
-  `EXPIRED`; `INACTIVE` does not run). Connecting returns a link the USER
-  opens in their browser; when it expires, ask for a NEW one — an old link is
-  never retried.
-- **Execution fails closed with the link.** A `not_connected` answer carries
-  the fresh connect link: show it to the user instead of retrying.
-- **Only the owner runs against their own connection**, and only if the
-  instance exposes that service. Both gates are server-side; nothing you send
-  changes them (there is no `user_id` or `session_id` to send).
-- **Session start already tells you what is connected** — the inventory is
-  injected, so do not poll `dran_services` to find out.
+**The sequences, the failure modes and the checklist live in
+`dran-services-flow`** — load it and run the flow; don't improvise the order.
+Two things worth knowing from here: the connection state is a **lifecycle read
+from the server** (`INITIATED` → `ACTIVE` / `EXPIRED`; `INACTIVE` does not run),
+and the inventory is **injected at turn start**, so you never poll for it.
 
 ## General rules (every flow obeys them)
 
@@ -143,11 +133,13 @@ flowchart LR
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (provider tools + REST) |
-| `dran-work-flow` | Goals, tasks and plans: alta, captura rápida, movimiento de columna, checklist y destino (`scope`/grupo) |
+| `dran-goal-flow` | Goals and their tasks: alta, captura rápida, movimiento de columna, checklist de una task y destino (`scope`/grupo) |
+| `dran-plan-flow` | Plans (entidad propia) y su checklist: alta, contenido, los pasos de una vez o de a uno |
+| `dran-services-flow` | The user's own apps: connect (hosted link), wait for `ACTIVE`, discover the catalog by toolkit/use case, run a tool, and what every failure answer means |
 
 ## Brain health and discovery (real tools, no flow of their own)
 
-The suite has five flows; these tools belong to the one that owns their
+The suite has seven flows; these tools belong to the one that owns their
 subject:
 
 | Tool | Lives in | What it is for |
@@ -157,7 +149,7 @@ subject:
 | `dran_generate_cluster_summaries` | knowledge-flow | regenerate the nightly cluster summaries on demand |
 | `dran_rename_slug` | knowledge-flow | rewrite a slug and every `![[…]]` embed that pointed at it |
 | `dran_reaugment_page` | knowledge-flow | re-run embedding/summary/relations after a body change |
-| `dran_list_groups` | work-flow | the credential owner's groups — the share target to name BEFORE writing |
+| `dran_list_groups` | goal-flow | the credential owner's groups — the share target to name BEFORE writing |
 
 ## Pitfalls
 

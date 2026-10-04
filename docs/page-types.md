@@ -42,9 +42,11 @@ flowchart TD
 
 ### `note` — free-form capture
 
-The journal, the inbox, the default. Use `dran_create_note` /
-`dran_update_note` — title+slug shorthands where `dran_update_note`
-**merges** meta (unlike `dran_update_page`, which replaces it).
+The journal, the inbox, the default. A note is a page like any other type —
+there is **no note-specific tool**: create it with `dran_create_page`
+(`page_type: "note"`) and edit it with `dran_update_page` by slug. The `date`
+meta field (and the free-form `props` bag) is written from the web form — the
+page tools carry title, body, summary, tags and visibility, not meta.
 
 - `date` — when it happened
 

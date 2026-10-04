@@ -210,7 +210,8 @@ One suite, versioned with this repo. Install it:
 ```bash
 mkdir -p ~/Workspace/Skills
 for s in dran dran-knowledge-flow dran-memory-flow \
-         dran-relations-flow dran-workers-flow dran-work-flow; do
+         dran-relations-flow dran-workers-flow dran-goal-flow \
+         dran-plan-flow dran-services-flow; do
   ln -sfn /path/to/dran/skills/$s ~/Workspace/Skills/$s
 done
 ```
@@ -238,12 +239,15 @@ Then point the agent at them from its system prompt:
   ledger and instantiate packets with `rielctl`). Riel creates no capability —
   it stops capability from being lost.
 - **Dran (second brain)** — when operating the Dran workspace (knowledge
-  pages, typed relations, memories, its workers, or the work surface: goals,
-  tasks and plans), load the `dran` skill and whichever apply:
+  pages, typed relations, memories, its workers, the user's own connected
+  services, or the work surface: goals, tasks and plans), load the `dran` skill
+  and whichever apply:
   `dran-knowledge-flow` (pages), `dran-relations-flow` (typed links),
   `dran-memory-flow` (durable facts), `dran-workers-flow`
-  (curator / link_gardener / graph_rag), `dran-work-flow` (goals · tasks ·
-  plans). Dran stores and returns what is known — it does not decide it.
+  (curator / link_gardener / graph_rag), `dran-services-flow` (the user's apps:
+  connect and run), `dran-goal-flow` (goals · tasks · destination),
+  `dran-plan-flow` (plans · checklist). Dran stores and returns what is known —
+  it does not decide it.
 ```
 
 Keep it that short: the prompt references the skills, it never embeds them.
