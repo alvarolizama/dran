@@ -117,7 +117,7 @@ msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:1072
 #: lib/dran_web/live/smart_collection_live.ex:287
-#: lib/dran_web/live/task_board_live.ex:889
+#: lib/dran_web/live/task_board_live.ex:856
 #, elixir-autogen, elixir-format
 msgid "Backlog"
 msgstr ""
@@ -126,7 +126,7 @@ msgstr ""
 #: lib/dran_web/components/resource_components.ex:216
 #: lib/dran_web/components/resource_components.ex:221
 #: lib/dran_web/components/task_components.ex:65
-#: lib/dran_web/live/admin_groups_live.ex:652
+#: lib/dran_web/live/admin_groups_live.ex:660
 #: lib/dran_web/live/admin_users_live.ex:436
 #: lib/dran_web/live/goal_live.ex:414
 #: lib/dran_web/live/plan_live.ex:338
@@ -137,7 +137,7 @@ msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:1076
 #: lib/dran_web/live/smart_collection_live.ex:291
-#: lib/dran_web/live/task_board_live.ex:893
+#: lib/dran_web/live/task_board_live.ex:860
 #, elixir-autogen, elixir-format
 msgid "Cancelled"
 msgstr ""
@@ -159,12 +159,12 @@ msgstr ""
 msgid "Content"
 msgstr ""
 
-#: lib/dran_web/live/admin_groups_live.ex:651
+#: lib/dran_web/live/admin_groups_live.ex:659
 #: lib/dran_web/live/goal_live.ex:413
 #: lib/dran_web/live/goal_live.ex:446
 #: lib/dran_web/live/pages_live.ex:151
 #: lib/dran_web/live/plan_live.ex:337
-#: lib/dran_web/live/task_board_live.ex:333
+#: lib/dran_web/live/task_board_live.ex:321
 #, elixir-autogen, elixir-format
 msgid "Create"
 msgstr ""
@@ -197,7 +197,7 @@ msgstr ""
 #: lib/dran_web/live/goal_live.ex:333
 #: lib/dran_web/live/goal_live.ex:1075
 #: lib/dran_web/live/smart_collection_live.ex:290
-#: lib/dran_web/live/task_board_live.ex:892
+#: lib/dran_web/live/task_board_live.ex:859
 #, elixir-autogen, elixir-format
 msgid "Done"
 msgstr ""
@@ -226,7 +226,7 @@ msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:1074
 #: lib/dran_web/live/smart_collection_live.ex:289
-#: lib/dran_web/live/task_board_live.ex:891
+#: lib/dran_web/live/task_board_live.ex:858
 #, elixir-autogen, elixir-format
 msgid "In Progress"
 msgstr ""
@@ -293,13 +293,13 @@ msgid "Relations"
 msgstr ""
 
 #: lib/dran_web/components/resource_components.ex:141
-#: lib/dran_web/live/admin_groups_live.ex:651
+#: lib/dran_web/live/admin_groups_live.ex:659
 #: lib/dran_web/live/admin_models_live.ex:304
 #: lib/dran_web/live/admin_system_live.ex:186
 #: lib/dran_web/live/admin_users_live.ex:443
 #: lib/dran_web/live/goal_live.ex:463
 #: lib/dran_web/live/settings_live.ex:239
-#: lib/dran_web/live/task_board_live.ex:351
+#: lib/dran_web/live/task_board_live.ex:339
 #: lib/dran_web/live/workspace_settings_live.ex:613
 #: lib/dran_web/live/workspace_settings_live.ex:1006
 #: lib/dran_web/live/workspace_settings_live.ex:1209
@@ -848,7 +848,7 @@ msgstr ""
 msgid "Mid"
 msgstr ""
 
-#: lib/dran_web/live/admin_groups_live.ex:672
+#: lib/dran_web/live/admin_groups_live.ex:680
 #: lib/dran_web/live/admin_users_live.ex:251
 #: lib/dran_web/live/admin_users_live.ex:378
 #: lib/dran_web/live/settings_live.ex:231
@@ -1339,7 +1339,7 @@ msgstr ""
 msgid "Delete this user?"
 msgstr ""
 
-#: lib/dran_web/live/admin_groups_live.ex:549
+#: lib/dran_web/live/admin_groups_live.ex:555
 #: lib/dran_web/live/admin_users_live.ex:250
 #: lib/dran_web/live/admin_users_live.ex:375
 #: lib/dran_web/live/workspace_settings_live.ex:1328
@@ -1431,7 +1431,7 @@ msgstr ""
 #: lib/dran_web/live/goal_live.ex:314
 #: lib/dran_web/live/pages_live.ex:80
 #: lib/dran_web/live/plan_live.ex:170
-#: lib/dran_web/live/task_board_live.ex:249
+#: lib/dran_web/live/task_board_live.ex:237
 #, elixir-autogen, elixir-format
 msgid "Edit"
 msgstr ""
@@ -1718,7 +1718,7 @@ msgstr ""
 msgid "No pages start with this letter."
 msgstr ""
 
-#: lib/dran_web/live/admin_groups_live.ex:597
+#: lib/dran_web/live/admin_groups_live.ex:605
 #: lib/dran_web/live/workspace_settings_live.ex:1384
 #, elixir-autogen, elixir-format
 msgid "No users match your search."
@@ -1882,8 +1882,8 @@ msgstr ""
 
 #: lib/dran_web/components/share_dialog.ex:65
 #: lib/dran_web/components/share_dialog.ex:80
-#: lib/dran_web/live/admin_groups_live.ex:559
-#: lib/dran_web/live/admin_groups_live.ex:633
+#: lib/dran_web/live/admin_groups_live.ex:566
+#: lib/dran_web/live/admin_groups_live.ex:641
 #: lib/dran_web/live/workspace_settings_live.ex:1346
 #: lib/dran_web/live/workspace_settings_live.ex:1408
 #, elixir-autogen, elixir-format
@@ -2050,7 +2050,7 @@ msgstr ""
 msgid "Role updated"
 msgstr ""
 
-#: lib/dran_web/live/admin_groups_live.ex:572
+#: lib/dran_web/live/admin_groups_live.ex:580
 #: lib/dran_web/live/workspace_settings_live.ex:1361
 #, elixir-autogen, elixir-format
 msgid "Search users by email or name..."
@@ -2117,7 +2117,7 @@ msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:1073
 #: lib/dran_web/live/smart_collection_live.ex:288
-#: lib/dran_web/live/task_board_live.ex:890
+#: lib/dran_web/live/task_board_live.ex:857
 #, elixir-autogen, elixir-format
 msgid "To Do"
 msgstr ""
@@ -2403,7 +2403,7 @@ msgstr ""
 
 #: lib/dran_web/components/resource_components.ex:565
 #: lib/dran_web/live/memory_live.ex:324
-#: lib/dran_web/live/task_board_live.ex:126
+#: lib/dran_web/live/task_board_live.ex:129
 #, elixir-autogen, elixir-format
 msgid "Filter by status"
 msgstr ""
@@ -2811,7 +2811,7 @@ msgstr[0] ""
 msgid "%{percent}% used · %{total}"
 msgstr ""
 
-#: lib/dran_web/live/admin_groups_live.ex:556
+#: lib/dran_web/live/admin_groups_live.ex:563
 #: lib/dran_web/live/workspace_settings_live.ex:922
 #: lib/dran_web/live/workspace_settings_live.ex:1343
 #, elixir-autogen, elixir-format
@@ -3375,12 +3375,12 @@ msgstr ""
 msgid "Add, remove or reorder steps"
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:116
+#: lib/dran_web/live/task_board_live.ex:119
 #, elixir-autogen, elixir-format
 msgid "All goals"
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:102
+#: lib/dran_web/live/task_board_live.ex:105
 #, elixir-autogen, elixir-format
 msgid "All tasks"
 msgstr ""
@@ -3397,17 +3397,17 @@ msgid "Copy the group slug"
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:823
-#: lib/dran_web/live/task_board_live.ex:577
+#: lib/dran_web/live/task_board_live.ex:562
 #, elixir-autogen, elixir-format
 msgid "Could not create the task."
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:505
+#: lib/dran_web/live/task_board_live.ex:490
 #, elixir-autogen, elixir-format
 msgid "Could not move task"
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:758
+#: lib/dran_web/live/task_board_live.ex:737
 #, elixir-autogen, elixir-format
 msgid "Could not open the inbox goal."
 msgstr ""
@@ -3418,12 +3418,12 @@ msgid "Could not save the steps."
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:863
-#: lib/dran_web/live/task_board_live.ex:621
+#: lib/dran_web/live/task_board_live.ex:606
 #, elixir-autogen, elixir-format
 msgid "Could not save the task."
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:649
+#: lib/dran_web/live/task_board_live.ex:634
 #, elixir-autogen, elixir-format
 msgid "Could not update the step."
 msgstr ""
@@ -3453,17 +3453,12 @@ msgstr ""
 msgid "Due on"
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:257
+#: lib/dran_web/live/task_board_live.ex:245
 #, elixir-autogen, elixir-format
 msgid "Empty"
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:144
-#, elixir-autogen, elixir-format
-msgid "Everyone"
-msgstr ""
-
-#: lib/dran_web/live/task_board_live.ex:114
+#: lib/dran_web/live/task_board_live.ex:117
 #, elixir-autogen, elixir-format
 msgid "Filter by goal"
 msgstr ""
@@ -3500,8 +3495,8 @@ msgid "Horizon"
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:860
-#: lib/dran_web/live/task_board_live.ex:486
-#: lib/dran_web/live/task_board_live.ex:618
+#: lib/dran_web/live/task_board_live.ex:471
+#: lib/dran_web/live/task_board_live.ex:603
 #, elixir-autogen, elixir-format
 msgid "Invalid status"
 msgstr ""
@@ -3518,13 +3513,13 @@ msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:260
 #: lib/dran_web/live/goal_live.ex:441
-#: lib/dran_web/live/task_board_live.ex:93
-#: lib/dran_web/live/task_board_live.ex:328
+#: lib/dran_web/live/task_board_live.ex:96
+#: lib/dran_web/live/task_board_live.ex:316
 #, elixir-autogen, elixir-format
 msgid "New task"
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:757
+#: lib/dran_web/live/task_board_live.ex:736
 #, elixir-autogen, elixir-format
 msgid "No owner for the inbox goal."
 msgstr ""
@@ -3647,7 +3642,7 @@ msgid "Subgoals"
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:884
-#: lib/dran_web/live/task_board_live.ex:668
+#: lib/dran_web/live/task_board_live.ex:653
 #, elixir-autogen, elixir-format
 msgid "Task deleted."
 msgstr ""
@@ -3655,34 +3650,34 @@ msgstr ""
 #: lib/dran_web/live/goal_live.ex:783
 #: lib/dran_web/live/goal_live.ex:839
 #: lib/dran_web/live/goal_live.ex:877
-#: lib/dran_web/live/task_board_live.ex:491
-#: lib/dran_web/live/task_board_live.ex:523
-#: lib/dran_web/live/task_board_live.ex:594
-#: lib/dran_web/live/task_board_live.ex:633
-#: lib/dran_web/live/task_board_live.ex:661
+#: lib/dran_web/live/task_board_live.ex:476
+#: lib/dran_web/live/task_board_live.ex:508
+#: lib/dran_web/live/task_board_live.ex:579
+#: lib/dran_web/live/task_board_live.ex:618
+#: lib/dran_web/live/task_board_live.ex:646
 #, elixir-autogen, elixir-format
 msgid "Task not found"
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:819
 #: lib/dran_web/live/goal_live.ex:849
-#: lib/dran_web/live/task_board_live.ex:571
-#: lib/dran_web/live/task_board_live.ex:607
+#: lib/dran_web/live/task_board_live.ex:556
+#: lib/dran_web/live/task_board_live.ex:592
 #, elixir-autogen, elixir-format
 msgid "Task saved."
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:856
-#: lib/dran_web/live/task_board_live.ex:501
-#: lib/dran_web/live/task_board_live.ex:614
-#: lib/dran_web/live/task_board_live.ex:645
+#: lib/dran_web/live/task_board_live.ex:486
+#: lib/dran_web/live/task_board_live.ex:599
+#: lib/dran_web/live/task_board_live.ex:630
 #, elixir-autogen, elixir-format
 msgid "Task was moved elsewhere — reloading"
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:250
-#: lib/dran_web/live/task_board_live.ex:79
-#: lib/dran_web/live/task_board_live.ex:719
+#: lib/dran_web/live/task_board_live.ex:82
+#: lib/dran_web/live/task_board_live.ex:698
 #, elixir-autogen, elixir-format
 msgid "Tasks"
 msgstr ""
@@ -3692,26 +3687,21 @@ msgstr ""
 msgid "The plan changed elsewhere — reloading."
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:222
+#: lib/dran_web/live/task_board_live.ex:210
 #, elixir-autogen, elixir-format
 msgid "Toggle step"
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:804
-#: lib/dran_web/live/task_board_live.ex:552
+#: lib/dran_web/live/task_board_live.ex:537
 #, elixir-autogen, elixir-format
 msgid "A task needs a title."
 msgstr ""
 
 #: lib/dran_web/components/resource_components.ex:567
-#: lib/dran_web/live/task_board_live.ex:128
+#: lib/dran_web/live/task_board_live.ex:131
 #, elixir-autogen, elixir-format
 msgid "All statuses"
-msgstr ""
-
-#: lib/dran_web/live/task_board_live.ex:142
-#, elixir-autogen, elixir-format
-msgid "Filter by assignee"
 msgstr ""
 
 #: lib/dran_web/components/task_components.ex:147
@@ -3719,7 +3709,7 @@ msgstr ""
 msgid "Owner inbox"
 msgstr ""
 
-#: lib/dran_web/live/task_board_live.ex:736
+#: lib/dran_web/live/task_board_live.ex:715
 #, elixir-autogen, elixir-format
 msgid "That goal is not available."
 msgstr ""
@@ -3756,7 +3746,7 @@ msgid "Track what you are working toward and the tasks that get you there."
 msgstr ""
 
 #: lib/dran_web/live/goal_live.ex:458
-#: lib/dran_web/live/task_board_live.ex:346
+#: lib/dran_web/live/task_board_live.ex:334
 #, elixir-autogen, elixir-format
 msgid "Edit task"
 msgstr ""
@@ -3816,7 +3806,7 @@ msgstr ""
 msgid "Add an existing account to this group. People must already have a Dran account — there is no invitation email, membership is granted as soon as you add them."
 msgstr ""
 
-#: lib/dran_web/live/admin_groups_live.ex:604
+#: lib/dran_web/live/admin_groups_live.ex:612
 #, elixir-autogen, elixir-format
 msgid "Everyone on this instance is already in this group."
 msgstr ""
@@ -4158,7 +4148,7 @@ msgid "Group renamed."
 msgstr ""
 
 #: lib/dran_web/live/admin_groups_live.ex:362
-#: lib/dran_web/live/admin_groups_live.ex:647
+#: lib/dran_web/live/admin_groups_live.ex:655
 #, elixir-autogen, elixir-format
 msgid "New group"
 msgstr ""
@@ -4168,7 +4158,7 @@ msgstr ""
 msgid "No groups yet"
 msgstr ""
 
-#: lib/dran_web/live/admin_groups_live.ex:647
+#: lib/dran_web/live/admin_groups_live.ex:655
 #, elixir-autogen, elixir-format
 msgid "Rename group"
 msgstr ""
@@ -4178,7 +4168,7 @@ msgstr ""
 msgid "Rename this group"
 msgstr ""
 
-#: lib/dran_web/live/admin_groups_live.ex:673
+#: lib/dran_web/live/admin_groups_live.ex:681
 #, elixir-autogen, elixir-format
 msgid "e.g. Design team"
 msgstr ""

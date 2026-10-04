@@ -150,7 +150,7 @@ defmodule DranWeb.TaskBoardLiveTest do
   # ── Filtros (contrato de paridad UI/UX) ───────────────────────────────────
 
   describe "filtros del board" do
-    test "los tres filtros existen y su estado vive en la URL" do
+    test "los dos filtros existen y su estado vive en la URL" do
       author = editor!("f1")
       goal = goal!(author, %{"title" => "Filtrable"})
 
@@ -159,11 +159,11 @@ defmodule DranWeb.TaskBoardLiveTest do
       assert has_element?(view, "#board-filters")
       assert has_element?(view, "#board-goal-filter-select")
       assert has_element?(view, "#board-status-filter")
-      # El filtro por responsable es de ADMIN: un no-owner no ve el control.
+      # No hay filtro por responsable: nunca se lista la gente de la instancia
+      # desde el board (el alcance del lector lo decide la política).
       refute has_element?(view, "#board-assignee-filter")
 
-      # El form de un no-owner no tiene campo de responsable: el patch lleva
-      # sólo goal + estado (el orden de la query es fijo y estable).
+      # El patch lleva sólo goal + estado (el orden de la query es fijo y estable).
       view
       |> form("#board-filters", %{
         "goal_id" => goal.id,
@@ -190,7 +190,7 @@ defmodule DranWeb.TaskBoardLiveTest do
       assert has_element?(view, "#column-backlog")
     end
 
-    test "un no-owner no ve el filtro por responsable ni lo aplica por query string" do
+    test "el ?assignee_id= de la URL se ignora: el board no tiene ese filtro" do
       author = editor!("f3")
       goal = goal!(author, %{"title" => "Responsables"})
 
@@ -203,8 +203,8 @@ defmodule DranWeb.TaskBoardLiveTest do
 
       {:ok, theirs} = Tasks.create_task(%{"goal_id" => goal.id, "title" => "Sin dueño"})
 
-      # El `?assignee_id=` de un no-owner se ignora (`filters_from/2`): no queda
-      # un filtro aplicado sin control que lo explique.
+      # Un enlace viejo (`?assignee_id=`) no deja un filtro invisible aplicado:
+      # se ignoran tanto la query como el control que lo explicaba.
       {:ok, view, _html} = live(login(build_conn(), author), ~p"/tasks?assignee_id=#{author.id}")
 
       refute has_element?(view, "#board-assignee-filter")
@@ -212,7 +212,7 @@ defmodule DranWeb.TaskBoardLiveTest do
       assert has_element?(view, "#task-card-#{theirs.id}")
     end
 
-    test "el admin sí filtra por responsable y el select ofrece a las personas" do
+    test "el owner tampoco filtra por responsable: el control no existe para nadie" do
       admin = owner!("f3b")
       other = editor!("f3c")
       goal = goal!(admin, %{"title" => "Responsables del admin"})
@@ -228,12 +228,14 @@ defmodule DranWeb.TaskBoardLiveTest do
 
       {:ok, view, _html} = live(login(build_conn(), admin), ~p"/tasks?assignee_id=#{admin.id}")
 
-      # El select ofrece a las personas, no una lista escrita a mano.
-      assert has_element?(view, "#board-assignee-filter option[value='#{admin.id}']")
-      assert has_element?(view, "#board-assignee-filter option[value='#{other.id}']")
-
+      # Ser el dueño de la instancia no agrega un modo «ver lo de todos»: ni el
+      # select (que enumeraba a las personas, `#{other.email}` incluido) ni el
+      # filtro por query. Las dos tasks se ven, como cualquier lector.
+      refute has_element?(view, "#board-assignee-filter")
+      refute has_element?(view, "#board-filters select[name='assignee_id']")
+      refute has_element?(view, "#board-filters option[value='#{other.id}']")
       assert has_element?(view, "#task-card-#{mine.id}")
-      refute has_element?(view, "#task-card-#{theirs.id}")
+      assert has_element?(view, "#task-card-#{theirs.id}")
     end
 
     test "filtrar por goal recorta a ese goal y sobrevive al reload" do

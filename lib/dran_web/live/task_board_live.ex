@@ -14,10 +14,9 @@ defmodule DranWeb.TaskBoardLive do
 
   Desde el contrato de paridad UI/UX el board tiene lo que pages ya tenía:
 
-    * **filtros** de goal + estado + responsable, con el estado en el socket Y en
-      la query string (`?goal_id=&status=&assignee_id=`, así el filtro se comparte
-      y sobrevive al reload) — servidos por `Dran.Tasks.list_tasks/1`, que ya
-      acepta `goal_id`, `status` y `assignee_id`;
+    * **filtros** de goal + estado, con el estado en el socket Y en
+      la query string (`?goal_id=&status=`, así el filtro se comparte
+      y sobrevive al reload) — servidos por `Dran.Tasks.list_tasks/1`;
     * el **alta de una task en el MISMO `<.resource_modal>` de pages**, abierto
       por `?new=true`, con **selector de goal**: el default es el goal elegido →
       el goal del filtro → el del tablero → la bandeja del dueño
@@ -26,9 +25,13 @@ defmodule DranWeb.TaskBoardLive do
       el `Edit` de la tarjeta abre el modal con el checklist en su puerta.
 
   Mover una task, en cambio, no se toca desde la tarjeta: se **arrastra** a otra
-  columna (`drag & drop`, hook colocado `.TaskDrag` → el evento `move`). Y el
-  filtro por **responsable** es de ADMIN: es el control que enumera las personas
-  de la instancia, así que un no-owner ni lo ve ni lo aplica por query string.
+  columna (`drag & drop`, hook colocado `.TaskDrag` → el evento `move`). El board
+  **no ofrece filtrar por responsable**: el control enumeraba las personas de la
+  instancia, y «ver lo de todos» no es un modo del board — el alcance del lector
+  lo decide la política (§ el párrafo de abajo), no un filtro. `?assignee_id=`
+  en la URL se ignora para todos; el único dueño de ese filtro es la API
+  (`GET /api/tasks?assignee=`), que lo aplica sobre las tasks que su identidad
+  ya puede leer.
 
   Toda lectura sale de los contextos con `scope:` resuelto por la política única
   (`Dran.ContentVisibility`). Por eso ni el board ni el selector de goal ofrecen
@@ -104,7 +107,7 @@ defmodule DranWeb.TaskBoardLive do
           </div>
         </div>
 
-        <%!-- Filtros: goal + estado + responsable. El estado vive en la URL. --%>
+        <%!-- Filtros: goal + estado. El estado vive en la URL. --%>
         <form id="board-filters" phx-change="filter" class="flex items-center gap-2 flex-wrap mb-4">
           <select
             :if={@live_action == :index && @goals != []}
@@ -131,25 +134,10 @@ defmodule DranWeb.TaskBoardLive do
             </option>
           </select>
 
-          <%!-- El filtro por responsable es de ADMIN: es el control que enumera
-          las personas de la instancia (`Accounts.list_users/0`). Un no-owner no
-          lo ve y su `?assignee_id=` se ignora (`filters_from/2`). --%>
-          <select
-            :if={@is_owner}
-            name="assignee_id"
-            id="board-assignee-filter"
-            class="select select-sm select-bordered"
-            aria-label={gettext("Filter by assignee")}
-          >
-            <option value="" selected={is_nil(@filters.assignee_id)}>{gettext("Everyone")}</option>
-            <option
-              :for={user <- @assignees}
-              value={user.id}
-              selected={@filters.assignee_id == user.id}
-            >
-              {user.name || user.email}
-            </option>
-          </select>
+          <%!-- Sin filtro por responsable: nunca se lista la gente de la
+          instancia acá. `?assignee_id=` se ignora para todos
+          (`filters_from/1`), así un enlace viejo no deja un filtro invisible
+          aplicado. --%>
         </form>
 
         <%!-- El tablero es la superficie de drag & drop: arrastrar una
@@ -381,7 +369,6 @@ defmodule DranWeb.TaskBoardLive do
        goal_visibilities: %{},
        goal: nil,
        filters: empty_filters(),
-       assignees: assignees(socket),
        scope: nil,
        board: empty_board(),
        counts: empty_counts(),
@@ -410,7 +397,7 @@ defmodule DranWeb.TaskBoardLive do
         socket =
           socket
           |> assign(
-            filters: filters_from(params, socket.assigns[:is_owner]),
+            filters: filters_from(params),
             goal: nil,
             modal_open: params["new"] == "true",
             editing_task: nil
@@ -438,8 +425,7 @@ defmodule DranWeb.TaskBoardLive do
               socket
               |> assign(
                 goal: goal,
-                filters:
-                  Map.put(filters_from(params, socket.assigns[:is_owner]), :goal_id, goal.id),
+                filters: Map.put(filters_from(params), :goal_id, goal.id),
                 modal_open: params["new"] == "true",
                 editing_task: nil
               )
@@ -459,8 +445,7 @@ defmodule DranWeb.TaskBoardLive do
   def handle_event("filter", params, socket) do
     query = %{
       "goal_id" => params["goal_id"],
-      "status" => params["status"],
-      "assignee_id" => params["assignee_id"]
+      "status" => params["status"]
     }
 
     {:noreply, push_patch(socket, to: board_path(socket, query))}
@@ -678,16 +663,11 @@ defmodule DranWeb.TaskBoardLive do
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc false
-  def empty_filters, do: %{goal_id: nil, status: nil, assignee_id: nil}
-
-  # El directorio de personas sólo lo carga un ADMIN: el filtro por responsable
-  # es suyo, así que a un no-owner ni le llega la lista.
-  defp assignees(socket) do
-    if socket.assigns[:is_owner], do: Dran.Accounts.list_users(), else: []
-  end
+  def empty_filters, do: %{goal_id: nil, status: nil}
 
   # Arma el board desde los contextos (scope-leídos) con los filtros vigentes:
-  # `goal_id`, `status` y `assignee_id` ya los acepta `Tasks.list_tasks/1`.
+  # `goal_id` y `status` ya los acepta `Tasks.list_tasks/1`. El `assignee_id`
+  # del contexto NO se usa acá: ese filtro es de la API, no de la superficie.
   defp load_board(socket, scope) do
     filters = socket.assigns.filters
     goal = socket.assigns[:goal]
@@ -699,8 +679,7 @@ defmodule DranWeb.TaskBoardLive do
       Tasks.list_tasks(
         scope: scope,
         goal_id: goal_id,
-        status: filters.status,
-        assignee_id: filters.assignee_id
+        status: filters.status
       )
 
     board = group_board(tasks)
@@ -783,14 +762,13 @@ defmodule DranWeb.TaskBoardLive do
   defp task_form(params), do: to_form(params, as: :task)
 
   # Filtros desde la query string, validados contra el vocabulario real. El
-  # responsable sólo lo filtra un ADMIN: el control que enumera las personas de
-  # la instancia es suyo, así que el `?assignee_id=` de un no-owner se ignora en
+  # responsable NO es un filtro de esta superficie (el control enumeraba la
+  # gente de la instancia): el `?assignee_id=` de cualquier lector se ignora en
   # vez de dejar un filtro invisible aplicado.
-  defp filters_from(params, is_owner) do
+  defp filters_from(params) do
     %{
       goal_id: blank_to_nil(params["goal_id"]),
-      status: (params["status"] in Task.statuses() && params["status"]) || nil,
-      assignee_id: (is_owner && parse_int(params["assignee_id"])) || nil
+      status: (params["status"] in Task.statuses() && params["status"]) || nil
     }
   end
 
@@ -798,15 +776,14 @@ defmodule DranWeb.TaskBoardLive do
   defp current_query(socket) do
     %{
       "goal_id" => socket.assigns.filters.goal_id,
-      "status" => socket.assigns.filters.status,
-      "assignee_id" => socket.assigns.filters.assignee_id
+      "status" => socket.assigns.filters.status
     }
   end
 
   # La URL del board con su query: el board de un goal NO repite el goal en la
   # query (el goal es la ruta), el global sí. El orden de los campos es fijo —
   # así la URL es estable y un test puede afirmarla entera.
-  @query_fields ~w(goal_id status assignee_id new)
+  @query_fields ~w(goal_id status new)
 
   defp board_path(socket, query) do
     query =
@@ -847,16 +824,6 @@ defmodule DranWeb.TaskBoardLive do
   defp blank_to_nil(value) when value in [nil, ""], do: nil
   defp blank_to_nil(value) when is_binary(value), do: String.trim(value)
   defp blank_to_nil(value), do: value
-
-  defp parse_int(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {int, ""} -> int
-      _ -> nil
-    end
-  end
-
-  defp parse_int(value) when is_integer(value), do: value
-  defp parse_int(_), do: nil
 
   # El scope de lectura de esta superficie, resuelto por la política única. Una
   # sesión sin fila en `users` devuelve `nil` — el caller navega fuera en vez de

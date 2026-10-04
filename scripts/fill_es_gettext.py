@@ -291,7 +291,6 @@ ES = {
     "Delete this goal and all its tasks?": "¿Borrar este goal y todas sus tasks?",
     "Due on": "Vence el",
     "Empty": "Vacío",
-    "Everyone": "Todos",
     "Goal": "Goal",
     "Goal deleted.": "Goal borrado.",
     "Goal saved.": "Goal guardado.",
