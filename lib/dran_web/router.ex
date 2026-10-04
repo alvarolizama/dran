@@ -48,6 +48,14 @@ defmodule DranWeb.Router do
     plug :require_instance_owner
   end
 
+  # Instance administration (not only the owner): the instance owner ∪ an
+  # `instance_role` in owner/admin — the same rule `/settings/instance` had
+  # written in its own mount. The plug guards the HTTP request; the LiveView
+  # re-runs it on the socket via `LiveAuth.on_mount/4`.
+  pipeline :instance_admin do
+    plug :require_instance_admin
+  end
+
   # ── Browser auth plug ──
 
   defp require_login(conn, _opts) do
@@ -88,6 +96,39 @@ defmodule DranWeb.Router do
 
       true ->
         conn
+    end
+  end
+
+  # ── Instance admin auth plug (owner ∪ instance_role admin/owner) ──
+
+  defp require_instance_admin(conn, _opts) do
+    user = Plug.Conn.get_session(conn, "user")
+
+    cond do
+      is_nil(user) ->
+        conn
+        |> Phoenix.Controller.redirect(to: ~p"/login")
+        |> Plug.Conn.halt()
+
+      instance_admin_session?(user) ->
+        conn
+
+      true ->
+        conn
+        |> Phoenix.Controller.put_flash(:error, "Instance admin access required")
+        |> Phoenix.Controller.redirect(to: ~p"/")
+        |> Plug.Conn.halt()
+    end
+  end
+
+  # La fila decide, no la bandera cacheada en la sesión: un usuario BORRADO con
+  # `is_owner: true` viejo no entra (SEC-002), y un `instance_role` admin/owner
+  # no viaja en la sesión. Mismo predicado que su gemelo del socket
+  # (`LiveAuth.on_mount(:require_instance_admin, ...)`).
+  defp instance_admin_session?(user) do
+    case Dran.Accounts.get_user_by_email(user) do
+      nil -> false
+      db_user -> Dran.Accounts.User.instance_admin?(db_user)
     end
   end
 
@@ -244,20 +285,28 @@ defmodule DranWeb.Router do
   # (No routes: the workspace home below serves "/". Kept as a placeholder
   # for future instance-level routes.)
 
-  # ── Settings: account (any logged-in user) ─────────────────────────────────
+  # ── Settings ──────────────────────────────────────────────────────────────
   #
-  # The account page carries the user's ONE credential (users.api_token).
-  # Defined BEFORE the admin scope so the static segment wins over the
-  # admin-only wildcard.
+  # Account is for ANY logged-in user (it carries the user's ONE credential,
+  # users.api_token). Instance settings is INSTANCE ADMINISTRATION: owner ∪
+  # instance_role admin/owner. They are separate scopes because the guard
+  # belongs to the route, not to the page.
 
   scope "/settings", DranWeb do
     pipe_through [:browser, :auth]
 
     live "/account", SettingsLive, :account
+  end
 
-    # Instance settings (page types, features, tuning) — instance admins
-    # (owner ∪ instance_role admin/owner), the old workspace_admin guard.
-    live "/instance", WorkspaceSettingsLive, :index
+  scope "/settings", DranWeb do
+    pipe_through [:browser, :auth, :instance_admin]
+
+    # live_session wraps the LiveView with an on_mount twin of the plug: the
+    # plug runs on the HTTP request only, so without this the guard would not
+    # re-run when the LiveView mounts over the socket.
+    live_session :instance_admin, on_mount: {DranWeb.LiveAuth, :require_instance_admin} do
+      live "/instance", WorkspaceSettingsLive, :index
+    end
   end
 
   # ── Admin (instance-level, owner-only) ────────────────────────────────────

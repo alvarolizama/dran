@@ -852,18 +852,22 @@ sidebar, menús, padding) es **Commons: §C12**. Dran aporta lo suyo:
   menú de usuario.
 - **Nav de instancia (`nav={:instance}`):** **Home arriba** (`hero-home`,
   `active_nav="home"` — antes decía «Workspaces» y el destino es el home de
-  conocimiento); grupo *Account* (Profile, API keys); grupo *Admin* (Users,
-  **Groups**, Models, System, Jobs) — visible para owners. **Sin item
-  Overview**: `/admin` sigue existiendo como ruta (impersonation redirige ahí)
-  pero el index de cards no es destino. `/settings/instance` y `/admin/*` usan
-  este nav; sin él el sidebar cae al de conocimiento y el grupo Admin
-  desaparece (era el bug de `/admin/groups`).
+  conocimiento); grupo *Account* (Profile, **Instance settings** — sólo con
+  `can_config`: owner ∪ `instance_role` admin/owner, que es quien puede abrir
+  `/settings/instance`); grupo *Admin* (Users, **Groups**, Models, System, Jobs)
+  — visible para owners. **Sin item Overview**: `/admin` sigue existiendo como
+  ruta (impersonation redirige ahí) pero el index de cards no es destino.
+  `/settings/instance` y `/admin/*` usan este nav; sin él el sidebar cae al de
+  conocimiento y el grupo Admin desaparece (era el bug de `/admin/groups`).
+  **`Instance settings` faltaba en este nav**: sólo vivía en el menú de perfil
+  del shell de conocimiento, y ahí escondido si no había workspace.
   **`/admin/workspaces` no existe** (W6): con una instancia = un cerebro no hay
   contenedores que crear ni que listar, así que el grupo Admin son cinco
   secciones, no seis.
-- **`<.user_footer>` (menú de perfil):** Home · Profile · API keys · Activity ·
-  Instance settings · **grupo *Admin*** (Users · Groups · Models · System ·
-  Jobs, sólo owners) · separador · Log out. El grupo Admin vive **también acá**
+- **`<.user_footer>` (menú de perfil):** Home · Profile · *Activity (con
+  workspace)* · **Instance settings** (`can_config`, con o sin workspace) ·
+  **grupo *Admin*** (Users · Groups · Models · System · Jobs, sólo owners) ·
+  separador · Log out. El grupo Admin vive **también acá**
   porque el sidebar del shell de conocimiento es el nav de conocimiento: sin él
   `/admin` era inalcanzable desde `/notes` sin escribir la URL.
 - **Banner de impersonación** (`root.html.heex`, `id="impersonation-banner"`):

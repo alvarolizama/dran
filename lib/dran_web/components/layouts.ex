@@ -110,6 +110,11 @@ defmodule DranWeb.Layouts do
         counts: counts,
         page_counts: page_counts,
         is_owner: is_owner,
+        # Quién configura la instancia: el dueño o un admin de instancia — la
+        # MISMA regla que aplica `DranWeb.WorkspaceSettingsLive` (y la que ya
+        # derivaba `user_footer`). Se computa una vez y se la llevan los dos
+        # navs para no divergir.
+        can_config: is_owner or assigns[:workspace_role] in ~w(owner admin),
         instance_nav?: instance_nav?
       )
 
@@ -222,7 +227,11 @@ defmodule DranWeb.Layouts do
 
             <nav class="flex-1 overflow-y-auto p-2 flex flex-col gap-4">
               <%= if @instance_nav? do %>
-                <.instance_nav active={@active_nav} is_owner={@is_owner} />
+                <.instance_nav
+                  active={@active_nav}
+                  is_owner={@is_owner}
+                  can_config={@can_config}
+                />
               <% else %>
                 <.sidebar_nav
                   active={@active_nav}
@@ -241,6 +250,7 @@ defmodule DranWeb.Layouts do
                 workspace_slug={@workspace_slug}
                 workspace_role={assigns[:workspace_role]}
                 is_owner={@is_owner}
+                can_config={@can_config}
                 active={@active_nav}
               />
             </div>
@@ -573,6 +583,10 @@ defmodule DranWeb.Layouts do
   attr :active, :string, default: nil
   attr :is_owner, :boolean, default: false
 
+  attr :can_config, :boolean,
+    default: false,
+    doc: "dueño de la instancia o admin de instancia: puede abrir /settings/instance"
+
   def instance_nav(assigns) do
     ~H"""
     <div class="flex flex-col gap-4">
@@ -594,6 +608,18 @@ defmodule DranWeb.Layouts do
           icon="hero-user"
           path={~p"/settings/account"}
           active={@active == "settings"}
+        />
+        <%!-- La configuración de la instancia va acá, no en el grupo Admin:
+             /admin/* es owner-only, mientras /settings/instance la abre también
+             un admin de instancia (`can_config`). Antes no estaba en NINGÚN nav
+             del shell de instancia — sólo en el menú de perfil del shell de
+             conocimiento, y ahí escondido si no había workspace. --%>
+        <.nav_link
+          :if={@can_config}
+          label={gettext("Instance settings")}
+          icon="hero-cog-6-tooth"
+          path={~p"/settings/instance"}
+          active={@active == "workspace_settings"}
         />
       </.nav_group>
 
@@ -703,10 +729,17 @@ defmodule DranWeb.Layouts do
   attr :is_owner, :boolean, default: false
   attr :active, :string, default: nil
 
+  attr :can_config, :boolean,
+    default: nil,
+    doc: "lo computa el shell; renderizado suelto (tests) se deriva de los assigns"
+
   def user_footer(assigns) do
     name = display_name(assigns[:user], assigns[:current_user])
 
-    can_config = assigns[:is_owner] || assigns[:workspace_role] in ~w(owner admin)
+    # El shell lo computa una vez (`Layouts.app/1`); un render suelto —los tests
+    # montan el componente solo— lo deriva de sus propios assigns.
+    can_config =
+      assigns[:can_config] || assigns[:is_owner] || assigns[:workspace_role] in ~w(owner admin)
 
     assigns =
       assigns
@@ -762,8 +795,14 @@ defmodule DranWeb.Layouts do
             label={gettext("Activity")}
             active={@active == "activity"}
           />
+          <%!-- La configuración de la instancia: con `can_config` —dueño o admin
+               de instancia— y con o sin workspace. Estaba atada a
+               `@workspace_slug`, así que en /admin/* y /settings/* —donde el
+               sidebar es el nav de instancia— el enlace no estaba en ningún
+               menú del shell. --%>
+          <div :if={@can_config} class="border-t border-base-300 my-1"></div>
           <.menu_item
-            :if={@workspace_slug && @can_config}
+            :if={@can_config}
             href={~p"/settings/instance"}
             icon="hero-cog-6-tooth"
             label={gettext("Instance settings")}

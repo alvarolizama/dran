@@ -43,6 +43,48 @@ defmodule DranWeb.SidebarNavTest do
     end
   end
 
+  describe "instance_nav (el sidebar de las páginas de instancia)" do
+    defp instance_nav(assigns \\ %{}) do
+      render_component(
+        &Layouts.instance_nav/1,
+        Map.merge(%{active: "home", is_owner: true, can_config: true}, assigns)
+      )
+    end
+
+    test "lleva Home, Account (Profile + Instance settings) y el grupo Admin" do
+      html = instance_nav()
+
+      assert html =~ ~s(href="/")
+      assert html =~ ~s(href="/settings/account")
+      assert html =~ ~s(href="/settings/instance")
+      assert html =~ t("Instance settings")
+
+      for path <- ~w(users groups models system jobs) do
+        assert html =~ ~s(href="/admin/#{path}")
+      end
+    end
+
+    # Era el hueco: /settings/instance no estaba en NINGÚN nav del shell de
+    # instancia (sólo en el menú de perfil del shell de conocimiento, y ahí
+    # escondido si no había workspace).
+    test "Instance settings no se ofrece a quien no configura la instancia" do
+      html = instance_nav(%{is_owner: false, can_config: false})
+
+      refute html =~ ~s(href="/settings/instance")
+      refute html =~ ~s(href="/admin/users")
+      assert html =~ ~s(href="/settings/account")
+    end
+
+    test "la página se marca activa" do
+      html = instance_nav(%{active: "workspace_settings"})
+
+      {pos, _} = :binary.match(html, ~s(href="/settings/instance"))
+      {end_pos, _} = :binary.match(html, "</a>", scope: {pos, byte_size(html) - pos})
+      anchor = binary_part(html, pos, end_pos - pos)
+      assert anchor =~ ~s(aria-current="page")
+    end
+  end
+
   describe "sidebar_nav grouping" do
     defp workspace_nav(active \\ "home") do
       render_component(&Layouts.sidebar_nav/1, %{
@@ -359,14 +401,21 @@ defmodule DranWeb.SidebarNavTest do
       assert html =~ ~s(href="/settings/instance")
     end
 
-    test "outside a workspace the menu has the account + Workspaces entries only" do
-      html = menu(%{workspace_slug: nil, is_owner: true})
+    test "outside a workspace the menu keeps the instance entries (no workspace ones)" do
+      owner = menu(%{workspace_slug: nil, is_owner: true})
+      viewer = menu(%{workspace_slug: nil, workspace_role: "viewer", is_owner: false})
 
-      refute html =~ "/activity"
-      refute html =~ ~s(href="/settings/instance")
-      assert html =~ ~s(href="/")
-      assert html =~ ~s(href="/settings/account")
-      refute html =~ ~s(href="/settings/api-keys")
+      # Workspace-scoped: siguen fuera (Activity es del cerebro).
+      refute owner =~ "/activity"
+      # Instance settings es de la INSTANCIA: está con o sin workspace, y sólo
+      # para quien puede abrirla (owner ∪ admin de instancia).
+      assert owner =~ ~s(href="/settings/instance")
+      assert owner =~ t("Instance settings")
+      refute viewer =~ ~s(href="/settings/instance")
+
+      assert owner =~ ~s(href="/")
+      assert owner =~ ~s(href="/settings/account")
+      refute owner =~ ~s(href="/settings/api-keys")
     end
 
     test "the active workspace entry is marked" do

@@ -71,14 +71,33 @@ defmodule DranWeb.ServicesAllowlistTest do
       assert Services.allowlist() == []
     end
 
-    test "un no-owner no ve la pestaña ni el formulario", %{conn: conn} do
+    test "un usuario normal no entra a Instance settings", %{conn: conn} do
       unique = System.unique_integer([:positive])
       {:ok, user} = Accounts.create_user(%{email: "member-#{unique}@example.com", name: "Member"})
 
-      {:ok, view, html} =
-        live(session_conn(conn, user.email, false), ~p"/settings/instance")
+      # La guardia es de la RUTA (owner ∪ admin de instancia): un miembro común
+      # —rol por defecto, `editor`— ni siquiera monta la página. Antes entraba y
+      # sólo se le escondía la pestaña de Servicios.
+      assert {:error, {:redirect, %{to: "/"}}} =
+               live(session_conn(conn, user.email, false), ~p"/settings/instance")
+    end
 
-      # La pestaña es del owner: ni el botón ni el form existen.
+    test "un admin de instancia entra, pero la pestaña de Servicios es del owner",
+         %{conn: conn} do
+      unique = System.unique_integer([:positive])
+
+      {:ok, user} = Accounts.create_user(%{email: "iadmin-#{unique}@example.com", name: "Admin"})
+
+      {:ok, user} =
+        user
+        |> Ecto.Changeset.change(instance_role: "admin")
+        |> Dran.Repo.update()
+
+      {:ok, view, html} = live(session_conn(conn, user.email, false), ~p"/settings/instance")
+
+      # La página es suya (administración de la instancia)…
+      assert html =~ t("Instance settings")
+      # …y la allowlist sigue siendo del OWNER: ni el botón ni el form existen.
       refute html =~ ~s{phx-value-tab="services"}
       refute has_element?(view, "#services-allowlist-form")
       refute has_element?(view, "#instance-services-section")

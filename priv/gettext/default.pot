@@ -16,8 +16,8 @@ msgstr ""
 msgid "Actions"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:663
-#: lib/dran_web/components/layouts.ex:678
+#: lib/dran_web/components/layouts.ex:689
+#: lib/dran_web/components/layouts.ex:704
 #, elixir-autogen, elixir-format
 msgid "Attempting to reconnect"
 msgstr ""
@@ -60,12 +60,12 @@ msgstr ""
 msgid "Semantic"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:670
+#: lib/dran_web/components/layouts.ex:696
 #, elixir-autogen, elixir-format
 msgid "Something went wrong!"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:655
+#: lib/dran_web/components/layouts.ex:681
 #, elixir-autogen, elixir-format
 msgid "We can't find the internet"
 msgstr ""
@@ -75,7 +75,7 @@ msgstr ""
 msgid "close"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:762
+#: lib/dran_web/components/layouts.ex:795
 #: lib/dran_web/components/page_components.ex:320
 #: lib/dran_web/live/activity_live.ex:37
 #: lib/dran_web/live/activity_live.ex:97
@@ -214,7 +214,7 @@ msgstr ""
 msgid "Entities"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:496
+#: lib/dran_web/components/layouts.ex:506
 #: lib/dran_web/live/home_live.ex:1065
 #: lib/dran_web/live/pages_live.ex:70
 #: lib/dran_web/live/search_live.ex:25
@@ -319,7 +319,7 @@ msgstr ""
 msgid "Save as smart collection"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:214
+#: lib/dran_web/components/layouts.ex:219
 #, elixir-autogen, elixir-format
 #, elixir-autogen, elixir-format
 msgid "Search..."
@@ -1307,8 +1307,8 @@ msgstr ""
 msgid "Add User"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:600
-#: lib/dran_web/components/layouts.ex:782
+#: lib/dran_web/components/layouts.ex:626
+#: lib/dran_web/components/layouts.ex:821
 #: lib/dran_web/live/admin_live.ex:18
 #: lib/dran_web/live/admin_live.ex:38
 #: lib/dran_web/live/admin_users_live.ex:252
@@ -1358,8 +1358,8 @@ msgstr ""
 msgid "Load more"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:614
-#: lib/dran_web/components/layouts.ex:802
+#: lib/dran_web/components/layouts.ex:640
+#: lib/dran_web/components/layouts.ex:841
 #: lib/dran_web/live/admin_live.ex:62
 #: lib/dran_web/live/admin_models_live.ex:37
 #: lib/dran_web/live/admin_models_live.ex:191
@@ -1385,8 +1385,8 @@ msgstr ""
 msgid "Page types"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:620
-#: lib/dran_web/components/layouts.ex:809
+#: lib/dran_web/components/layouts.ex:646
+#: lib/dran_web/components/layouts.ex:848
 #: lib/dran_web/live/admin_live.ex:69
 #: lib/dran_web/live/admin_system_live.ex:27
 #: lib/dran_web/live/admin_system_live.ex:143
@@ -1399,8 +1399,8 @@ msgstr ""
 msgid "Toggle WYSIWYG / Markdown"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:602
-#: lib/dran_web/components/layouts.ex:788
+#: lib/dran_web/components/layouts.ex:628
+#: lib/dran_web/components/layouts.ex:827
 #: lib/dran_web/live/admin_live.ex:48
 #: lib/dran_web/live/admin_users_live.ex:24
 #: lib/dran_web/live/admin_users_live.ex:209
@@ -1573,7 +1573,7 @@ msgstr ""
 msgid "Cluster not found"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:467
+#: lib/dran_web/components/layouts.ex:477
 #: lib/dran_web/live/cluster_live.ex:55
 #: lib/dran_web/live/cluster_live.ex:254
 #: lib/dran_web/live/workspace_settings_live.ex:1799
@@ -1774,8 +1774,8 @@ msgstr ""
 msgid "Instance-level administration — users, workspaces, models, system, and jobs."
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:626
-#: lib/dran_web/components/layouts.ex:816
+#: lib/dran_web/components/layouts.ex:652
+#: lib/dran_web/components/layouts.ex:855
 #: lib/dran_web/live/admin_jobs_live.ex:19
 #: lib/dran_web/live/admin_jobs_live.ex:114
 #: lib/dran_web/live/admin_live.ex:76
@@ -1783,7 +1783,7 @@ msgstr ""
 msgid "Jobs"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:500
+#: lib/dran_web/components/layouts.ex:510
 #: lib/dran_web/live/workspace_settings_live.ex:1801
 #, elixir-autogen, elixir-format
 msgid "Journey"
@@ -1866,7 +1866,7 @@ msgstr ""
 msgid "No users yet — create one with the button above."
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:591
+#: lib/dran_web/components/layouts.ex:605
 #: lib/dran_web/live/settings_live.ex:53
 #: lib/dran_web/live/settings_live.ex:58
 #: lib/dran_web/live/settings_live.ex:210
@@ -1874,7 +1874,7 @@ msgstr ""
 msgid "Account"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:724
+#: lib/dran_web/components/layouts.ex:757
 #, elixir-autogen, elixir-format
 msgid "Account settings"
 msgstr ""
@@ -1966,7 +1966,7 @@ msgstr ""
 msgid "Key"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:556
+#: lib/dran_web/components/layouts.ex:566
 #: lib/dran_web/live/workspace_settings_live.ex:1834
 #, elixir-autogen, elixir-format
 msgid "Knowledge base"
@@ -2022,8 +2022,8 @@ msgstr ""
 msgid "Password changed"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:593
-#: lib/dran_web/components/layouts.ex:754
+#: lib/dran_web/components/layouts.ex:607
+#: lib/dran_web/components/layouts.ex:787
 #: lib/dran_web/live/settings_live.ex:219
 #, elixir-autogen, elixir-format
 msgid "Profile"
@@ -2106,7 +2106,7 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:479
+#: lib/dran_web/components/layouts.ex:489
 #: lib/dran_web/live/home_live.ex:687
 #: lib/dran_web/live/memory_live.ex:42
 #: lib/dran_web/live/memory_live.ex:593
@@ -2707,9 +2707,9 @@ msgstr ""
 msgid "Disk"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:494
-#: lib/dran_web/components/layouts.ex:584
-#: lib/dran_web/components/layouts.ex:748
+#: lib/dran_web/components/layouts.ex:504
+#: lib/dran_web/components/layouts.ex:598
+#: lib/dran_web/components/layouts.ex:781
 #, elixir-autogen, elixir-format
 msgid "Home"
 msgstr ""
@@ -2721,7 +2721,7 @@ msgstr ""
 msgid "Instance"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:829
+#: lib/dran_web/components/layouts.ex:868
 #, elixir-autogen, elixir-format
 msgid "Log out"
 msgstr ""
@@ -3091,17 +3091,17 @@ msgstr ""
 msgid "read-only"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:740
+#: lib/dran_web/components/layouts.ex:773
 #, elixir-autogen, elixir-format
 msgid "Account menu"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:157
+#: lib/dran_web/components/layouts.ex:162
 #, elixir-autogen, elixir-format
 msgid "Collapse or expand the sidebar"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:150
+#: lib/dran_web/components/layouts.ex:155
 #, elixir-autogen, elixir-format
 msgid "Menu"
 msgstr ""
@@ -3178,8 +3178,8 @@ msgstr ""
 msgid "Group deleted — its shares were removed too."
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:608
-#: lib/dran_web/components/layouts.ex:795
+#: lib/dran_web/components/layouts.ex:634
+#: lib/dran_web/components/layouts.ex:834
 #: lib/dran_web/live/admin_groups_live.ex:39
 #: lib/dran_web/live/admin_groups_live.ex:358
 #: lib/dran_web/live/admin_live.ex:55
@@ -3187,7 +3187,8 @@ msgstr ""
 msgid "Groups"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:769
+#: lib/dran_web/components/layouts.ex:619
+#: lib/dran_web/components/layouts.ex:808
 #: lib/dran_web/live/services_live.ex:191
 #: lib/dran_web/live/workspace_settings_live.ex:67
 #: lib/dran_web/live/workspace_settings_live.ex:118
@@ -3382,7 +3383,7 @@ msgstr ""
 msgid "All tasks"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:506
+#: lib/dran_web/components/layouts.ex:516
 #: lib/dran_web/live/goal_live.ex:186
 #, elixir-autogen, elixir-format
 msgid "Board"
@@ -3477,7 +3478,7 @@ msgstr ""
 msgid "Goal saved."
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:522
+#: lib/dran_web/components/layouts.ex:532
 #: lib/dran_web/live/goal_live.ex:103
 #: lib/dran_web/live/goal_live.ex:639
 #: lib/dran_web/live/home_live.ex:597
@@ -3563,7 +3564,7 @@ msgstr ""
 msgid "Plan saved."
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:528
+#: lib/dran_web/components/layouts.ex:538
 #: lib/dran_web/live/home_live.ex:632
 #: lib/dran_web/live/plan_live.ex:102
 #: lib/dran_web/live/plan_live.ex:509
@@ -3748,12 +3749,12 @@ msgstr ""
 msgid "Edit task"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:554
+#: lib/dran_web/components/layouts.ex:564
 #, elixir-autogen, elixir-format
 msgid "Views"
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:555
+#: lib/dran_web/components/layouts.ex:565
 #, elixir-autogen, elixir-format
 msgid "Goals & Plans"
 msgstr ""
@@ -4037,8 +4038,8 @@ msgstr ""
 msgid "Service disconnected. The provider revocation is already in flight."
 msgstr ""
 
-#: lib/dran_web/components/layouts.ex:541
-#: lib/dran_web/components/layouts.ex:557
+#: lib/dran_web/components/layouts.ex:551
+#: lib/dran_web/components/layouts.ex:567
 #: lib/dran_web/live/admin_system_live.ex:194
 #: lib/dran_web/live/services_live.ex:35
 #: lib/dran_web/live/services_live.ex:139
