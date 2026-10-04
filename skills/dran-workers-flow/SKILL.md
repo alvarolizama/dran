@@ -1,7 +1,7 @@
 ---
 name: dran-workers-flow
 description: "Use when running Dran workers (curator, graph_rag)."
-version: 2.0.0
+version: 2.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -39,8 +39,8 @@ unverified run.**
 
 ```mermaid
 flowchart TD
-  START([maintain the brain]) --> S1["RUN dran_start_worker\nworker_type + input"]
-  S1 --> S2["RUN dran_get_worker_session\nsession_id - poll"]
+  START([maintain the brain]) --> S1["RUN `dran_start_worker`\nworker_type + input"]
+  S1 --> S2["RUN `dran_get_worker_session`\nsession_id - poll"]
   S2 --> G1{"session\nfinished?"}
   G1 -->|"no, under 10 polls"| S2
   G1 -->|"no, 10+ polls"| A1["ASK[goal-changing] worker slow or stuck?"]

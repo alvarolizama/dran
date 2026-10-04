@@ -33,8 +33,10 @@ adding or keeping a line:
 ```bash
 # the toolset the plugin really registers (50: 46 dran_* + 4 dran_memory_*)
 grep -oE '"name": "dran_[a-z_]+"' hermes_plugin/dran/__init__.py | sort -u | wc -l
-# the names each skill of the suite claims, to diff against the line above
-grep -rhoE '\bdran_[a-z_]+' skills/*/SKILL.md | sort -u
+# the names each skill of the suite claims (exact tool names, backticked), to
+# diff against the line above — prose suffixes (dran_memory_*) and repo paths
+# (lib/dran_web/…) are not tool claims
+grep -rhoE '`dran_[a-z_]+`' skills/*/SKILL.md | tr -d '`' | sort -u
 # the REST surface under every tool
 grep -nE '^\s+(live|get|post|put|patch|delete) "' lib/dran_web/router.ex
 ```

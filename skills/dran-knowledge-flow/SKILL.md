@@ -1,7 +1,7 @@
 ---
 name: dran-knowledge-flow
 description: "Use when creating/editing/deleting Dran pages."
-version: 2.0.0
+version: 2.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -102,8 +102,8 @@ flowchart TD
   normalizes it). Raw HTML in a body is discarded, so never send an
   `<iframe>`: the reference is the contract.
 - **Brain ops on a page** — real tools of this flow, no separate skill:
-  - `dran_rename_slug` — rewrites every `![[old-slug]]` embed in the
-    workspace, so it WRITES other pages: ASK first.
+  - `dran_rename_slug` — rewrites every `![[old-slug]]` embed across the
+    instance, so it WRITES other pages: ASK first.
   - `dran_reaugment_page` — re-runs the augmentation pipeline (embedding,
     summary, relations). Use it after a body change when inference was
     offline.
@@ -114,9 +114,9 @@ flowchart TD
     summaries on demand (the `/clusters` surface).
 - Every write is attributed server-side and nothing is client-settable:
   `created_by` is the `X-Hermes-Agent` header when it came (the Hermes
-  profile), otherwise the API key name; `owner_user_id` is the OWNER of the
-  key (`api_keys.created_by_user_id`). The header lands in `agent_name` —
-  attribution, never authorization: it does not widen access.
+  profile), otherwise the account email; `owner_user_id` is the account that
+  owns the token. The header lands in `agent_name` — attribution, never
+  authorization: it never widens access.
 
 ## Pitfalls
 

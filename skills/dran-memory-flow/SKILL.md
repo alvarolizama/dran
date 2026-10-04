@@ -1,7 +1,7 @@
 ---
 name: dran-memory-flow
 description: "Use when listing/searching Dran agent memories."
-version: 1.3.0
+version: 1.4.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -74,17 +74,17 @@ Repo.get returns nil"]
 
 | Route | Method | Access |
 | --- | --- | --- |
-| `/api/memory` | GET | key valid (read always allowed) |
-| `/api/memory/search` | GET (`q`, `limit`) | key valid |
+| `/api/memory` | GET | valid token (read always allowed) |
+| `/api/memory/search` | GET (`q`, `limit`) | valid token |
 | `/api/memory` | POST | `write_access` — **plugin's job, not this flow's**; grey-zone match returns **409 + `near_duplicate: true`** (nothing stored) |
 | `/api/memory/:id` | PATCH | `write_access` — rewrite in place (trust/feedback counters preserved); **plugin's job (`dran_memory_update`)** |
 | `/api/memory/feedback` | POST | `write_access` — plugin's job |
 | `/api/memory/ingest` | POST | `write_access` — plugin's job (session end) |
-| `/api/memory/:id` | DELETE | `write_access` — soft-delete (superseded); no `workspace` param needed (single instance) |
-| `/api/memory/:id?purge=true` | DELETE | `write_access` — **hard delete, permanent** |
+| `/api/memory/:id` | DELETE | write authorization — soft-delete (superseded); no `workspace` param needed (single instance) |
+| `/api/memory/:id?purge=true` | DELETE | write authorization — **hard delete, permanent** |
 
-- Base URL is the profile's Dran (`$HERMES_HOME/dran_memory.json →
-  base_url`); same `DRAN_API_KEY` as the plugin tools.
+- Base URL is the profile's Dran (the provider's config file in
+  `$HERMES_HOME`, read by Hermes); same `DRAN_API_KEY` as the plugin tools.
 - **The provider tools that front these routes** (the four `dran_memory_*`):
   `dran_memory_add` (POST — dedupe + `force`), `dran_memory_search` (GET
   `/search` — recall), `dran_memory_update` (PATCH — rewrite in place),
@@ -120,25 +120,24 @@ Repo.get returns nil"]
 - **Assuming the write gate needs a `workspace`** — it does not: the gate
   resolves the INSTANCE itself (`require_write_access` →
   `DranWeb.API.Instance.instance_context_id/0`), and a legacy
-  `?workspace=<slug>` is accepted and ignored. What `403` means here is the
-  key's own access level: a `read` key gets
-  `"Token does not have write access to this workspace"` on every write,
-  including DELETE. Fix the key, not the URL.
+  `?workspace=<slug>` is accepted and ignored. A `403` here means the token
+  may not write: `"Token does not have write access to this workspace"` on
+  every write, including DELETE. Fix the token, not the URL.
 - **GET /api/memory caps at 100 rows regardless of `limit`** — paginate
   with `offset` (loop until a page returns < 100) before claiming a
-  total count; the first page lies about the size of the workspace.
+  total count; the first page lies about the size of the instance.
 - **No bulk purge endpoint** — full wipe = per-id loop of
   `DELETE /:id?purge=true`, then re-enumerate until 0
   remain; the UI-only "Borrar obsoletos" covers superseded rows only.
-- **Deleting the whole workspace's recall on a bad review** — delete by
-  specific id, one confirmation each.
+- **Deleting the whole recall on a bad review** — delete by specific id,
+  one confirmation each.
 - **Expecting the knowledge tools to cover memory** — `dran_search`/`dran_*_page` are knowledge; memory is `dran_memory_*` from the provider
   and REST exist.
 - **Confusing memory with page knowledge** — memories are agent-facts
   (dedupe + trust server-side); knowledge that humans read goes through
   dran-knowledge-flow.
 - **The ingest cursor lives in Hermes, not here** — the plugin sends only
-  each session's message delta (`$HERMES_HOME/dran_memory_cursor.json`).
+  each session's message delta (the plugin's cursor file in `$HERMES_HOME`).
   A re-ingest of the same transcript is a no-op cost-wise server-side,
   but if a session was ingested with facts MISSING, don't re-POST the
   full transcript by hand — fix the fact with PATCH instead.
@@ -149,5 +148,5 @@ Repo.get returns nil"]
 - [ ] Search + browse to locate exact ids before any delete
 - [ ] Delete confirmed by the human, verified by readback (gone)
 - [ ] Purge (`?purge=true`) explicitly flagged as permanent to the human
-- [ ] API-key DELETEs need no `workspace` param (single instance)
+- [ ] DELETEs need no `workspace` param (single instance)
 - [ ] Totals counted with offset pagination (limit caps at 100)

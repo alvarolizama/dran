@@ -1,7 +1,7 @@
 ---
 name: dran
 description: "Use when operating Dran: router + shared rules."
-version: 14.0.0
+version: 14.1.0
 author: Álvaro Lizama
 license: MIT
 metadata:
@@ -57,15 +57,16 @@ ships no developer skill, so there is nothing to load — read the code.
   `config.yaml` must list `dran`, and the plugin directory is symlinked into
   `~/.hermes/profiles/<perfil>/plugins/dran`.
 - The secret lives ONCE in the profile's `.env` (`DRAN_API_KEY`); the memory
-  provider and the tools resolve the same var — one key, one credential.
-- Config comes from `$HERMES_HOME/dran/config.json` (base URL; the
-  `workspace` field is informational only),
-  the same file the memory panel writes.
-- **A key creates NO actor.** Attribution is derived server-side — never
+  provider and the tools resolve the same var — one token, one credential.
+- Config comes from `$HERMES_HOME/dran/config.json` (base URL), the same file
+  the memory panel writes.
+- **The token creates NO actor.** Attribution is derived server-side — never
   client-settable: `created_by` is the `X-Hermes-Agent` header (the active
-  profile) when it came, otherwise the key name; `owner_user_id` is the user
-  that owns the key. The header value is persisted as `agent_name`.
-- **Write gate**: keys with `read` access get `403` on every write tool.
+  profile) when it came, otherwise the account email; `owner_user_id` is the
+  account that owns the token. The header value is persisted as `agent_name`.
+- **Write gate**: the server authorizes the write against the instance
+  (`require_write_access`); a token that may not write gets `403` on every
+  write tool.
 - **Memory tools** (`dran_memory_*`) come from the memory provider; the
   knowledge tools (`dran_search`, `dran_create_page`, …) come from the same
   plugin's toolset.
@@ -80,10 +81,10 @@ flowchart TD
 
 - Every call targets the instance behind the plugin's `base_url`. There is no
   workspace selection, no workspace matrix, and no `workspace` param to send.
-- A key reads and writes **exactly what its owner reads** (own ∪ public ∪
-  shared-with-the-owner). The key creates **no actor**: attribution comes from
-  the key name and the `X-Hermes-Agent` header, and `owner_user_id` is the
-  user that owns the key.
+- A token reads and writes **exactly what its owner reads** (own ∪ public ∪
+  shared-with-the-owner). The token creates **no actor**: attribution comes
+  from the account and the `X-Hermes-Agent` header, and `owner_user_id` is the
+  account that owns the token.
 - Pages accept `visibility` (`private` default | `public` | `shared`) at
   creation and update. Memory facts are ALWAYS born private via tools — the
   API rejects a `visibility` param with 422.
@@ -117,7 +118,7 @@ file on disk and there is no anonymous index of them.
 
 | Tool | What it is for |
 | --- | --- |
-| `dran_skills` | the LIVE catalog this key can read (never carries bodies) |
+| `dran_skills` | the LIVE catalog this token can read (never carries bodies) |
 | `dran_skill` | ONE body by slug, framed with slug, version and `content_hash` |
 | `dran_skill_save` | create (new slug) or update — **ASK the user first** |
 | `dran_skill_delete` | delete by slug — **ASK the user first** |
@@ -149,7 +150,7 @@ flowchart LR
 
 | Flow | When to load it |
 | --- | --- |
-| `dran-knowledge-flow` | Create, update, search or delete pages (4 built-in types + the workspace's custom ones; lists the effective types first when none is named) |
+| `dran-knowledge-flow` | Create, update, search or delete pages (4 built-in types + the instance's custom ones; lists the effective types first when none is named) |
 | `dran-relations-flow` | Link two pages with a typed relation |
 | `dran-workers-flow` | Fire and poll curator / link_gardener / graph_rag |
 | `dran-memory-flow` | Administer shared agent memories (provider tools + REST) |
