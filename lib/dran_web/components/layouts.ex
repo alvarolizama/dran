@@ -83,7 +83,9 @@ defmodule DranWeb.Layouts do
     workspace_nav? = sidebar? and not instance_nav?
 
     counts =
-      if workspace_nav?, do: compute_counts(assigns[:workspace_slug]), else: %{}
+      if workspace_nav?,
+        do: assign_services_count(compute_counts(assigns[:workspace_slug])),
+        else: %{}
 
     page_counts =
       case assigns[:page_counts] do
@@ -325,6 +327,17 @@ defmodule DranWeb.Layouts do
     end
   end
 
+  # El badge de Servicios NO cuenta conexiones: contarlas costaría una llamada al
+  # vendor en CADA render del nav (el layout se pinta en todas las páginas) y el
+  # estado nunca se cachea (se lee del servidor). Lo que se muestra es lo que sí
+  # es local: cuántos servicios expone la instancia. El estado real de cada
+  # conexión vive en `/services`, que sí consulta al servidor.
+  defp assign_services_count(counts) do
+    Map.put(counts, :services, length(Dran.Services.allowlist()))
+  rescue
+    _ -> Map.put(counts, :services, 0)
+  end
+
   @doc """
   Renders the grouped sidebar navigation for the second brain.
   Links are grouped in labelled sub-sections (Views, Goals & Plans,
@@ -518,14 +531,30 @@ defmodule DranWeb.Layouts do
       }
     ]
 
-    # Las tres sub-secciones del nav, en orden: vistas → objetivos y planes →
-    # knowledge base. Todas llevan rótulo: el nav se lee como secciones y no
-    # como una lista plana. Knowledge base es 3/3 y agrupa los tipos de página,
-    # Clusters y Memory.
+    # Sub-sección 4/4 — SERVICIOS: las apps que el lector conecta y que su agente
+    # usa. Es superficie propia (como Memory), no un tipo de página, y va al
+    # final: el badge cuenta los servicios EXPUESTOS por la instancia (dato
+    # local) — contar conectadas costaría una llamada al vendor por render.
+    service_items = [
+      %{
+        key: "services",
+        label: gettext("Services"),
+        icon: "hero-squares-plus",
+        path: base <> "/services",
+        badge: counts[:services] || 0
+      }
+    ]
+
+    # Las sub-secciones del nav, en orden: vistas → objetivos y planes →
+    # knowledge base → servicios. Todas llevan rótulo: el nav se lee como
+    # secciones y no como una lista plana. Knowledge base agrupa los tipos de
+    # página, Clusters y Memory; Servicios cierra el nav porque es la otra
+    # superficie propia (las apps del usuario), no un tipo de página.
     [
       %{key: "views", label: gettext("Views"), items: view_items},
       %{key: "goals-plans", label: gettext("Goals & Plans"), items: work_items},
-      %{key: "knowledge-base", label: gettext("Knowledge base"), items: page_type_items}
+      %{key: "knowledge-base", label: gettext("Knowledge base"), items: page_type_items},
+      %{key: "services", label: gettext("Services"), items: service_items}
     ]
   end
 

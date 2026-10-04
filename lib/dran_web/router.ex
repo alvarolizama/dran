@@ -512,6 +512,11 @@ defmodule DranWeb.Router do
     # Shared multi-agent memory (first-class, own table — not page types).
     live "/memory", MemoryLive, :index
 
+    # Servicios: las apps del usuario conectadas a la instancia. Una superficie
+    # propia (como Memory) — no un tipo de página — y por eso va ANTES de la
+    # ruta genérica `/:type`.
+    live "/services", ServicesLive, :index
+
     # Retorno del consentimiento de un servicio: la ÚNICA ruta de aterrizaje
     # (la fija el servidor en `Dran.Services.callback_url/0`). No lee nada de la
     # query — los params de una vuelta OAuth son input, no prueba de propiedad —

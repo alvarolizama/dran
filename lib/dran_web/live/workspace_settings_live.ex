@@ -81,6 +81,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         all_users: []
       )
       |> assign_settings_form()
+      |> assign_services_form()
       |> assign_general_form()
       |> assign_custom_type_form()
       |> assign_workspace_members()
@@ -150,6 +151,16 @@ defmodule DranWeb.WorkspaceSettingsLive do
               >
                 {gettext("Automation")}
               </.tab_button>
+              <%!-- Servicios: política de INSTANCIA y del owner. Decide qué apps
+                   puede conectar la gente de esta instancia. --%>
+              <.tab_button
+                :if={@is_owner}
+                active={@active_tab == :services}
+                tab="services"
+                icon="hero-squares-plus"
+              >
+                {gettext("Services")}
+              </.tab_button>
               <%!-- Users tab: workspace membership died with the multi-workspace
                    model (W1). User management lives in /admin/users; the
                    instance_role column replaces membership roles (W2 wires the
@@ -179,6 +190,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
             <div :if={@active_tab == :brain_tuning}>
               <.brain_tuning_section workspace={@workspace} form={@settings_form} />
+            </div>
+
+            <div :if={@active_tab == :services && @is_owner}>
+              <.services_section form={@services_form} />
             </div>
 
             <div :if={@active_tab == :users}>
@@ -380,6 +395,22 @@ defmodule DranWeb.WorkspaceSettingsLive do
          socket
          |> assign(settings_form: to_form(changeset, as: :workspace))
          |> put_flash(:error, gettext("Could not save settings"))}
+    end
+  end
+
+  @impl true
+  def handle_event("save_services", %{"services" => %{"toolkits" => toolkits}}, socket) do
+    # La allowlist de servicios es política de INSTANCIA y del owner: sin el
+    # flag, el evento no hace nada (fail-closed), no importa lo que llegue.
+    if socket.assigns[:is_owner] do
+      Dran.Services.put_allowlist(toolkits)
+
+      {:noreply,
+       socket
+       |> assign_services_form()
+       |> put_flash(:info, gettext("Settings saved"))}
+    else
+      {:noreply, put_flash(socket, :error, gettext("Only the instance owner can change this"))}
     end
   end
 
@@ -1385,6 +1416,63 @@ defmodule DranWeb.WorkspaceSettingsLive do
   end
 
   # -- Helpers ----------------------------------------------------------------
+
+  # La allowlist de SERVICIOS (política de instancia, del owner): qué apps puede
+  # conectar la gente de esta instancia. Vive en `Dran.Settings` (no en la fila
+  # del workspace) porque es política de la INSTANCIA y la comparten todas las
+  # superficies: la sección `/services`, el catálogo y la ejecución.
+  defp assign_services_form(socket) do
+    values = %{"toolkits" => Enum.join(Dran.Services.allowlist(), ", ")}
+    assign(socket, services_form: to_form(values, as: :services))
+  end
+
+  attr :form, :any, required: true
+
+  defp services_section(assigns) do
+    ~H"""
+    <section id="instance-services-section" class="surface-2 rounded-2xl overflow-hidden">
+      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
+          <.icon name="hero-squares-plus" class="size-4 text-primary" />
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-heading">{gettext("Services")}</h2>
+          <p class="text-caption mt-1">
+            {gettext(
+              "Which apps this instance exposes to its people. A service outside this list cannot be listed, catalogued or executed — and each person connects their OWN account, so nobody runs against someone else's."
+            )}
+          </p>
+        </div>
+      </header>
+
+      <div class="px-5 py-5">
+        <.form
+          for={@form}
+          id="services-allowlist-form"
+          phx-submit="save_services"
+          class="space-y-4"
+        >
+          <.input
+            field={@form[:toolkits]}
+            type="text"
+            label={gettext("Exposed services")}
+            placeholder="gmail, googlecalendar, github, slack"
+          />
+          <p class="text-xs text-base-content/60">
+            {gettext(
+              "Comma-separated provider slugs. Empty means nothing is exposed. The instance needs its own provider key (DRAN_COMPOSIO_API_KEY) for any of this to work; the state is visible in Admin → System."
+            )}
+          </p>
+          <div class="flex justify-end">
+            <button type="submit" class="btn btn-primary btn-sm">
+              {gettext("Save")}
+            </button>
+          </div>
+        </.form>
+      </div>
+    </section>
+    """
+  end
 
   # True when the current user is owner/admin of the URL workspace (or the
   # instance owner). Used by the attach_hook defense-in-depth.

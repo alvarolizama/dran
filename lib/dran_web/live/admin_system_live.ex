@@ -26,6 +26,7 @@ defmodule DranWeb.AdminSystemLive do
       socket
       |> assign(active_nav: "admin_system", page_title: gettext("System"), workspace_slug: nil)
       |> assign(inference_test: nil)
+      |> assign(composio_test: nil)
       |> assign(monitoring: nil)
       |> assign_instance_form()
 
@@ -95,8 +96,25 @@ defmodule DranWeb.AdminSystemLive do
   end
 
   @impl true
+  def handle_event("test_composio", _params, socket) do
+    pid = self()
+
+    Task.start(fn ->
+      result = Dran.Services.ping()
+      send(pid, {:composio_test_result, result})
+    end)
+
+    {:noreply, assign(socket, composio_test: :testing)}
+  end
+
+  @impl true
   def handle_info({:inference_test_result, result}, socket) do
     {:noreply, assign(socket, inference_test: result)}
+  end
+
+  @impl true
+  def handle_info({:composio_test_result, result}, socket) do
+    {:noreply, assign(socket, composio_test: result)}
   end
 
   # ── Instance settings helpers ──────────────────────────────────────────────
@@ -170,6 +188,90 @@ defmodule DranWeb.AdminSystemLive do
               </div>
             </.form>
           </.section>
+
+          <.config_section
+            icon="hero-squares-plus"
+            title={gettext("Services")}
+            subtitle={gettext("Apps the instance exposes to its people")}
+          >
+            <.config_row
+              label={gettext("Status")}
+              env="DRAN_COMPOSIO_API_KEY"
+              description={
+                gettext(
+                  "Whether the services integration is configured. Read-only — the key is instance state and lives server-side."
+                )
+              }
+            >
+              <div class="flex items-center gap-3 flex-wrap">
+                <.services_status_badge
+                  test={@composio_test}
+                  configured={Dran.Services.enabled?()}
+                />
+                <button
+                  phx-click="test_composio"
+                  id="services-test-connection"
+                  disabled={@composio_test == :testing}
+                  class={[
+                    "btn btn-xs gap-2 transition-all duration-150",
+                    @composio_test == :testing && "btn-ghost opacity-60",
+                    @composio_test != :testing && "btn-ghost hover:bg-primary/10"
+                  ]}
+                >
+                  <.icon
+                    name={if @composio_test == :testing, do: "hero-arrow-path", else: "hero-bolt"}
+                    class={"size-4 #{if @composio_test == :testing, do: "animate-spin", else: ""}"}
+                  />
+                  {if @composio_test == :testing,
+                    do: gettext("Testing..."),
+                    else: gettext("Test connection")}
+                </button>
+              </div>
+            </.config_row>
+            <.config_row
+              label={gettext("API URL")}
+              env="DRAN_COMPOSIO_BASE_URL"
+              description={gettext("Provider endpoint. Read-only — set via environment variable.")}
+            >
+              <code class="text-sm font-mono text-primary">
+                {Dran.Services.status().base_url}
+              </code>
+            </.config_row>
+            <.config_row
+              label={gettext("API key")}
+              env="DRAN_COMPOSIO_API_KEY"
+              description={
+                gettext(
+                  "Scoped instance key. Never shown — only its state. Read-only, set via environment variable."
+                )
+              }
+            >
+              <span id="services-key-state" class="text-sm text-base-content/60">
+                {if Dran.Services.enabled?(), do: "••••••••", else: "—"}
+              </span>
+            </.config_row>
+            <.config_row
+              label={gettext("Exposed services")}
+              description={
+                gettext(
+                  "Which services the instance exposes. It is instance policy: the owner decides it in Instance settings, and a service outside the list cannot be listed, catalogued or executed."
+                )
+              }
+            >
+              <div class="flex items-center gap-3">
+                <span class="text-sm text-base-content/60">
+                  {length(Dran.Services.allowlist())}
+                </span>
+                <.link
+                  navigate={~p"/settings/instance"}
+                  id="services-instance-settings-link"
+                  class="link link-hover text-xs font-medium"
+                >
+                  {gettext("Open Instance settings")}
+                </.link>
+              </div>
+            </.config_row>
+          </.config_section>
 
           <.config_section
             icon="hero-cpu-chip"
@@ -628,4 +730,59 @@ defmodule DranWeb.AdminSystemLive do
   end
 
   defp format_inference_error(reason), do: inspect(reason)
+
+  # ── Servicios (integración Composio) ───────────────────────────────────────
+
+  attr :test, :any, default: nil
+  attr :configured, :boolean, default: false
+
+  defp services_status_badge(assigns) do
+    ~H"""
+    <div class="flex items-center gap-2 flex-wrap">
+      <%= cond do %>
+        <% @test == :testing -> %>
+          <span class="loading loading-dots loading-xs text-info"></span>
+          <span class="text-info text-xs font-medium">{gettext("Testing...")}</span>
+        <% match?({:ok, _}, @test) -> %>
+          <% {:ok, r} = @test %>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-success/15 text-success">
+            <.icon name="hero-check-circle" class="size-3" />
+            {gettext("Responds")}
+          </span>
+          <span class="text-xs text-base-content/50">
+            {r.latency_ms}ms · {r.accounts} {gettext("connections visible")}
+          </span>
+        <% match?({:error, _}, @test) -> %>
+          <% {:error, reason} = @test %>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-error/15 text-error">
+            <.icon name="hero-x-circle" class="size-3" />
+            {gettext("Offline")}
+          </span>
+          <span class="text-xs text-error/70">
+            {format_services_error(reason)}
+          </span>
+        <% @configured -> %>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-info/15 text-info">
+            <.icon name="hero-server" class="size-3" />
+            {gettext("Configured")}
+          </span>
+        <% true -> %>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full bg-base-200 text-base-content/50">
+            <.icon name="hero-x-mark" class="size-3" />
+            {gettext("Not configured")}
+          </span>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp format_services_error(:not_configured), do: gettext("Key not configured")
+
+  defp format_services_error({:composio, status, _body}),
+    do: gettext("The provider answered %{status}", status: status)
+
+  defp format_services_error(%Req.TransportError{reason: reason}),
+    do: gettext("TransportError: %{detail}", detail: inspect(reason))
+
+  defp format_services_error(reason), do: inspect(reason)
 end

@@ -315,7 +315,12 @@ defmodule DranWeb.ResourceComponents do
   attr :title, :string, required: true
   attr :description, :string, default: nil
   attr :cta, :string, default: nil
-  attr :new_path, :string, required: true
+  attr :new_path, :string, default: nil
+
+  attr :navigate, :string,
+    default: nil,
+    doc:
+      "cuando la superficie no tiene modal de alta (`?new=true`), el CTA va a otra ruta con `navigate`"
 
   def resource_empty_state(assigns) do
     ~H"""
@@ -330,6 +335,14 @@ defmodule DranWeb.ResourceComponents do
         <p :if={@description} class="text-sm text-base-content/50">{@description}</p>
       </div>
       <.link
+        :if={@navigate}
+        navigate={@navigate}
+        class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
+      >
+        <.icon name="hero-arrow-right" class="w-4 h-4" /> {@cta || gettext("New")}
+      </.link>
+      <.link
+        :if={!@navigate}
         patch={@new_path}
         class="btn btn-primary btn-sm transition hover:scale-105 active:scale-95"
       >
