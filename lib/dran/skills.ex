@@ -105,6 +105,22 @@ defmodule Dran.Skills do
   @doc "Changeset para formularios (la validación vive en el schema)."
   def change_skill(%Skill{} = skill, attrs \\ %{}), do: Skill.changeset(skill, attrs)
 
+  @doc """
+  Conteo de skills legibles — UNA query agregada.
+
+  Existe para el badge del nav: un contador no trae filas para contarlas en
+  memoria, y el nav se pinta en TODAS las páginas. El scope es el del lector
+  (la misma puerta que `list_skills/1`): contar todo anunciaría los privados
+  ajenos y el nav es una superficie personal.
+  """
+  def count_skills(opts \\ []) do
+    scope = Keyword.get(opts, :scope, :all)
+
+    Skill
+    |> Dran.ContentVisibility.filter(scope, :skill)
+    |> Repo.aggregate(:count, :id)
+  end
+
   # ──────────────────────────────────────────────────────────────────────────
   # El contrato de wire servido
   # ──────────────────────────────────────────────────────────────────────────
@@ -192,6 +208,7 @@ defmodule Dran.Skills do
   def create_skill(attrs, opts \\ []) do
     attrs
     |> normalize_attrs()
+    |> put_slug_from_name()
     |> put_owner(opts[:owner_user_id])
     |> then(&(%Skill{} |> Skill.changeset(&1) |> Repo.insert()))
   end
@@ -240,6 +257,18 @@ defmodule Dran.Skills do
     do: Map.put(attrs, "owner_user_id", owner_user_id)
 
   defp put_owner(attrs, _owner_user_id), do: attrs
+
+  # El `slug` (la dirección del wire) se DERIVA del `name` cuando no viene: son
+  # el MISMO espacio de nombres — el identificador es uno, se escribe una vez y
+  # no se renombra (renombrarlo rompe a quien lo tenga cargado). El form del
+  # alta sólo pide el nombre, y el API puede mandar uno de los dos.
+  defp put_slug_from_name(attrs) do
+    cond do
+      Map.has_key?(attrs, "slug") or Map.has_key?(attrs, :slug) -> attrs
+      name = attrs["name"] || attrs[:name] -> Map.put(attrs, "slug", name)
+      true -> attrs
+    end
+  end
 
   defp normalize_attrs(attrs) when is_map(attrs), do: attrs
   defp normalize_attrs(_attrs), do: %{}

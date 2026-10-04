@@ -131,7 +131,7 @@ defmodule DranWeb.SidebarNavTest do
       |> Enum.map(&(&1 |> String.replace(~r/<[^>]*>/, "") |> String.trim()))
     end
 
-    test "las cuatro sub-secciones llevan rótulo y las vistas van juntas, en orden" do
+    test "las cinco sub-secciones llevan rótulo y las vistas van juntas, en orden" do
       html = workspace_nav()
 
       # El nav ya no tiene bloques planos: cada bloque es una sub-sección con su
@@ -140,6 +140,7 @@ defmodule DranWeb.SidebarNavTest do
                t("Views"),
                rendered_msgid("Goals & Plans"),
                t("Knowledge base"),
+               t("Skills"),
                t("Services")
              ]
 
@@ -177,9 +178,9 @@ defmodule DranWeb.SidebarNavTest do
       assert clusters_pos < memory_pos
       assert Enum.at(summaries, kb_index) < refs_pos
 
-      # Ninguno abre sub-sección propia: el nav tiene cuatro, no cinco
-      # (vistas, objetivos y planes, knowledge base y servicios).
-      assert length(summaries) == 4
+      # Ninguno abre sub-sección propia: el nav tiene CINCO, no seis
+      # (vistas, objetivos y planes, knowledge base, skills y servicios).
+      assert length(summaries) == 5
     end
 
     test "Inicio abre la sub-sección de vistas" do
@@ -243,7 +244,7 @@ defmodule DranWeb.SidebarNavTest do
       # con su propia sub-sección etiquetada y Memory al final.
       refute html =~ ~s(data-nav-block="memory")
 
-      kb_block = slice(html, ~s(data-nav-block="knowledge-base"), ~s(data-nav-block="services"))
+      kb_block = slice(html, ~s(data-nav-block="knowledge-base"), ~s(data-nav-block="skills"))
       assert length(summary_positions(kb_block)) == 1
       assert kb_block =~ t("Knowledge base")
       assert kb_block =~ ~s(href="/memory")
@@ -293,9 +294,55 @@ defmodule DranWeb.SidebarNavTest do
       refute slice(without_badge, ~s(data-nav-block="services"), "</nav>") =~ "badge"
     end
 
+    test "Skills tiene su propio bloque, con su badge local, entre Knowledge base y Servicios" do
+      html = workspace_nav()
+
+      kb_pos = pos(html, ~s(data-nav-block="knowledge-base"))
+      skills_pos = pos(html, ~s(data-nav-block="skills"))
+      services_pos = pos(html, ~s(data-nav-block="services"))
+
+      assert kb_pos < skills_pos
+      assert skills_pos < services_pos
+
+      block = slice(html, ~s(data-nav-block="skills"), ~s(data-nav-block="services"))
+      assert length(summary_positions(block)) == 1
+      assert block =~ t("Skills")
+      assert block =~ ~s(href="/skills")
+      # No es un tipo de página ni cuelga de Knowledge base.
+      refute kb_block_for(html) =~ ~s(href="/skills")
+    end
+
+    test "el badge de Skills cuenta lo del lector, y se esconde en cero" do
+      with_badge =
+        render_component(&Layouts.sidebar_nav/1, %{
+          active: "skills",
+          is_owner: true,
+          workspace_slug: "personal",
+          workspace_role: "owner",
+          counts: %{skills: 3}
+        })
+
+      block = slice(with_badge, ~s(data-nav-block="skills"), ~s(data-nav-block="services"))
+      assert block =~ ~s(href="/skills")
+      assert block =~ "badge badge-sm shell-hide"
+      assert block =~ "3"
+
+      without_badge =
+        render_component(&Layouts.sidebar_nav/1, %{
+          active: "skills",
+          is_owner: true,
+          workspace_slug: "personal",
+          workspace_role: "owner",
+          counts: %{skills: 0}
+        })
+
+      refute slice(without_badge, ~s(data-nav-block="skills"), ~s(data-nav-block="services")) =~
+               "badge"
+    end
+
     # El bloque de Knowledge base, para comprobar qué NO vive dentro de él.
     defp kb_block_for(html) do
-      slice(html, ~s(data-nav-block="knowledge-base"), ~s(data-nav-block="services"))
+      slice(html, ~s(data-nav-block="knowledge-base"), ~s(data-nav-block="skills"))
     end
   end
 

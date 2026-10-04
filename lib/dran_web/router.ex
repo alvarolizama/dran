@@ -545,6 +545,15 @@ defmodule DranWeb.Router do
     # ruta genérica `/:type`.
     live "/services", ServicesLive, :index
 
+    # Skills: el catálogo de instrucciones que un agente conectado por API carga
+    # por tool. Entidad propia (como Memory y Services — no un tipo de página),
+    # así que va ANTES de la ruta genérica `/:type`. El alta y la edición son
+    # estado de URL (`?new=true` / `?edit=true`), como en goals y plans: no
+    # existen las rutas /new ni /edit, y `:slug` es la dirección del wire (no se
+    # renombra).
+    live "/skills", SkillLive, :index
+    live "/skills/:slug", SkillLive, :show
+
     # Retorno del consentimiento de un servicio: la ÚNICA ruta de aterrizaje
     # (la fija el servidor en `Dran.Services.callback_url/0`). No lee nada de la
     # query — los params de una vuelta OAuth son input, no prueba de propiedad —

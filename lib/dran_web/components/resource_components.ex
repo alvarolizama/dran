@@ -548,6 +548,18 @@ defmodule DranWeb.ResourceComponents do
   attr :prefix, :string, required: true, doc: "prefijo de los ids: goals, plans"
   attr :status, :string, default: nil
   attr :statuses, :list, required: true, doc: "pares {valor, etiqueta}"
+
+  attr :status_param, :string,
+    default: "status",
+    doc:
+      "nombre del campo del primer filtro en la URL: goals/plans filtran por `status` y skills por `visibility` (el destino)"
+
+  attr :status_all_label, :string,
+    default: nil,
+    doc: "la opción «todos»; el default es «All statuses»"
+
+  attr :status_aria, :string, default: nil, doc: "aria-label del primer select"
+
   attr :order, :string, required: true
   attr :orders, :list, required: true, doc: "pares {valor, etiqueta}"
 
@@ -559,12 +571,14 @@ defmodule DranWeb.ResourceComponents do
     ~H"""
     <form id={"#{@prefix}-filters"} phx-change="filter" class="flex flex-wrap items-center gap-2 mb-4">
       <select
-        name="status"
-        id={"#{@prefix}-status-filter"}
+        name={@status_param}
+        id={"#{@prefix}-#{@status_param}-filter"}
         class="select select-sm select-bordered"
-        aria-label={gettext("Filter by status")}
+        aria-label={@status_aria || gettext("Filter by status")}
       >
-        <option value="" selected={is_nil(@status)}>{gettext("All statuses")}</option>
+        <option value="" selected={is_nil(@status)}>
+          {@status_all_label || gettext("All statuses")}
+        </option>
         <option :for={{value, label} <- @statuses} value={value} selected={@status == value}>
           {label}
         </option>

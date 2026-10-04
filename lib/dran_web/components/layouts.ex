@@ -87,7 +87,10 @@ defmodule DranWeb.Layouts do
 
     counts =
       if workspace_nav?,
-        do: assign_services_count(compute_counts(assigns[:workspace_slug])),
+        do:
+          compute_counts(assigns[:workspace_slug])
+          |> assign_services_count()
+          |> assign_skills_count(assigns[:user]),
         else: %{}
 
     page_counts =
@@ -349,6 +352,18 @@ defmodule DranWeb.Layouts do
     _ -> Map.put(counts, :services, 0)
   end
 
+  # El badge de Skills también es LOCAL — y del LECTOR: cuenta lo que puede
+  # leer, con la MISMA puerta que la lista (`ContentVisibility`). Contar el
+  # total anunciaría cuántos skills privados ajenos existen en una superficie
+  # personal, y el nav se pinta en todas las páginas, así que el conteo sale de
+  # UNA query agregada, no de traer las filas.
+  defp assign_skills_count(counts, user) do
+    scope = Dran.ContentVisibility.resolve(nil, user, :skill)
+    Map.put(counts, :skills, Dran.Skills.count_skills(scope: scope))
+  rescue
+    _ -> Map.put(counts, :skills, 0)
+  end
+
   @doc """
   Renders the grouped sidebar navigation for the second brain.
   Links are grouped in labelled sub-sections (Views, Goals & Plans,
@@ -549,7 +564,23 @@ defmodule DranWeb.Layouts do
       ]
       |> Enum.reject(&(!&1))
 
-    # Sub-sección 4/4 — SERVICIOS: las apps que el lector conecta y que su agente
+    # Sub-sección 4/5 — SKILLS: las instrucciones que un agente conectado por API
+    # descubre y carga por tool. Superficie propia (como Memory y Servicios), no
+    # un tipo de página, y sin gate de instancia (la decisión del contrato: el
+    # destino de cada skill ES el control). El badge es LOCAL: cuenta lo que el
+    # LECTOR puede leer, la misma puerta que la lista.
+    skill_items =
+      [
+        %{
+          key: "skills",
+          label: gettext("Skills"),
+          icon: "hero-academic-cap",
+          path: base <> "/skills",
+          badge: counts[:skills] || 0
+        }
+      ]
+
+    # Sub-sección 5/5 — SERVICIOS: las apps que el lector conecta y que su agente
     # usa. Es superficie propia (como Memory), no un tipo de página, y va al
     # final: el badge cuenta los servicios EXPUESTOS por la instancia (dato
     # local) — contar conectadas costaría una llamada al vendor por render.
@@ -567,14 +598,16 @@ defmodule DranWeb.Layouts do
       |> Enum.reject(&(!&1))
 
     # Las sub-secciones del nav, en orden: vistas → objetivos y planes →
-    # knowledge base → servicios. Todas llevan rótulo: el nav se lee como
-    # secciones y no como una lista plana. Knowledge base agrupa los tipos de
-    # página, Clusters y Memory; Servicios cierra el nav porque es la otra
-    # superficie propia (las apps del usuario), no un tipo de página.
+    # knowledge base → skills → servicios. Todas llevan rótulo: el nav se lee
+    # como secciones y no como una lista plana. Knowledge base agrupa los tipos
+    # de página, Clusters y Memory; Skills cierra el contenido que el agente
+    # consume y Servicios cierra el nav porque es la otra superficie propia (las
+    # apps del usuario), no un tipo de página.
     [
       %{key: "views", label: gettext("Views"), items: view_items},
       %{key: "goals-plans", label: gettext("Goals & Plans"), items: work_items},
       %{key: "knowledge-base", label: gettext("Knowledge base"), items: page_type_items},
+      %{key: "skills", label: gettext("Skills"), items: skill_items},
       %{key: "services", label: gettext("Services"), items: service_items}
     ]
   end

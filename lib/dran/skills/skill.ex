@@ -99,6 +99,9 @@ defmodule Dran.Skills.Skill do
   @doc "Descripciones válidas: el tope que el índice del prompt respeta."
   def description_max, do: @description_max
 
+  @doc "Largo máximo del identificador del wire (`name`/`slug`)."
+  def name_max, do: @name_max
+
   @doc "Tamaño válido del cuerpo (mínimo, máximo)."
   def body_limits, do: {@body_min, @body_max}
 
