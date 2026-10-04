@@ -94,13 +94,24 @@ flowchart TD
 - Confidence levels for claims recorded in pages: low / medium / high /
   verified.
 - `dran_list_pages` takes an optional `page_type`; `dran_list_page_types`
-  returns the effective types with their full definitions; `dran_stats` for
-  counts; `dran_get_page` for one slug.
+  returns the effective types with their full definitions; `dran_get_page`
+  for one slug.
+- **Brain ops on a page** — real tools of this flow, no separate skill:
+  - `dran_rename_slug` — rewrites every `![[old-slug]]` embed in the
+    workspace, so it WRITES other pages: ASK first.
+  - `dran_reaugment_page` — re-runs the augmentation pipeline (embedding,
+    summary, relations). Use it after a body change when inference was
+    offline.
+  - `dran_stats` — pages by type, memories, relations.
+  - `dran_lint_brain` — structural hygiene, read-only: orphans, broken
+    embeds, missing metadata.
+  - `dran_generate_cluster_summaries` — regenerates the nightly cluster
+    summaries on demand (the `/clusters` surface).
 - Every write is attributed server-side and nothing is client-settable:
   `created_by` is the `X-Hermes-Agent` header when it came (the Hermes
   profile), otherwise the API key name; `owner_user_id` is the OWNER of the
   key (`api_keys.created_by_user_id`). The header lands in `agent_name` —
-  attribution, never authorization: it never widens access.
+  attribution, never authorization: it does not widen access.
 
 ## Pitfalls
 
@@ -110,9 +121,10 @@ flowchart TD
   IS the done-check.
 - **Deleting without confirmation** — `dran_delete_page` is irreversible
   and takes the page's relations with it; ASK first.
-- **Assuming a rename tool exists** — the plugin has no `rename_slug`; to
-  move a page, update its `title` (the slug is auto-managed) and re-check
-  `dran_get_links` on both sides.
+- **Renaming a slug like a title edit** — `dran_rename_slug` rewrites the
+  `![[old-slug]]` embeds held by OTHER pages, so it is a write beyond the
+  page you named: ASK, then re-check the links on both sides. A title edit
+  does NOT move the slug (the slug is its own identity).
 
 ## Checklist
 

@@ -10,6 +10,30 @@ The agent flows are thin clients over the plugin tools (`dran_*`,
 `dran_memory_*`) — they teach the call sequences, not the internals. Nothing
 about changing Dran's code ships here.
 
+## What the suite covers (the app's real surface)
+
+The suite is audited against the code that ships with it — nothing else:
+
+| Skill | Real surface | Source of truth |
+|---|---|---|
+| `dran` | connection, auth, attribution, the readback rule + the tool-to-flow map | `hermes_plugin/dran/__init__.py`, `lib/dran_web/router.ex` |
+| `dran-knowledge-flow` | pages: CRUD, types, rename, reaugment, lint, stats, cluster summaries | `lib/dran/knowledge.ex`, `lib/dran/page_augmenter.ex` |
+| `dran-relations-flow` | typed relations — 13 types, 5 of them settable by hand | `lib/dran/relation.ex` |
+| `dran-workers-flow` | the 3 workers + what the 7 scheduled jobs are | `lib/dran/worker/`, `lib/dran/jobs.ex` |
+| `dran-memory-flow` | memory REST (`/api/memory*`) + the provider tools | `lib/dran_web/controllers/api/memory_controller.ex`, `lib/dran/memory.ex` |
+| `dran-work-flow` | goals · tasks · plans · capture · checklist · groups | `lib/dran/goals.ex`, `tasks.ex`, `plans.ex` |
+
+**Invariant:** every registered tool has a home in a flow, and no flow
+describes a tool the plugin does not register. Measure both sides before
+adding or keeping a line:
+
+```bash
+# the toolset the plugin really registers (41: 37 dran_* + 4 dran_memory_*)
+grep -oE '"dran_[a-z_]+"' hermes_plugin/dran/__init__.py | sort -u | wc -l
+# the REST surface under every tool
+grep -nE '^\s+(live|get|post|put|patch|delete) "' lib/dran_web/router.ex
+```
+
 ## How Hermes discovers a skill
 
 Two mechanisms exist. They are **not** equivalent:

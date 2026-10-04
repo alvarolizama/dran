@@ -2,9 +2,9 @@
 
 *Dran* — Tibetan for "remember". What one agent learns, none forget.
 
-**A shared brain for agent swarms**: one instance holding both the knowledge
-(a wiki graph) and the memory (facts) that every agent reads and writes. You run
-it yourself, next to your agents.
+**The knowledge base and the toolset your personal AI assistants share**: one
+instance holding both the knowledge (a wiki graph) and the memory (facts) that
+your assistants read and write. You run it yourself, next to them.
 
 ## What it is
 
@@ -24,20 +24,23 @@ Two things live inside, and they are different on purpose:
   `reference`) or a **custom type declared by the instance**. Curated,
   editable, versioned. Think "the wiki".
 - **Memory** — atomic **facts** with trust scores, deduplicated per owner.
-  Written by agents as they learn; never hand-edited, always private on
-  creation. Think "what the swarm knows".
+  Written by your assistants as they learn; never hand-edited, always private on
+  creation. Think "what your assistants know".
 
 ### What it is for
 
-- **One agent that remembers across sessions** — facts survive restarts, and
-  are recalled automatically at the start of a turn.
-- **Many agents that share what they learn** — a fact stored by one is
-  available to all; the graph keeps them linked.
+- **One assistant that remembers across sessions** — facts survive restarts,
+  and are recalled automatically at the start of a turn.
+- **Several assistants that share what they learn** — a fact stored by one is
+  available to all, and the graph keeps them linked.
+- **Work you drive from either side** — goals, tasks and plans are the same
+  rows whether your assistant creates them through a tool or you move them on
+  the board.
 - **Agent output you can actually read** — reports, notes and entities land
   in a graph you browse, not in a folder of markdown files.
-- **Per-item visibility** — every page, memory, collection and report is
-  `private` (default), `public`, or `shared` with specific users and groups.
-  An API key reads exactly what its owner reads. See
+- **Per-item visibility** — every page, memory, collection, report, goal and
+  plan is `private` (default), `public`, or `shared` with specific users and
+  groups. An API key reads exactly what its owner reads. See
   [Visibility](#visibility).
 
 ### Features
@@ -70,6 +73,17 @@ Two things live inside, and they are different on purpose:
   injected at turn start, and the session is digested at the end (facts
   extracted server-side — the transcript is never stored).
 
+**Work**
+
+- **Goals, tasks and plans** — a goal is the WHAT (it derives its progress from
+  its tasks), a task is the action (a board with columns, priorities and due
+  dates), a plan is the HOW (an ordered checklist). Your assistant creates,
+  captures, moves and checks them off through the same tools you click in the UI.
+- **Quick capture** — `dran_capture` drops a task into the owner's inbox goal
+  with no ceremony; the board is where it lands.
+- **Same destinations** — work items take the same per-item visibility
+  (`private` | `public` | shared with a group), declared per write.
+
 **Automation**
 
 - **3 background workers**: `curator` (duplicates/conflicts), `link_gardener`
@@ -80,10 +94,13 @@ Two things live inside, and they are different on purpose:
 
 **App**
 
-- Wiki at `/`; memory at `/memory`; 3D graph at
-  `/:ws/graph`; clusters with LLM summaries; smart collections; activity feed;
-  journey timeline.
-- Admin (owner-only) at `/admin`: users, groups, models, system, jobs.
+- Wiki at `/` (pages by type, letters, collections); goals at `/goals`, the
+  task board at `/tasks`, plans at `/plans`; memory at `/memory`; the 3D graph
+  at `/graph`; clusters with LLM summaries at `/clusters`; smart collections
+  at `/collections`; reports at `/reports/:slug`; hybrid search at `/search`;
+  activity feed at `/activity`; journey timeline at `/journey`.
+- Account and instance settings at `/settings`; Admin (owner-only) at
+  `/admin`: users, groups, models, system, jobs.
 
 ## Stack
 
@@ -124,7 +141,7 @@ probe, not a readiness check (see [Production](#production)).
 
 ### The Hermes plugin
 
-Gives an agent the tools (`dran_*`, 17) **and** the memory provider
+Gives an agent the tools (`dran_*`, 37) **and** the memory provider
 (`dran_memory_*`, 4) — one key, one attribution, its owner's reach.
 
 **a. Create the credential.** In Dran → **Settings → API Keys**: create the key
@@ -328,7 +345,7 @@ DATABASE_URL=ecto://nope:nope@127.0.0.1:1/nope SECRET_KEY_BASE=test \
 ## Architecture
 
 ```
-┌──────────────┐   plugin tools (21)   ┌──────────────────┐
+┌──────────────┐   plugin tools (37)   ┌──────────────────┐
 │ Hermes agent │ ────────────────────► │                  │
 └──────────────┘                       │   Dran server    │
 ┌──────────────┐   REST /api/*         │   (Phoenix)      │
@@ -349,9 +366,9 @@ uses the same routes directly.
 - Instance owner + instance roles (`owner` / `admin` / `editor` / `viewer`)
 - Per-user API keys (`read` | `write`): a key reads and writes exactly as its
   owner
-- Per-item visibility: every page/memory/collection/report is `private`
-  (default), `public`, or `shared` with users and groups; the read filter is
-  one module (`Dran.ContentVisibility`)
+- Per-item visibility: every page/memory/collection/report/goal/plan is
+  `private` (default), `public`, or `shared` with users and groups; the read
+  filter is one module (`Dran.ContentVisibility`)
 - Memory visibility is web-only: tools/API create private facts and a
   `visibility` param is rejected with 422
 - Row-level auth on resources; `sobelow` + `deps.audit` in precommit
@@ -370,6 +387,9 @@ The instance is one workspace; isolation lives on the ITEM:
   on any page, and user groups from `/admin/groups`.
 - **Pages** may set `visibility` at creation via the API/plugin
   (`dran_create_page(visibility: "public")`).
+- **Goals and plans** declare their destination per WRITE (`scope: private |
+  public | %{group: slug}`); a task inherits its goal's visibility — that is
+  why sharing the goal is enough.
 - **Memories** are always created `private` by tools/API; visibility changes
   happen only in the web UI (a `visibility` param returns 422).
 

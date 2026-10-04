@@ -40,10 +40,11 @@ invent an id or a destination, and never assume a write landed.
 
 | Change | Tool | Why this one |
 |---|---|---|
-| Content of a task: título, cuerpo, prioridad, fecha, asignado, pasos, recurrencia, archivado, `completed_at` | `dran_update_task` | Es la puerta del contenido |
+| Content of a **goal** or a **task**: título, cuerpo, prioridad, horizonte/fechas, asignado, pasos, recurrencia, archivado, `completed_at` | `dran_update_goal` · `dran_update_task` | Es la puerta del contenido (`status` NO está acá) |
 | **Estado / posición / goal de una task** | `dran_move_task` | Única puerta de la columna: mantiene las posiciones de ambas y exige `lock_version` (409 si perdió la carrera) |
 | Pasos de un plan | `dran_set_plan_checklist` (reemplaza el array) o `dran_toggle_checklist` (UN ítem, por `index` o `text`) | `dran_update_plan` **nunca** toca el checklist |
 | Alta | `dran_create_goal` · `dran_create_task` · `dran_create_plan` (`checklist` nace con el plan) · `dran_capture` | `capture` = captura rápida, sin goal, a la bandeja |
+| Lectura | `dran_list_goals` · `dran_get_goal` · `dran_list_tasks` · `dran_get_task` · `dran_list_plans` · `dran_get_plan` | El readback: el `ok` de una escritura no es estado |
 
 `dran_create_task` sin `goal` también aterriza en la **bandeja del dueño**. El
 goal de una task es su contenedor: **una task no existe sin goal**.

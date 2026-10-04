@@ -85,6 +85,12 @@ Repo.get returns nil"]
 
 - Base URL is the profile's Dran (`$HERMES_HOME/dran_memory.json →
   base_url`); same `DRAN_API_KEY` as the plugin tools.
+- **The provider tools that front these routes** (the four `dran_memory_*`):
+  `dran_memory_add` (POST — dedupe + `force`), `dran_memory_search` (GET
+  `/search` — recall), `dran_memory_update` (PATCH — rewrite in place),
+  `dran_memory_feedback` (POST `/feedback` — trust ±). This flow only reads,
+  searches and deletes; the four writes belong to the provider so provenance
+  stays honest.
 - `created_by` on every memory is attributed server-side from the key's
   actor — never trust a client-set author.
 
@@ -111,12 +117,13 @@ Repo.get returns nil"]
 - **Purge ≠ delete** — plain DELETE soft-supersedes (status flips, row
   stays, excluded from search); `?purge=true` hard-deletes the row, and
   the fact can be re-stored later (no dedupe ghost).
-- **DELETE /api/memory/:id without `?workspace=<slug>` 403s for API
-  keys** — the write-access plug resolves the workspace from
-  `conn.params` only; with no `workspace` param it gets `nil` →
-  `"API key does not have write access to this workspace"` even for a
-  valid write key. Query params populate `conn.params`, so appending
-  `&workspace=<slug>` fixes it.
+- **Assuming the write gate needs a `workspace`** — it does not: the gate
+  resolves the INSTANCE itself (`require_write_access` →
+  `DranWeb.API.Instance.instance_context_id/0`), and a legacy
+  `?workspace=<slug>` is accepted and ignored. What `403` means here is the
+  key's own access level: a `read` key gets
+  `"Token does not have write access to this workspace"` on every write,
+  including DELETE. Fix the key, not the URL.
 - **GET /api/memory caps at 100 rows regardless of `limit`** — paginate
   with `offset` (loop until a page returns < 100) before claiming a
   total count; the first page lies about the size of the workspace.

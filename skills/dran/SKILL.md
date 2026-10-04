@@ -111,6 +111,20 @@ flowchart LR
 | `dran-memory-flow` | Administer shared agent memories (provider tools + REST) |
 | `dran-work-flow` | Goals, tasks and plans: alta, captura rápida, movimiento de columna, checklist y destino (`scope`/grupo) |
 
+## Brain health and discovery (real tools, no flow of their own)
+
+The suite has five flows; these tools belong to the one that owns their
+subject:
+
+| Tool | Lives in | What it is for |
+| --- | --- | --- |
+| `dran_stats` | knowledge-flow | pages by type, memories, relations |
+| `dran_lint_brain` | knowledge-flow | structural hygiene, read-only: orphans, broken embeds, missing metadata |
+| `dran_generate_cluster_summaries` | knowledge-flow | regenerate the nightly cluster summaries on demand |
+| `dran_rename_slug` | knowledge-flow | rewrite a slug and every `![[…]]` embed that pointed at it |
+| `dran_reaugment_page` | knowledge-flow | re-run embedding/summary/relations after a body change |
+| `dran_list_groups` | work-flow | the credential owner's groups — the share target to name BEFORE writing |
+
 ## Pitfalls
 
 - **Absorbing a flow you were routed away from** — the router is the

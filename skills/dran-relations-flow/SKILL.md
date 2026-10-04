@@ -64,8 +64,9 @@ flowchart TD
 
 - **Creatable types are exactly these 5**: `related`, `part_of`,
   `supersedes`, `contradicts`, `embeds`. The schema accepts 13 types
-  server-side, but the rest are machine-owned: `semantic` comes from the
-  augmenter (embeddings), `mentions` from the entity linker, and
+  server-side (`Dran.Relation.relation_types/0`), but the other 8 are
+  machine-owned: `semantic` comes from the augmenter (embeddings), `mentions`
+  from the entity linker, `informs` (memory → page) from memory ingest, and
   `works_in`/`has_tier`/`based_in`/`written_in`/`built_with` from props
   materialization.
 - Direction matters: `part_of` from the child TO the parent.
