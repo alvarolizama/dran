@@ -188,7 +188,7 @@ defmodule DranWeb.ServicesLive do
               "The instance owner decides which services are available. Once one is exposed, you can connect it here."
             )
           }
-          cta={gettext("Instance settings")}
+          cta={gettext("Settings")}
           navigate={~p"/admin/instance"}
         />
 

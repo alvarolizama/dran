@@ -26,6 +26,10 @@ defmodule DranWeb.InstanceSettingsAccessTest do
     user
   end
 
+  # El catálogo se elige por locale en la petición, así que el texto se pide al
+  # backend en vez de escribirlo literal.
+  defp t(msgid), do: Gettext.gettext(DranWeb.Gettext, msgid)
+
   defp with_role(user, role) do
     user |> Ecto.Changeset.change(instance_role: role) |> Repo.update!()
   end
@@ -43,9 +47,10 @@ defmodule DranWeb.InstanceSettingsAccessTest do
       owner = user!("instance_owner@test.dev", %{is_owner: true})
       conn = session_conn(conn, owner.email, true)
 
-      {:ok, _view, html} = live(conn, ~p"/admin/instance")
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
 
-      assert html =~ "Instance settings"
+      # El título de la página es el del enlace del nav (Admin › Settings).
+      assert view |> element("#settings-title") |> render() =~ t("Settings")
     end
 
     test "un admin de instancia NO entra: la configuración es del dueño", %{conn: conn} do
@@ -104,7 +109,7 @@ defmodule DranWeb.InstanceSettingsAccessTest do
     end
   end
 
-  describe "el nav muestra Instance settings sólo al dueño" do
+  describe "el nav muestra Settings sólo al dueño" do
     # El guard admite al dueño EN CUALQUIER página, así que el ítem del nav no
     # puede depender de dónde esté parado el lector — y los dos hablan del dueño:
     # la página vive en el grupo Admin (`/admin/instance`) y el menú de perfil

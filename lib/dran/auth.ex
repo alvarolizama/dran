@@ -16,6 +16,13 @@ defmodule Dran.Auth do
 
   @fallback_workspace_slug "personal"
 
+  # Nombre del cerebro cuando todavía NO hay fila (instalación vacía). No se
+  # deriva del slug: «Personal» era herencia del modelo de un workspace por
+  # usuario y en una instancia única — donde no hay nada por persona — no
+  # significa nada. El de la casa es el nombre del producto; el owner lo cambia
+  # en Settings → General.
+  @fallback_workspace_name "Dran"
+
   @doc """
   Bearer token for API/agent access (legacy admin token).
 
@@ -64,12 +71,12 @@ defmodule Dran.Auth do
 
   @doc """
   The instance's display name (what the shell shows as the brain's name), else
-  the slug-derived default.
+  the house default — never a per-person name.
   """
   def default_workspace_name do
     case the_instance() do
       %{name: name} when is_binary(name) and name != "" -> name
-      _ -> String.capitalize(@fallback_workspace_slug)
+      _ -> @fallback_workspace_name
     end
   end
 

@@ -82,7 +82,7 @@ defmodule DranWeb.WorkspaceSettingsLiveTest do
         |> element("#invite-member-form")
         |> render_submit(%{"invite" => %{"email" => "dup@example.com", "role" => "viewer"}})
 
-      assert html =~ t("That user already has access to this workspace.")
+      assert html =~ t("That user already has access to this instance.")
     end
 
     test "is refused for a user with no role in the workspace", %{conn: conn} do

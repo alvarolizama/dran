@@ -433,14 +433,14 @@ defmodule Dran.WorkspaceTest do
       # The flag is the only control: settings rows are ignored (and do not
       # count as a configured default either).
       assert Dran.Auth.default_workspace_slug() == "personal"
-      assert Dran.Auth.default_workspace_name() == "Personal"
+      assert Dran.Auth.default_workspace_name() == "Dran"
       refute Dran.Auth.default_workspace_configured?()
     end
 
     @tag :no_default_workspace
-    test "with nothing flagged and no workspace at all, the default is the personal literal" do
+    test "with nothing flagged and no workspace at all, the default is the house literal" do
       assert Dran.Auth.default_workspace_slug() == "personal"
-      assert Dran.Auth.default_workspace_name() == "Personal"
+      assert Dran.Auth.default_workspace_name() == "Dran"
       refute Dran.Auth.default_workspace_configured?()
     end
 

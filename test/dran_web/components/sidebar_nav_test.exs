@@ -51,7 +51,7 @@ defmodule DranWeb.SidebarNavTest do
       )
     end
 
-    test "lleva Home, Account (Profile) y el grupo Admin con Instance settings" do
+    test "lleva Home, Account (Profile) y el grupo Admin con Settings" do
       html = instance_nav()
 
       assert html =~ ~s(href="/")
@@ -59,7 +59,7 @@ defmodule DranWeb.SidebarNavTest do
       # La configuración de la instancia ES administración (owner-only): vive en
       # el grupo Admin, con la URL del shell de admin.
       assert html =~ ~s(href="/admin/instance")
-      assert html =~ t("Instance settings")
+      assert html =~ t("Settings")
       refute html =~ ~s(href="/settings/instance")
 
       for path <- ~w(instance users groups models system jobs) do
@@ -69,7 +69,7 @@ defmodule DranWeb.SidebarNavTest do
 
     # El enlace no puede ofrecerse a quien el guard de la ruta rebotaría: la
     # página es del owner y sólo para él se pinta (dueño del grupo Admin).
-    test "Instance settings no se ofrece a quien no es el dueño" do
+    test "Settings no se ofrece a quien no es el dueño" do
       html = instance_nav(%{is_owner: false})
 
       refute html =~ ~s(href="/admin/instance")
@@ -424,7 +424,7 @@ defmodule DranWeb.SidebarNavTest do
       refute viewer =~ ~s(href="/settings/api-keys")
     end
 
-    test "workspace owner sees Activity; Instance settings is the INSTANCE owner's" do
+    test "workspace owner sees Activity; Settings is the INSTANCE owner's" do
       ws_owner = menu(%{workspace_slug: "personal", workspace_role: "owner", is_owner: false})
       inst_owner = menu(%{workspace_slug: "personal", workspace_role: "owner", is_owner: true})
 
@@ -434,21 +434,21 @@ defmodule DranWeb.SidebarNavTest do
       # /admin/instance y ese shell es owner-only.
       refute ws_owner =~ ~s(href="/admin/instance")
       assert inst_owner =~ ~s(href="/admin/instance")
-      assert inst_owner =~ t("Instance settings")
+      assert inst_owner =~ t("Settings")
       # account links siguen arriba
       assert ws_owner =~ ~s(href="/settings/account")
       assert ws_owner =~ ~s(id="logout-form")
     end
 
-    test "viewer sees Activity but not Instance settings" do
+    test "viewer sees Activity but not Settings" do
       html = menu(%{workspace_slug: "personal", workspace_role: "viewer", is_owner: false})
 
       assert html =~ ~s(href="/activity")
-      # Instance settings is owner-only: viewer gets no admin link at all
+      # Settings is owner-only: viewer gets no admin link at all
       refute html =~ ~s(href="/admin/instance")
     end
 
-    test "instance owner sees Instance settings regardless of role" do
+    test "instance owner sees Settings regardless of role" do
       html = menu(%{workspace_slug: "personal", workspace_role: "viewer", is_owner: true})
 
       assert html =~ ~s(href="/admin/instance")
@@ -460,10 +460,10 @@ defmodule DranWeb.SidebarNavTest do
 
       # Workspace-scoped: siguen fuera (Activity es del cerebro).
       refute owner =~ "/activity"
-      # Instance settings es de la INSTANCIA: está con o sin workspace, y sólo
+      # Settings es de la INSTANCIA: está con o sin workspace, y sólo
       # para el dueño (la ruta vive en /admin/*).
       assert owner =~ ~s(href="/admin/instance")
-      assert owner =~ t("Instance settings")
+      assert owner =~ t("Settings")
       refute viewer =~ ~s(href="/admin/instance")
 
       assert owner =~ ~s(href="/")

@@ -201,30 +201,58 @@ defmodule DranWeb.SettingsLiveTest do
       {:ok, ws: ws}
     end
 
-    test "the General tab shows the slug and the private access note", %{
+    test "the General tab holds the name only — no slug, no access note", %{
       conn: conn,
       ws: ws
     } do
       {:ok, view, html} = live(conn, ~p"/admin/instance")
 
       assert has_element?(view, "#general-section")
-      # The workspace slug is the URL identity: visible, and clearly read-only.
-      assert html =~ ws.slug
-      assert html =~ t("read-only")
 
-      # W6: no default flag — with one container there is nothing to pick.
-      refute has_element?(view, "#workspace-is-default")
+      # Lo que la pantalla dice ahora: SÓLO el nombre. El slug (identificador
+      # interno con el que el API y los jobs resuelven la instancia) y el bloque
+      # de acceso sobran aquí — la instancia es privada por invariante y el
+      # acceso se administra en /admin/users, no en esta pantalla (comentario
+      # del owner, 2026-10-04).
+      general = view |> element("#general-section") |> render()
 
-      # No visibility control any more: the section states the invariant (every
-      # workspace is private, access is granted from the Users tab) instead of
-      # offering a public/private choice that no longer exists.
+      assert general =~ t("Name")
+      refute general =~ t("Slug")
+      refute general =~ ws.slug
+      refute general =~ t("read-only")
+      refute general =~ t("Access")
+      refute general =~ t("Private")
+      refute general =~ "Identifier the instance is resolved by"
+      refute general =~ "Only accounts on this instance can open it"
+
+      # La invariante que contaba esa nota sigue en pie, y sigue sin control que
+      # la pueda mover: no hay selector de visibilidad ni bandera de default.
+      assert ws.visibility == "private"
       refute has_element?(view, "#workspace-visibility")
       refute html =~ t("Public")
 
+      # W6: no default flag — with one container there is nothing to pick.
+      refute has_element?(view, "#workspace-is-default")
+    end
+
+    test "the page reads Settings and the page types say they are instance-wide", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+
+      # El título de la página es el del enlace del nav (Admin › Settings): el
+      # renombre no puede quedarse en el sidebar.
+      assert view |> element("#settings-title") |> render() =~ t("Settings")
+
+      html =
+        view
+        |> element("button[phx-click='select_tab'][phx-value-tab='page_types']")
+        |> render_click()
+
+      # Los tipos son de la INSTANCIA: el aviso lo dice antes de la lista, porque
+      # el interruptor de cada fila vale para todo el mundo.
       assert html =~
                esc(
                  t(
-                   "Only the people you add from the Users tab can open this workspace, and it never appears in anyone else's list. There is no public, discoverable tier."
+                   "Instance-wide: a type's switch applies to everyone here. Disabling one only removes its sidebar entry and its list — the pages of that type are kept."
                  )
                )
     end
@@ -237,7 +265,7 @@ defmodule DranWeb.SettingsLiveTest do
         |> form("#workspace-general-form", %{"workspace" => %{"name" => ws.name}})
         |> render_submit()
 
-      assert html =~ t("Workspace saved")
+      assert html =~ t("Settings saved")
       assert Knowledge.get_workspace!(ws.id).visibility == "private"
     end
 
@@ -264,6 +292,15 @@ defmodule DranWeb.SettingsLiveTest do
       # And its current state is spelled out, with the same word used by the
       # Page types list.
       assert html =~ t("Enabled")
+
+      # El tab es de INSTANCIA: el owner apaga la feature para todos, y el
+      # caption lo dice antes de la lista de toggles.
+      assert html =~
+               esc(
+                 t(
+                   "Turn parts of this instance on or off. It is instance-wide — everyone here gets the same set — and disabling a feature only removes its entry point: no page, relation or summary is ever deleted."
+                 )
+               )
     end
 
     test "turning a feature off is persisted and shown as disabled", %{conn: conn, ws: ws} do
@@ -338,23 +375,23 @@ defmodule DranWeb.SettingsLiveTest do
   # Mirrors the private helpers in the LiveView, so the test asserts the copy
   # that actually ships rather than a second copy written by hand.
   defp feature_description("search"),
-    do: "Full-text and semantic search across this workspace's pages."
+    do: "Full-text and semantic search across this instance's pages."
 
-  defp feature_description("graph"), do: "The relationship map of this workspace's pages."
+  defp feature_description("graph"), do: "The relationship map of this instance's pages."
 
   defp feature_description("journey"),
-    do: "Timeline of how this workspace's knowledge grew over time."
+    do: "Timeline of how this instance's knowledge grew over time."
 
   defp feature_description("collections"),
-    do: "Curated and smart page lists that update as the workspace changes."
+    do: "Curated and smart page lists that update as the instance changes."
 
   defp feature_description("clusters"),
     do: "Related pages grouped into themes by the nightly job."
 
   defp feature_description("reports"),
-    do: "Generated reports written from this workspace's content."
+    do: "Generated reports written from this instance's content."
 
-  defp feature_description("activity"), do: "Log of the recent changes to this workspace's pages."
+  defp feature_description("activity"), do: "Log of the recent changes to this instance's pages."
 
   defp feature_description("memory"),
     do: "The atomic facts your workers keep — what the brain remembers between runs."
@@ -722,13 +759,15 @@ defmodule DranWeb.SettingsLiveTest do
       assert has_element?(view, "#meta-field-label-0")
       assert has_element?(view, "#meta-field-type-0")
 
-      # La lleno: el JSON del form se re-deriva de la FILA.
+      # La lleno: el JSON del form se re-deriva de la FILA. `_target` es la ruta
+      # que manda LiveView (`["meta_field_rows", "0", "key"]`), no el nombre del
+      # input: es el shape contra el que el handler tiene que decidir.
       render_change(view, "validate_custom_page_type", %{
         "workspace" => type_params(meta_fields: ~s([["text", "", ""]])),
         "meta_field_rows" => %{
           "0" => %{"type" => "text", "key" => "cuisine", "label" => "Cuisine"}
         },
-        "_target" => ["meta_field_rows[0][key]"]
+        "_target" => ["meta_field_rows", "0", "key"]
       })
 
       # El fallback avanzado muestra exactamente lo mismo: un solo valor.
@@ -750,13 +789,87 @@ defmodule DranWeb.SettingsLiveTest do
              ]
     end
 
+    test "tipear en una fila no la borra: el `_target` llega como ruta de claves", %{conn: conn} do
+      # Lo que manda un browser de verdad: LiveView decodifica el `_target` a la
+      # RUTA de la clave — `["meta_field_rows", "0", "key"]` — no al nombre del
+      # input. Mientras el guard comparó los ELEMENTOS de esa lista contra
+      # `"meta_field_rows[..."` nunca dio true: el cambio de una fila entraba
+      # por el branch del JSON, que re-deriva las filas de `meta_fields` ("[]")
+      # y borraba la fila recién tipiada.
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+      open_page_types_tab(view)
+
+      render_click(view, "add_meta_field_row")
+      assert has_element?(view, "#meta-field-row-0")
+
+      # Una fila a medio llenar (key sin label): el payload del browser, con su
+      # ruta. La fila tiene que SOBREVIVIR con lo tipiado.
+      render_change(view, "validate_custom_page_type", %{
+        "workspace" => type_params(meta_fields: "[]"),
+        "meta_field_rows" => %{"0" => %{"type" => "text", "key" => "cuisine", "label" => ""}},
+        "_target" => ["meta_field_rows", "0", "key"]
+      })
+
+      assert has_element?(view, "#meta-field-row-0")
+      assert has_element?(view, "#meta-field-key-0[value='cuisine']")
+
+      # …y al completarla, el JSON del form la lleva (el formato de cable no cambió).
+      render_change(view, "validate_custom_page_type", %{
+        "workspace" => type_params(meta_fields: "[]"),
+        "meta_field_rows" => %{
+          "0" => %{"type" => "text", "key" => "cuisine", "label" => "Cuisine"}
+        },
+        "_target" => ["meta_field_rows", "0", "label"]
+      })
+
+      assert has_element?(view, "#meta-field-key-0[value='cuisine']")
+      assert render(view) =~ "&quot;cuisine&quot;"
+
+      # El select de tipo también es una fila (misma ruta, otra hoja).
+      render_change(view, "validate_custom_page_type", %{
+        "workspace" => type_params(meta_fields: "[]"),
+        "meta_field_rows" => %{
+          "0" => %{"type" => "date", "key" => "cuisine", "label" => "Cuisine"}
+        },
+        "_target" => ["meta_field_rows", "0", "type"]
+      })
+
+      assert has_element?(view, "#meta-field-type-0 option[value='date'][selected]")
+
+      # Las formas que puede empujar un `phx-change` a mano siguen contando.
+      for target <- [
+            "meta_field_rows[0][key]",
+            ["meta_field_rows[0][key]"],
+            ["meta_field_rows", "0"]
+          ] do
+        html =
+          render_change(view, "validate_custom_page_type", %{
+            "workspace" => type_params(meta_fields: "[]"),
+            "meta_field_rows" => %{
+              "0" => %{"type" => "text", "key" => "tapas", "label" => "Tapas"}
+            },
+            "_target" => target
+          })
+
+        assert html =~ "&quot;tapas&quot;", "el _target #{inspect(target)} se perdió"
+      end
+
+      # Y el JSON sigue mandando cuando el que cambió es el textarea.
+      render_change(view, "validate_custom_page_type", %{
+        "workspace" => type_params(meta_fields: ~s([["text", "vino", "Vino"]])),
+        "_target" => ["workspace", "meta_fields"]
+      })
+
+      assert has_element?(view, "#meta-field-key-0[value='vino']")
+    end
+
     test "quitar una fila y los payloads forjados no rompen el editor", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin/instance")
       open_page_types_tab(view)
 
       render_change(view, "validate_custom_page_type", %{
         "workspace" => type_params(meta_fields: ~s([["text", "a", "A"], ["date", "b", "B"]])),
-        "_target" => ["workspace[meta_fields]"]
+        "_target" => ["workspace", "meta_fields"]
       })
 
       assert has_element?(view, "#meta-field-row-0")
@@ -785,7 +898,7 @@ defmodule DranWeb.SettingsLiveTest do
       # Una fila a medio llenar: el validador dice qué falta…
       render_change(view, "validate_custom_page_type", %{
         "workspace" => type_params(meta_fields: ~s([["text", "", ""]])),
-        "_target" => ["workspace[meta_fields]"]
+        "_target" => ["workspace", "meta_fields"]
       })
 
       assert render(view) =~ "Field 1: the key must be a non-empty string."
@@ -803,7 +916,7 @@ defmodule DranWeb.SettingsLiveTest do
       html =
         render_change(view, "validate_custom_page_type", %{
           "workspace" => type_params(meta_fields: "[["),
-          "_target" => ["workspace[meta_fields]"]
+          "_target" => ["workspace", "meta_fields"]
         })
 
       refute has_element?(view, "#meta-field-rows")

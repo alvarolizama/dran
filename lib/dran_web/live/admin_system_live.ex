@@ -254,7 +254,7 @@ defmodule DranWeb.AdminSystemLive do
               label={gettext("Exposed services")}
               description={
                 gettext(
-                  "Which services the instance exposes. It is instance policy: the owner decides it in Instance settings, and a service outside the list cannot be listed, catalogued or executed."
+                  "Which services the instance exposes. It is instance policy: the owner decides it in Settings → Services, and a service outside the list cannot be listed, catalogued or executed."
                 )
               }
             >
@@ -267,7 +267,7 @@ defmodule DranWeb.AdminSystemLive do
                   id="services-instance-settings-link"
                   class="link link-hover text-xs font-medium"
                 >
-                  {gettext("Open Instance settings")}
+                  {gettext("Open Settings")}
                 </.link>
               </div>
             </.config_row>
