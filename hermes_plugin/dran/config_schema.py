@@ -104,6 +104,101 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             inline=True,
             group="Write destination",
         ),
+        # ── Tools: una superficie por grupo ────────────────────────────────
+        # Las 46 knowledge tools son SIETE superficies, y cada grupo tiene DOS
+        # interruptores sobre la misma cosa: este campo (que el panel escribe
+        # como `tools.<group>` en el JSON) y un TOOLSET de Hermes
+        # (`dran_pages`, `dran_goals`, `dran_tasks`, `dran_plans`,
+        # `dran_services`, `dran_skills`, `dran_brain`) que el operador corta
+        # con `hermes tools disable dran_pages`, `platform_toolsets` o
+        # `agent.disabled_toolsets` — por perfil y por plataforma.
+        #
+        # Un grupo apagado esconde sus tools del modelo Y del catálogo de
+        # tool_search, y sus llamadas se rechazan sin efecto. Aplica a la
+        # PRÓXIMA sesión: la que está en vuelo conserva su superficie (el
+        # prompt no se reescribe a mitad de conversación).
+        ProviderField(
+            key="pages",
+            label="Pages & relations",
+            kind=KIND_BOOL,
+            description="Search, list, read, create, update, delete and relink "
+            "knowledge pages (dran_search, dran_*_page, dran_rename_slug, "
+            "dran_reaugment_page, dran_*_relation, dran_get_links). "
+            "Hermes toolset: dran_pages.",
+            default="true",
+            inline=True,
+            group="Tools",
+        ),
+        ProviderField(
+            key="goals",
+            label="Goals",
+            kind=KIND_BOOL,
+            description="The container of work: list, read, create, update and "
+            "delete goals, plus dran_list_groups (the destination slugs a goal "
+            "or plan write can target). Hermes toolset: dran_goals.",
+            default="true",
+            inline=True,
+            group="Tools",
+        ),
+        ProviderField(
+            key="tasks",
+            label="Tasks & capture",
+            kind=KIND_BOOL,
+            description="List, read, create, update, move and delete tasks, plus "
+            "dran_capture (quick capture: a task into the inbox goal). "
+            "Hermes toolset: dran_tasks.",
+            default="true",
+            inline=True,
+            group="Tools",
+        ),
+        ProviderField(
+            key="plans",
+            label="Plans & checklists",
+            kind=KIND_BOOL,
+            description="List, read, create, update and delete plans, and tick "
+            "their checklist (dran_set_plan_checklist, dran_toggle_checklist). "
+            "Hermes toolset: dran_plans.",
+            default="true",
+            inline=True,
+            group="Tools",
+        ),
+        ProviderField(
+            key="services",
+            label="Connected services",
+            kind=KIND_BOOL,
+            description="Inspect the connected services, emit a connect link, "
+            "DISCOVER a toolkit's tool catalog and run one of its tools "
+            "(dran_services*). The catalog travels as data — never one tool per "
+            "toolkit. Hermes toolset: dran_services.",
+            default="true",
+            inline=True,
+            group="Tools",
+        ),
+        ProviderField(
+            key="skills",
+            label="Remote skills",
+            kind=KIND_BOOL,
+            description="List the workspace's skills, load one body by slug, and "
+            "save or delete one (dran_skills, dran_skill, dran_skill_save, "
+            "dran_skill_delete). Hermes toolset: dran_skills.",
+            default="true",
+            inline=True,
+            group="Tools",
+        ),
+        ProviderField(
+            key="brain",
+            label="Brain & workers",
+            kind=KIND_BOOL,
+            description="The agent-side brain: start an autonomous worker "
+            "session and read it back, regenerate cluster summaries, audit the "
+            "workspace's structure and read the dashboard numbers "
+            "(dran_start_worker, dran_get_worker_session, "
+            "dran_generate_cluster_summaries, dran_lint_brain, dran_stats). "
+            "Hermes toolset: dran_brain.",
+            default="true",
+            inline=True,
+            group="Tools",
+        ),
         ProviderField(
             key="auto_recall",
             label="Auto recall",
