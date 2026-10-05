@@ -287,11 +287,14 @@ defmodule DranWeb.Layouts do
 
         # Zero out counts for disabled page types so sidebar links vanish.
         # Iterates the workspace's EFFECTIVE types (4 built-in ∪ custom), and
-        # the key is the type's own path — custom types declare theirs.
+        # the key is the type's own PATH as a STRING — building an atom per
+        # custom type would grow the atom table with owner input (custom
+        # types are declared at runtime, fail-closed but unbounded). The
+        # badge lookup (type_atom) reads the same string.
         type_counts =
           Map.new(Dran.Knowledge.effective_page_types(context), fn type ->
             count = if type in disabled, do: 0, else: by_type[type] || 0
-            {String.to_atom(Dran.Workspace.page_type_path(context, type)), count}
+            {Dran.Workspace.page_type_path(context, type), count}
           end)
 
         # Smart collections are first-class Brain collections now.
@@ -612,10 +615,11 @@ defmodule DranWeb.Layouts do
     ]
   end
 
-  # Badge keys are keyed by the type's workspace path (e.g. "notes" → :notes)
-  # — compute_counts builds them the same way, so a new type needs no clause.
+  # Badge keys are the type's workspace PATH as a plain string (e.g. "notes")
+  # — compute_counts builds them the same way, so a new type needs no clause
+  # and no runtime atom is created from owner-declared paths.
   defp type_atom(ws, type) do
-    ws |> Dran.Workspace.page_type_path(type) |> String.to_atom()
+    Dran.Workspace.page_type_path(ws, type)
   end
 
   # ── Instance nav (/, /settings/*, /admin/*) ───────────────────────────────
@@ -657,7 +661,7 @@ defmodule DranWeb.Layouts do
            abrirla; eso ya no es así y un enlace que rebota no se deja. --%>
       <.nav_group :if={@is_owner} label={gettext("Admin")}>
         <.nav_link
-          label={gettext("Instance settings")}
+          label={gettext("Settings")}
           icon="hero-cog-6-tooth"
           path={~p"/admin/instance"}
           active={@active == "admin_instance"}
@@ -753,7 +757,7 @@ defmodule DranWeb.Layouts do
   The menu is the global fallback from any URL: Home (back to the brain) plus
   the account entry (Profile, which carries the API credential). When the shell
   is showing the knowledge content it also carries the brain-scoped entries
-  (Activity · Instance settings) after a divider, and — for instance owners —
+  (Activity · Settings) after a divider, and — for instance owners —
   the ADMIN group (Users · Groups · All workspaces · Models · System · Jobs),
   which is what makes /admin reachable from the knowledge shell at all.
 
@@ -838,7 +842,7 @@ defmodule DranWeb.Layouts do
             :if={@is_owner}
             href={~p"/admin/instance"}
             icon="hero-cog-6-tooth"
-            label={gettext("Instance settings")}
+            label={gettext("Settings")}
             active={@active == "admin_instance"}
           />
           <.menu_item

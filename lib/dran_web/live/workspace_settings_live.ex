@@ -1,8 +1,9 @@
 defmodule DranWeb.WorkspaceSettingsLive do
   @moduledoc """
-  Instance configuration page with tabbed settings: General (name, default
-  flag), Page types, Features, Automation (worker limits + semantic
-  membership) and — owner-only — Services.
+  Instance configuration page ("Settings" in the nav) with tabbed settings:
+  General (name), Page types, Features, Automation (worker
+  limits + semantic membership) and — owner-only — Services. Every tab is
+  instance-wide: what it changes, changes for everyone on this instance.
 
   It IS instance administration, so it lives at `/admin/instance` and the guard
   is the owner: `/admin/*` is owner policy (`pipeline :admin` +
@@ -47,6 +48,10 @@ defmodule DranWeb.WorkspaceSettingsLive do
   @brain_keys ~w(worker_max_pages entity_linker_enabled summary_language)
   @advanced_keys ~w(semantic_threshold_short semantic_threshold_mid semantic_threshold_long)
 
+  # The tuning keys as atoms, built ONCE at compile time from the same
+  # allowlists (both lines above) — no String.to_atom at request time.
+  @tuning_atoms for k <- @brain_keys ++ @advanced_keys, into: %{}, do: {k, String.to_atom(k)}
+
   # Meta fields del alta de tipos: los tipos que acepta el validador y el tipo
   # con el que nace una fila nueva. El formato de cable sigue siendo la lista
   # JSON `[[tipo, key, label]]` (ver `parse_meta_fields/1`).
@@ -88,10 +93,11 @@ defmodule DranWeb.WorkspaceSettingsLive do
       socket
       |> assign(
         active_nav: "admin_instance",
-        # The route (and the nav link) call this "Instance settings": the page
-        # configures the INSTANCE — page types, features, tuning — not a
-        # workspace inside it. Title and shell follow the route name.
-        page_title: gettext("Instance settings"),
+        # The nav link and the page read "Settings" (Admin › Settings): what the
+        # page configures is the INSTANCE — name, page types, features, tuning,
+        # services — and all of it is global for everyone here. The route keeps
+        # its name (`/admin/instance`), and the shell follows the title.
+        page_title: gettext("Settings"),
         current_user_struct: user,
         workspace: workspace,
         # Instance shell (DESIGN §T2): /admin/* renders the instance nav, so
@@ -142,7 +148,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <div class="w-full p-6 space-y-6">
           <%!-- Page header --%>
           <div>
-            <h1 class="text-title">{gettext("Instance settings")}</h1>
+            <h1 id="settings-title" class="text-title">{gettext("Settings")}</h1>
             <p class="text-caption mt-1">
               {if @workspace,
                 do: @workspace.name,
@@ -152,7 +158,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
           <div :if={is_nil(@workspace)} class="alert alert-warning">
             <.icon name="hero-exclamation-triangle" class="size-5" />
-            <span>{gettext("Workspace not found.")}</span>
+            <span>{gettext("Instance not found.")}</span>
           </div>
 
           <div :if={@workspace} class="space-y-6">
@@ -196,7 +202,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
             <%!-- Tab content --%>
             <div :if={@active_tab == :general}>
-              <.general_section workspace={@workspace} form={@general_form} />
+              <.general_section form={@general_form} />
             </div>
 
             <div :if={@active_tab == :page_types}>
@@ -262,13 +268,13 @@ defmodule DranWeb.WorkspaceSettingsLive do
          socket
          |> assign(workspace: updated)
          |> assign_general_form()
-         |> put_flash(:info, gettext("Workspace saved"))}
+         |> put_flash(:info, gettext("Settings saved"))}
 
       {:error, changeset} ->
         {:noreply,
          socket
          |> assign(general_form: to_form(changeset, as: :workspace))
-         |> put_flash(:error, gettext("Could not save workspace"))}
+         |> put_flash(:error, gettext("Could not save settings"))}
     end
   end
 
@@ -527,7 +533,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
          |> assign(invite_form: to_form(%{"email" => "", "role" => role}, as: :invite))
          |> assign_workspace_members()
          |> assign_all_users()
-         |> put_flash(:info, gettext("%{email} now has access to this workspace", email: email))}
+         |> put_flash(:info, gettext("%{email} now has access to this instance", email: email))}
 
       {:error, :user_not_found} ->
         {:noreply,
@@ -541,7 +547,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
       {:error, :already_member} ->
         {:noreply,
-         put_flash(socket, :info, gettext("That user already has access to this workspace."))}
+         put_flash(socket, :info, gettext("That user already has access to this instance."))}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, gettext("Could not add the user"))}
@@ -619,7 +625,6 @@ defmodule DranWeb.WorkspaceSettingsLive do
     """
   end
 
-  attr :workspace, Workspace, required: true
   attr :form, :any, required: true
 
   defp general_section(assigns) do
@@ -632,7 +637,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("General")}</h2>
           <p class="text-caption mt-1">
-            {gettext("What this workspace is called and who can reach it.")}
+            {gettext("What this instance is called.")}
           </p>
         </div>
       </header>
@@ -650,57 +655,11 @@ defmodule DranWeb.WorkspaceSettingsLive do
                 field={@form[:name]}
                 type="text"
                 label={gettext("Name")}
-                placeholder={gettext("e.g. Personal")}
+                placeholder={gettext("e.g. My brain")}
               />
               <p class="text-xs text-base-content/50 mt-1.5">
-                {gettext("Shown in the workspace switcher, the sidebar and every breadcrumb.")}
+                {gettext("Shown on the home page and as the browser title.")}
               </p>
-            </div>
-
-            <%!-- The slug is the URL identity of the workspace and is not
-                 editable here: changing it would break every existing link. --%>
-            <div>
-              <span class="block text-sm font-medium text-base-content/70 mb-1.5">
-                {gettext("Slug")}
-              </span>
-              <div class="flex items-center gap-2">
-                <code class="rounded-lg border border-base-300 bg-base-200/50 px-2 py-1.5 font-mono text-xs">
-                  {@workspace.slug}
-                </code>
-                <span class="text-xs text-base-content/50">{gettext("read-only")}</span>
-              </div>
-              <p class="text-xs text-base-content/50 mt-1.5">
-                {gettext(
-                  "The workspace identifier in every URL: /%{slug}/notes, /%{slug}/settings…",
-                  slug: @workspace.slug
-                )}
-              </p>
-            </div>
-          </div>
-
-          <%!-- Access --%>
-          <div class="space-y-3">
-            <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider">
-              {gettext("Access")}
-            </h3>
-
-            <%!-- There is no visibility control any more: every workspace is
-                 private and access is granted one account at a time from the
-                 Users tab. The old public/private select was removed rather
-                 than left disabled, so nothing suggests a discoverable tier
-                 that no longer exists. --%>
-            <div class="flex items-start gap-3 rounded-xl border border-base-content/10 px-3 py-2.5">
-              <.icon name="hero-lock-closed" class="size-4 mt-0.5 shrink-0 text-base-content/50" />
-              <div class="min-w-0">
-                <span class="block text-sm font-medium text-base-content">
-                  {gettext("Private")}
-                </span>
-                <span class="block text-xs text-base-content/60 mt-1">
-                  {gettext(
-                    "Only the people you add from the Users tab can open this workspace, and it never appears in anyone else's list. There is no public, discoverable tier."
-                  )}
-                </span>
-              </div>
             </div>
           </div>
 
@@ -735,7 +694,9 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("Page types")}</h2>
           <p class="text-caption mt-1">
-            {gettext("Which kinds of page this workspace can hold, and which of them are enabled.")}
+            {gettext(
+              "Which kinds of page this instance can hold — for everyone on it — and which of them are enabled."
+            )}
           </p>
         </div>
       </header>
@@ -746,6 +707,15 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <h3 class="text-caption font-semibold text-base-content/60 uppercase tracking-wider mb-3">
           {gettext("Available types")}
         </h3>
+
+        <%!-- Los tipos son de la INSTANCIA (viven en el workspace único), así
+             que el aviso va aquí arriba: el interruptor de cada fila vale para
+             todo el mundo, y apagar un tipo no borra sus páginas. --%>
+        <p class="text-xs text-base-content/60 mb-3">
+          {gettext(
+            "Instance-wide: a type's switch applies to everyone here. Disabling one only removes its sidebar entry and its list — the pages of that type are kept."
+          )}
+        </p>
 
         <div class="space-y-2">
           <%= for type <- effective_page_types(@workspace) do %>
@@ -816,7 +786,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
           <h3 class="text-sm font-semibold">{gettext("Add a custom page type")}</h3>
           <p class="text-caption mt-1">
             {gettext(
-              "Gets its own sidebar section, list, graph colour and editor fields. The four built-in types cannot be redefined."
+              "Gets its own sidebar section, list, graph colour and editor fields for everyone on this instance. The four built-in types cannot be redefined."
             )}
           </p>
         </div>
@@ -859,7 +829,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
                 />
                 <p class="text-xs text-base-content/50 mt-1.5">
                   {gettext(
-                    "URL segment — pages will live at /workspace/%{path}/slug. Must be unique and cannot collide with a reserved route.",
+                    "URL segment — pages will live at /%{path}/slug. Must be unique and cannot collide with a reserved route.",
                     path: preview.path || "recipes"
                   )}
                 </p>
@@ -1166,7 +1136,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
           <h2 class="text-heading">{gettext("Features")}</h2>
           <p class="text-caption mt-1">
             {gettext(
-              "Turn parts of this workspace on or off. Disabling a feature only removes its entry point — no page, relation or summary is ever deleted."
+              "Turn parts of this instance on or off. It is instance-wide — everyone here gets the same set — and disabling a feature only removes its entry point: no page, relation or summary is ever deleted."
             )}
           </p>
         </div>
@@ -1246,7 +1216,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
           <h2 class="text-heading">{gettext("Automation")}</h2>
           <p class="text-caption mt-1">
             {gettext(
-              "Worker limits, semantic thresholds and summary language for this workspace. Applies to autonomous workers, the page augmenter and the nightly cron jobs."
+              "Worker limits, semantic thresholds and summary language for this instance. Applies to autonomous workers, the page augmenter and the nightly cron jobs."
             )}
           </p>
         </div>
@@ -1382,7 +1352,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
         <div class="min-w-0">
           <h2 class="text-heading">{gettext("Users")}</h2>
           <p class="text-caption mt-1">
-            {gettext("Who can open this workspace, and with which role.")}
+            {gettext("Who can open this instance, and with which role.")}
           </p>
         </div>
       </header>
@@ -1403,7 +1373,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
           </ul>
 
           <div :if={@members == []} class="text-sm text-base-content/50 py-4 text-center">
-            {gettext("No users have access to this workspace yet.")}
+            {gettext("No users have access to this instance yet.")}
           </div>
 
           <div :if={@members != []} class="space-y-2">
@@ -1442,9 +1412,9 @@ defmodule DranWeb.WorkspaceSettingsLive do
                   type="button"
                   phx-click="toggle_member"
                   phx-value-user_id={member.id}
-                  data-confirm={gettext("Remove %{user} from this workspace?", user: member.email)}
+                  data-confirm={gettext("Remove %{user} from this instance?", user: member.email)}
                   class="btn btn-ghost btn-xs btn-circle text-error"
-                  title={gettext("Remove from workspace")}
+                  title={gettext("Remove from instance")}
                 >
                   <.icon name="hero-x-mark" class="size-4" />
                 </button>
@@ -1461,7 +1431,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
           <p class="text-xs text-base-content/60 mb-3">
             {gettext(
-              "Give an existing account access to this workspace. People must already have a Dran account — there is no invitation email, access is granted as soon as you add them."
+              "Give an existing account access to this instance. People must already have a Dran account — there is no invitation email, access is granted as soon as you add them."
             )}
           </p>
 
@@ -1638,7 +1608,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
 
     values =
       Map.new(@brain_keys ++ @advanced_keys, fn key ->
-        {key, Workspace.get_tuning(workspace, String.to_atom(key))}
+        {key, Workspace.get_tuning(workspace, Map.fetch!(@tuning_atoms, key))}
       end)
       |> Map.update!("summary_language", &(&1 || "auto"))
 
@@ -1926,18 +1896,29 @@ defmodule DranWeb.WorkspaceSettingsLive do
     end
   end
 
-  # `_target` del form: la lista de inputs que disparó el `phx-change` (o el
-  # nombre suelto). Las filas del editor son las que empiezan con
-  # `meta_field_rows[`.
+  # `_target` del form: LiveView lo normaliza a la RUTA de la clave, no al
+  # nombre del input — `channel.ex` (`decode_merge_target/1`) decodifica
+  # `"meta_field_rows[0][key]"` y junta sus claves ⇒ `["meta_field_rows", "0",
+  # "key"]`. Comparar los elementos contra el nombre completo nunca daba true y
+  # el cambio de una fila se leía como cambio del JSON, que re-derivaba las
+  # filas de `meta_fields` y borraba lo recién tipiado. Un `phx-change` empujado
+  # a mano (JS / tests) puede traer el nombre completo o la lista de nombres,
+  # así que también se aceptan esas formas.
+  defp meta_field_rows_target?([head | _]) when is_binary(head), do: meta_field_root?(head)
+
+  defp meta_field_rows_target?(target) when is_binary(target), do: meta_field_root?(target)
+
   defp meta_field_rows_target?(target) when is_list(target) do
     Enum.any?(target, &meta_field_rows_target?/1)
   end
 
-  defp meta_field_rows_target?(target) when is_binary(target) do
-    String.starts_with?(target, "meta_field_rows[")
-  end
-
   defp meta_field_rows_target?(_target), do: false
+
+  defp meta_field_root?("meta_field_rows"), do: true
+
+  defp meta_field_root?(name) when is_binary(name) do
+    String.starts_with?(name, "meta_field_rows[")
+  end
 
   # Los botones de fila son `phx-click` y no llevan el payload del form: el
   # estado sale del assign que el `phx-change` mantiene al día. Con el JSON roto
@@ -2163,25 +2144,25 @@ defmodule DranWeb.WorkspaceSettingsLive do
   # toggle. Written as "what it gives you", because that is the decision the
   # toggle asks for.
   defp feature_description("search"),
-    do: gettext("Full-text and semantic search across this workspace's pages.")
+    do: gettext("Full-text and semantic search across this instance's pages.")
 
   defp feature_description("graph"),
-    do: gettext("The relationship map of this workspace's pages.")
+    do: gettext("The relationship map of this instance's pages.")
 
   defp feature_description("journey"),
-    do: gettext("Timeline of how this workspace's knowledge grew over time.")
+    do: gettext("Timeline of how this instance's knowledge grew over time.")
 
   defp feature_description("collections"),
-    do: gettext("Curated and smart page lists that update as the workspace changes.")
+    do: gettext("Curated and smart page lists that update as the instance changes.")
 
   defp feature_description("clusters"),
     do: gettext("Related pages grouped into themes by the nightly job.")
 
   defp feature_description("reports"),
-    do: gettext("Generated reports written from this workspace's content.")
+    do: gettext("Generated reports written from this instance's content.")
 
   defp feature_description("activity"),
-    do: gettext("Log of the recent changes to this workspace's pages.")
+    do: gettext("Log of the recent changes to this instance's pages.")
 
   defp feature_description("memory"),
     do: gettext("The atomic facts your workers keep — what the brain remembers between runs.")

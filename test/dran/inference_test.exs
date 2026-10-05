@@ -1,8 +1,11 @@
 defmodule Dran.InferenceTest do
-  use ExUnit.Case, async: false
+  # DataCase (not bare ExUnit): seeding `model_*` into the Settings table
+  # needs a sandboxed Repo checkout.
+  use Dran.DataCase, async: false
 
   alias Dran.Inference
   alias Dran.Inference.Config
+  alias Dran.Settings
 
   setup do
     original = Application.get_env(:dran, :inference)
@@ -65,10 +68,15 @@ defmodule Dran.InferenceTest do
         })
       end)
 
+      # The model comes from the Settings table (Admin → Models), not from
+      # the app env: seed it and clean it up.
+      Settings.put("model_embedding", "Qwen3-Embedding")
+
+      on_exit(fn -> Settings.delete("model_embedding") end)
+
       Application.put_env(:dran, :inference,
         base_url: "http://localhost:8000/v1",
         api_key: "test-key",
-        embedding_model: "Qwen3-Embedding",
         timeout: 5_000,
         req_plug: {Req.Test, Dran.Inference.Client},
         schedule_async: false
@@ -97,10 +105,13 @@ defmodule Dran.InferenceTest do
         })
       end)
 
+      Settings.put("model_embedding", "Qwen3-Embedding")
+
+      on_exit(fn -> Settings.delete("model_embedding") end)
+
       Application.put_env(:dran, :inference,
         base_url: "http://localhost:8000/v1",
         api_key: "test-key",
-        embedding_model: "Qwen3-Embedding",
         timeout: 5_000,
         req_plug: {Req.Test, Dran.Inference.Client},
         schedule_async: false
@@ -126,10 +137,17 @@ defmodule Dran.InferenceTest do
         })
       end)
 
+      Settings.put("model_embedding", "Qwen3-Embedding")
+      Settings.put("model_chat", "Qwen3.5-9B")
+
+      on_exit(fn ->
+        Settings.delete("model_embedding")
+        Settings.delete("model_chat")
+      end)
+
       Application.put_env(:dran, :inference,
         base_url: "http://localhost:8000/v1",
         api_key: "test-key",
-        embedding_model: "Qwen3-Embedding",
         timeout: 5_000,
         req_plug: {Req.Test, Dran.Inference.Client},
         schedule_async: false

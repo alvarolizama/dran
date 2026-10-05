@@ -27,6 +27,12 @@ defmodule DranWeb.SearchLive do
 
   @mode_strings for {mode, _label} <- @search_modes, do: mode
 
+  # string → atom map built from the SAME allowlist at compile time, so the
+  # strategy passed to Knowledge.search never needs String.to_atom at
+  # runtime (sobelow DOS.StringToAtom: the mode is allowlisted, but the
+  # conversion has a clean zero-conversion form — use it).
+  @mode_atoms for {mode, _label} <- @search_modes, into: %{}, do: {mode, String.to_atom(mode)}
+
   @impl true
   def mount(params, session, socket) do
     # The URL slug wins over the session (see Plugs.Auth.assign_to_socket/3).
@@ -57,7 +63,7 @@ defmodule DranWeb.SearchLive do
           Knowledge.search(q,
             workspace_id: socket.assigns.context.id,
             limit: 20,
-            strategy: String.to_atom(socket.assigns.search_mode),
+            strategy: Map.fetch!(@mode_atoms, socket.assigns.search_mode),
             scope: page_scope(socket)
           )
 
@@ -98,7 +104,7 @@ defmodule DranWeb.SearchLive do
             Knowledge.search(q,
               workspace_id: socket.assigns.context.id,
               limit: 20,
-              strategy: String.to_atom(socket.assigns.search_mode),
+              strategy: Map.fetch!(@mode_atoms, socket.assigns.search_mode),
               scope: page_scope(socket)
             )
 

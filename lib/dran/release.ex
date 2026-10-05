@@ -262,10 +262,15 @@ defmodule Dran.Release do
     :ok
   end
 
+  # Allowlisted: only the envs mix defines can come back. MIX_ENV is host
+  # operator input (not web input), but the allowlist is free — and it keeps
+  # a stray MIX_ENV value from minting an atom.
+  @mix_envs %{"dev" => :dev, "test" => :test, "prod" => :prod}
+
   defp config_env do
     case System.get_env("MIX_ENV") do
       nil -> :prod
-      env -> String.to_atom(env)
+      env -> Map.get(@mix_envs, env, :prod)
     end
   end
 end

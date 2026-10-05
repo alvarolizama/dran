@@ -26,21 +26,16 @@ defmodule Dran.Inference.Config do
   @spec api_key :: String.t() | nil
   def api_key, do: get(:api_key)
 
-  @spec embedding_model :: String.t()
-  def embedding_model, do: model_or_setting("embedding")
+  # The model names are runtime settings (Admin → Models writes
+  # `model_chat` / `model_embedding` into the settings table). The old
+  # `:"#{key}_model"` config-key fallback read a keyword nobody ever set
+  # (`load_from_env` emits no such key) — dead branch, and the atom it built
+  # from interpolation is what sobelow flagged (DOS.BinToAtom).
+  @spec embedding_model :: String.t() | nil
+  def embedding_model, do: Dran.Settings.get("model_embedding")
 
-  @spec chat_model :: String.t()
-  def chat_model, do: model_or_setting("chat")
-
-  defp model_or_setting(key) do
-    case Dran.Settings.get("model_#{key}") do
-      nil -> get(:"#{key}_model")
-      "" -> get(:"#{key}_model")
-      model -> model
-    end
-  rescue
-    _ -> get(:"#{key}_model")
-  end
+  @spec chat_model :: String.t() | nil
+  def chat_model, do: Dran.Settings.get("model_chat")
 
   @spec embedding_dimensions :: pos_integer()
   def embedding_dimensions, do: get(:embedding_dimensions) || 1024

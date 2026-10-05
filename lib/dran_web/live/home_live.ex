@@ -29,6 +29,7 @@ defmodule DranWeb.HomeLive do
   alias Dran.Workspace
 
   alias DranWeb.GraphHelpers
+  alias DranWeb.HTMLSanitizer
   alias DranWeb.Plugs.Auth
 
   # Types hidden from the global 3D graph — same list the panel uses via
@@ -485,7 +486,7 @@ defmodule DranWeb.HomeLive do
             </span>
           </div>
           <p :if={result[:excerpt]} class="text-sm text-base-content/60 mt-1 line-clamp-2">
-            {raw(result.excerpt)}
+            {raw(HTMLSanitizer.sanitize_to_string(result.excerpt))}
           </p>
         </.link>
       </div>

@@ -363,6 +363,7 @@ DATABASE_URL=ecto://nope:nope@127.0.0.1:1/nope SECRET_KEY_BASE=test \
 - **Usage** — [docs/usage.md](docs/usage.md) — the surfaces, the destination and the tools
 - **REST API** — [docs/api.md](docs/api.md)
 - **Page types** — [docs/page-types.md](docs/page-types.md)
+- **Security review** — [docs/security-review.md](docs/security-review.md)
 - **Dependency debt** — [docs/dependency-debt.md](docs/dependency-debt.md)
 - **Plugin** — [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md)
 - **Skills** — [skills/README.md](skills/README.md)
