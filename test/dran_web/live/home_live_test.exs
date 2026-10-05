@@ -2,7 +2,7 @@ defmodule DranWeb.HomeLiveTest do
   use DranWeb.ConnCase, async: false
 
   alias Dran.Knowledge
-  alias Dran.{Goals, Memory, Plans, Repo}
+  alias Dran.{Goals, Memory, Plans, Skills, Repo}
   alias Dran.Accounts.User
 
   setup %{conn: conn} do
@@ -148,7 +148,7 @@ defmodule DranWeb.HomeLiveTest do
       refute has_element?(reader_view, "#home-status-goals-active")
     end
 
-    test "planes activos con su progreso, memoria y páginas, todo scopeado", %{
+    test "planes activos con su progreso, memoria, skills y páginas, todo scopeado", %{
       conn: conn,
       workspace: workspace,
       reader: reader,
@@ -165,13 +165,25 @@ defmodule DranWeb.HomeLiveTest do
       {:ok, _} = create_page!(workspace, reader, "Reader page", "private")
       {:ok, _} = create_page!(workspace, admin, "Admin page", "private")
 
+      # Un skill propio y uno privado ajeno: los skills son de la INSTANCIA (su
+      # tabla no tiene `workspace_id`), así que el número sale del mismo scope
+      # PERSONAL de esta sección — un admin no ensancha.
+      {:ok, _} = create_skill!("del-lector", reader)
+      {:ok, _} = create_skill!("del-admin", admin)
+
       {:ok, view, _} = live(login(conn, reader), ~p"/")
+      {:ok, admin_view, _} = live(login(conn, admin), ~p"/")
 
       assert has_element?(view, "#home-status-plan-#{plan.id}", "Reader plan")
       assert has_element?(view, "#home-status-plan-#{plan.id}", "1/2")
       assert has_element?(view, "#home-status-plans-total", "1")
       assert has_element?(view, "#home-status-memory-total", "0")
       assert has_element?(view, "#home-status-pages-total", "1")
+
+      # Cada lector cuenta SU skill; ninguno cuenta el privado del otro.
+      assert has_element?(view, "#home-status-skills-total", "1")
+      assert has_element?(admin_view, "#home-status-skills-total", "1")
+      refute has_element?(admin_view, "#home-status-skills-total", "2")
     end
 
     test "una sesión sin fila en `users` no dibuja el estado", %{conn: conn} do
@@ -254,6 +266,19 @@ defmodule DranWeb.HomeLiveTest do
       visibility: visibility,
       owner_user_id: owner.id
     })
+  end
+
+  defp create_skill!(slug, owner) do
+    Skills.create_skill(
+      %{
+        "slug" => slug,
+        "name" => slug,
+        "description" => "skill de #{slug}",
+        "body" => "# #{slug}",
+        "visibility" => "private"
+      },
+      owner_user_id: owner.id
+    )
   end
 
   describe "el grafo dibuja goals y plans (W4)" do

@@ -26,6 +26,7 @@ defmodule DranWeb.HomeLive do
   alias Dran.Memory
   alias Dran.Plans
   alias Dran.Plans.Plan
+  alias Dran.Skills
   alias Dran.Workspace
 
   alias DranWeb.GraphHelpers
@@ -522,7 +523,7 @@ defmodule DranWeb.HomeLive do
           {gettext("Your status")}
         </h2>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           <%!-- Goals: el total y los estados con contenido --%>
           <div id="home-status-goals" class="card bg-base-100 border border-base-300">
             <div class="card-body p-5 gap-3">
@@ -628,6 +629,26 @@ defmodule DranWeb.HomeLive do
                 {@status.memory}
               </span>
               <p class="text-xs text-base-content/50">{gettext("facts you can read")}</p>
+            </div>
+          </div>
+
+          <%!-- Skills: la superficie propia de las instrucciones que un agente
+          conectado descubre y carga por tool (hermana de Memory, no un tipo de
+          página). El número es del LECTOR y de la INSTANCIA: la tabla de skills
+          no tiene `workspace_id`. --%>
+          <div id="home-status-skills" class="card bg-base-100 border border-base-300">
+            <div class="card-body p-5 gap-1">
+              <.link
+                navigate={~p"/skills"}
+                class="flex items-center gap-2 font-medium hover:text-primary transition-colors"
+              >
+                <.icon name="hero-academic-cap" class="size-4 text-primary/70" />
+                {gettext("Skills")}
+              </.link>
+              <span id="home-status-skills-total" class="text-2xl font-semibold tabular-nums">
+                {@status.skills}
+              </span>
+              <p class="text-xs text-base-content/50">{gettext("skills you can read")}</p>
             </div>
           </div>
 
@@ -1485,6 +1506,11 @@ defmodule DranWeb.HomeLive do
               %{id: plan.id, title: plan.title, progress: Plans.progress(plan)}
             end),
           memory: Memory.count_memories(workspace.id, scope: scope),
+          # Los skills son de la INSTANCIA (la tabla no tiene `workspace_id`),
+          # como el badge del nav: mismo `count_skills/1` —una query agregada—
+          # y la misma puerta, pero con el scope PERSONAL de esta sección (el
+          # nav resuelve con `scope/3` y ahí un owner sí ensancha).
+          skills: Skills.count_skills(scope: scope),
           pages:
             Knowledge.count_pages(
               workspace_id: workspace.id,

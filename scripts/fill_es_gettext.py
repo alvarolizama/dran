@@ -459,6 +459,7 @@ ES = {
     "Skill deleted.": "Skill eliminado.",
     "Skill saved.": "Skill guardado.",
     "Skills": "Skills",
+    "skills you can read": "skills que puedes leer",
     "The name is the wire address and cannot be renamed.": "El nombre es la dirección del wire y no se puede renombrar.",
     "The name is the wire address: it is never renamed.": "El nombre es la dirección del wire: nunca se renombra.",
     "The name is the wire address: it is set once and never renamed. Editing changes the body, the description and the destination.": "El nombre es la dirección del wire: se escribe una vez y nunca se renombra. Editar cambia el cuerpo, la descripción y el destino.",

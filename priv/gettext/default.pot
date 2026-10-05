@@ -4418,3 +4418,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "the instance"
 msgstr ""
+
+#: lib/dran_web/live/home_live.ex:651
+#, elixir-autogen, elixir-format
+msgid "skills you can read"
+msgstr ""

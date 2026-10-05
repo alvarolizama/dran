@@ -4416,3 +4416,8 @@ msgstr "Mostrando toda la instancia"
 #, elixir-autogen, elixir-format
 msgid "the instance"
 msgstr "la instancia"
+
+#: lib/dran_web/live/home_live.ex:651
+#, elixir-autogen, elixir-format
+msgid "skills you can read"
+msgstr "skills que puedes leer"
