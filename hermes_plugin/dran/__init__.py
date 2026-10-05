@@ -18,7 +18,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from agent.memory_provider import MemoryProvider, RecallStatus
 
@@ -1375,7 +1375,80 @@ class DranMemoryProvider(MemoryProvider):
 # in the `X-Hermes-Agent` header; Dran persists it as `agent_name` on the
 # written content (server-side attribution).
 
+# ── Grupos: un interruptor por superficie y un TOOLSET de Hermes por grupo ──
+#
+# Las 46 tools registradas no son un solo interruptor: son SIETE superficies,
+# cada una con su switch en el panel del plugin (Desktop → Settings → Memory &
+# Context → Tools, escribe `tools.<group>` en $HERMES_HOME/dran/config.json) y
+# con su propio TOOLSET de Hermes (`dran_<group>`), para que el operador pueda
+# cortar una superficie desde `hermes tools disable dran_pages`,
+# `platform_toolsets` o `agent.disabled_toolsets` — por perfil y por plataforma.
+#
+# La TABLA es la única fuente de verdad: los campos bool del panel viven en
+# config_schema.py (que no puede importar este módulo) y los tests los
+# comparan contra ella; los conjuntos del dispatcher (más abajo) se derivan de
+# aquí. Un tool sin grupo caería al toolset pelado `dran` — el viejísimo
+# interruptor todo-o-nada — y los tests verifican que los 46 estén mapeados.
+_TOOL_GROUPS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    # Páginas, relaciones y el cerebro como texto: lo que el agente escribe y
+    # lee del workspace.
+    ("pages", (
+        "dran_search",
+        "dran_list_pages", "dran_list_page_types", "dran_get_page",
+        "dran_create_page", "dran_update_page", "dran_delete_page",
+        "dran_rename_slug", "dran_reaugment_page",
+        "dran_get_links", "dran_create_relation", "dran_delete_relation",
+    )),
+    # El contenedor de trabajo. `dran_list_groups` es el descubrimiento del
+    # destino de escritura (el slug del grupo): transversal a goals y plans,
+    # pero vive con goals para no abrir un octavo switch.
+    ("goals", (
+        "dran_list_groups",
+        "dran_list_goals", "dran_get_goal", "dran_create_goal",
+        "dran_update_goal", "dran_delete_goal",
+    )),
+    ("tasks", (
+        "dran_list_tasks", "dran_create_task", "dran_capture",
+        "dran_get_task", "dran_update_task", "dran_move_task",
+        "dran_delete_task",
+    )),
+    ("plans", (
+        "dran_list_plans", "dran_get_plan", "dran_create_plan",
+        "dran_update_plan", "dran_set_plan_checklist",
+        "dran_toggle_checklist", "dran_delete_plan",
+    )),
+    # Servicios conectados: el catálogo viaja como DATO, nunca una tool por
+    # toolkit.
+    ("services", (
+        "dran_services", "dran_services_connect", "dran_services_tools",
+        "dran_services_run", "dran_services_wait",
+    )),
+    # Skills remotos: 4 tools FIJAS, el catálogo como dato y el cuerpo por tool.
+    ("skills", (
+        "dran_skills", "dran_skill", "dran_skill_save", "dran_skill_delete",
+    )),
+    # El cerebro del lado del agente: sesión de worker autónomo e higiene
+    # estructural (lint, resúmenes de cluster, stats).
+    ("brain", (
+        "dran_start_worker", "dran_get_worker_session",
+        "dran_generate_cluster_summaries", "dran_lint_brain", "dran_stats",
+    )),
+)
+
+_TOOL_GROUP_NAMES: Tuple[str, ...] = tuple(name for name, _ in _TOOL_GROUPS)
+_GROUP_TOOLS: Dict[str, Tuple[str, ...]] = {name: tools for name, tools in _TOOL_GROUPS}
+_TOOL_TO_GROUP: Dict[str, str] = {
+    tool: group for group, tools in _TOOL_GROUPS for tool in tools
+}
+# Prefijo de los toolsets de Hermes (`dran_pages`, `dran_goals`, ...). El nombre
+# pelado queda como fallback de un tool sin grupo, nunca como el switch real.
 _TOOLSET = "dran"
+
+
+def _toolset_for(tool_name: str) -> str:
+    """Toolset of a registered tool: `dran_<group>` (el switch por superficie)."""
+    group = _TOOL_TO_GROUP.get(tool_name)
+    return f"{_TOOLSET}_{group}" if group else _TOOLSET
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -1399,7 +1472,7 @@ def _client_for(ctx) -> Optional[_DranClient]:
     except Exception:
         config = {}
     try:
-        config = _deep_merge(config, _load_dran_config(os.path.expanduser("~/.hermes")))
+        config = _deep_merge(config, _load_dran_config(_active_hermes_home()))
     except Exception:
         pass
     api_key = config.get("api_key") or _resolve_secret()
@@ -1412,6 +1485,110 @@ def _client_for(ctx) -> Optional[_DranClient]:
         default_scope=str(config.get("scope") or "private"),
         default_group=str(config.get("scope_group") or ""),
     )
+
+
+def _active_hermes_home() -> str:
+    """The ACTIVE profile's home — resolved per call, never cached.
+
+    One Hermes process serves several profiles (multiplex gateway), and the
+    plugin is loaded once: a home captured at register/initialize time would
+    answer for whichever profile loaded it. Both surfaces already resolve it
+    per call (`DranMemoryProvider._hermes_home`) and so does the group gate.
+    """
+    try:
+        from hermes_constants import get_hermes_home
+        return str(get_hermes_home())
+    except Exception:  # no Hermes runtime (tests import this module alone)
+        return os.path.expanduser("~/.hermes")
+
+
+# Group toggles, cached by the on-disk signature of the config candidates: the
+# handler guard runs on every tool call, so the JSON is parsed once per config
+# generation instead of once per call.
+_TOGGLES_CACHE: Dict[str, Any] = {}
+
+
+def _config_signature(hermes_home: str) -> Tuple[Tuple[str, Any, Any], ...]:
+    """Identity of the config candidates (path, mtime_ns, size) — cache key."""
+    signature = []
+    for path in _config_paths(hermes_home):
+        try:
+            stat = path.stat()
+            signature.append((str(path), stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            signature.append((str(path), None, None))
+    return tuple(signature)
+
+
+def _group_toggles(ctx: Any = None) -> Dict[str, bool]:
+    """`group -> enabled` from the merged config; a MISSING key means ON.
+
+    Fail-open by design: this is a switch for the operator's convenience, not
+    a security boundary — a config that cannot be read (or that lost the
+    `tools` section) must leave the agent's surface as it was, never empty it.
+    Precedence follows `_client_for`: the plugin context's config first, the
+    profile's `$HERMES_HOME/dran/config.json` last (the panel writes that one,
+    and it wins per key, not wholesale).
+    """
+    toggles = {name: True for name in _TOOL_GROUP_NAMES}
+    hermes_home = _active_hermes_home()
+    signature = _config_signature(hermes_home)
+    cached = _TOGGLES_CACHE.get(hermes_home)
+    if cached is not None and cached[0] == signature:
+        return dict(cached[1])
+
+    sources: List[Any] = []
+    try:
+        sources.append(dict((ctx or _PLUGIN_CTX).config or {}).get("tools"))
+    except Exception:
+        pass
+    try:
+        sources.append(_load_dran_config(hermes_home).get("tools"))
+    except Exception:
+        pass
+
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        for name in _TOOL_GROUP_NAMES:
+            value = source.get(name)
+            if isinstance(value, bool):
+                toggles[name] = value
+
+    _TOGGLES_CACHE[hermes_home] = (signature, dict(toggles))
+    return toggles
+
+
+def _group_enabled(group: str, ctx: Any = None) -> bool:
+    """Is *group* on? An unknown group is always on (never silently hidden)."""
+    if group not in _GROUP_TOOLS:
+        return True
+    return bool(_group_toggles(ctx).get(group, True))
+
+
+def _make_group_check(group: str):
+    """`check_fn` for one group's tools: False hides them from the model.
+
+    Hermes drops a tool whose check_fn is False from the schema list AND from
+    the tool_search catalog (`tools/registry.py::get_definitions` → the
+    deferred assembly), which is exactly the surface we want to cut.
+
+    Verdicts are TTL-cached (~30 s) and, after a success, a failure is served
+    as last-good for a grace window (~60 s) — both would delay an OFF switch
+    visible in the config. A config-backed probe is therefore marked as
+    uncached (`no_cache_check_fn`), so the verdict always reflects the config
+    on disk.
+    """
+
+    def _check() -> bool:
+        return _group_enabled(group)
+
+    _check.__name__ = f"dran_group_{group}_enabled"
+    try:
+        from tools.registry import no_cache_check_fn
+        return no_cache_check_fn(_check)
+    except Exception:  # no Hermes runtime: the plain callable is enough
+        return _check
 
 
 def _workspace_slugs(config: Optional[dict]) -> List[str]:
@@ -2100,39 +2277,23 @@ def _tool_schemas() -> List[Dict[str, Any]]:
 
 # Las tools del contenedor de trabajo y del plan (contrato de superficies):
 # goals, tasks, la captura rápida y el checklist. Se despachan juntas para que
-# el dispatcher principal no crezca con 18 ramas, y cada una es un cliente
-# delgado de una ruta del REST.
-_WORK_TOOLS = frozenset({
-    "dran_list_groups",
-    "dran_list_goals", "dran_get_goal", "dran_create_goal", "dran_update_goal",
-    "dran_delete_goal",
-    "dran_list_tasks", "dran_create_task", "dran_get_task", "dran_capture",
-    "dran_update_task", "dran_move_task", "dran_delete_task",
-    "dran_list_plans", "dran_get_plan", "dran_create_plan", "dran_update_plan",
-    "dran_set_plan_checklist", "dran_toggle_checklist", "dran_delete_plan",
-})
+# el dispatcher principal no crezca con una rama por tool, y cada una es un
+# cliente delgado de una ruta del REST. El conjunto se DERIVA de la tabla de
+# grupos: un solo lugar donde mover una tool de superficie.
+_WORK_TOOLS = frozenset(
+    _GROUP_TOOLS["goals"] + _GROUP_TOOLS["tasks"] + _GROUP_TOOLS["plans"]
+)
 
 # Servicios conectados (cliente delgado del REST /api/services): listar, emitir
 # el link de conexión, descubrir el catálogo, ejecutar y esperar a ACTIVE. Se
 # despachan juntas por la misma razón que las de trabajo: el dispatcher principal
 # no crece con una rama por tool.
-_SERVICES_TOOLS = frozenset({
-    "dran_services",
-    "dran_services_connect",
-    "dran_services_tools",
-    "dran_services_run",
-    "dran_services_wait",
-})
+_SERVICES_TOOLS = frozenset(_GROUP_TOOLS["services"])
 
 # Skills remotos (cliente delgado del REST /api/skills): 4 tools FIJAS y el
 # catálogo como DATO. El cuerpo llega como resultado de tool — nunca a disco — y
 # el `dran_skill` que ya se cargó en la sesión responde `unchanged` por hash.
-_SKILL_TOOLS = frozenset({
-    "dran_skills",
-    "dran_skill",
-    "dran_skill_save",
-    "dran_skill_delete",
-})
+_SKILL_TOOLS = frozenset(_GROUP_TOOLS["skills"])
 
 
 def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> str:
@@ -2143,6 +2304,22 @@ def _handle_plugin_tool(tool_name: str, args: Dict[str, Any], **kwargs: Any) -> 
     closure (see `_make_handler`).
     """
     args = args or {}
+
+    # El gate del grupo, ANTES del cliente: un grupo apagado no llega a la API.
+    # El `check_fn` ya esconde la tool del modelo, pero Hermes NO lo re-evalúa
+    # al despachar (`tools/registry.py::dispatch`) y el prompt de una sesión en
+    # vuelo está congelado: si el modelo la llama igual, la respuesta es un
+    # error estructurado, nunca un efecto.
+    group = _TOOL_TO_GROUP.get(tool_name)
+    if group and not _group_enabled(group, kwargs.get("ctx")):
+        return json.dumps({
+            "error": f"tool disabled: the '{group}' group is off in the dran config",
+            "group": group,
+            "hint": (f"re-enable it in Dran → Settings → Memory & Context → Tools "
+                     f"({group}), or `hermes tools enable dran_{group}`; it applies "
+                     f"to the NEXT session (this one keeps its tool surface)"),
+        })
+
     try:
         client = _client_for(kwargs.get("ctx") or _PLUGIN_CTX)
         if client is None:
@@ -2934,17 +3111,28 @@ def register(ctx) -> None:
     except Exception as exc:  # never let the tool registration cost the provider
         logger.warning("Dran plugin: could not register memory provider: %s", exc)
 
-    # 2) Knowledge tools — each write carries X-Hermes-Agent.
+    # 2) Knowledge tools — each write carries X-Hermes-Agent. Cada tool se
+    # registra en el TOOLSET de su grupo (`dran_pages`, `dran_goals`, ...) y con
+    # el `check_fn` del grupo: Hermes esconde del modelo (y del catálogo de
+    # tool_search) toda tool cuyo grupo esté apagado en la config.
     for schema in _tool_schemas():
         name = schema["name"]
+        group = _TOOL_TO_GROUP.get(name)
+        if group is None:
+            # Un tool sin grupo caería al switch viejo (todo-o-nada) sin decirlo:
+            # los tests verifican el mapeo completo, esto es el cinturón.
+            logger.warning(
+                "Dran plugin: tool %s has no group — it registers in the bare %r "
+                "toolset and cannot be switched off from the panel", name, _TOOLSET)
         try:
             ctx.register_tool(
                 name=name,
-                toolset=_TOOLSET,
+                toolset=_toolset_for(name),
                 schema=schema,
                 handler=_make_handler(name),
                 description=schema.get("description", ""),
                 emoji="🧠",
+                check_fn=_make_group_check(group) if group else None,
             )
         except Exception as exc:
             logger.warning("Dran plugin: could not register tool %s: %s", name, exc)

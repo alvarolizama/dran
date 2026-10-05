@@ -1,5 +1,5 @@
 name: dran
-version: 1.4.0
+version: 1.5.0
 description: "Dran — shared multi-agent memory store + knowledge tools backed by your Dran instance (REST, per-account API token attribution, X-Hermes-Agent identity)."
 author: Álvaro Lizama
 license: MIT
@@ -29,6 +29,14 @@ hooks:
 # Tool names this plugin registers from register(ctx). Listed so the plugins
 # hub can show what it provides (and surface `requires_env` hints); the
 # schemas themselves live in __init__.py and are the source of truth.
+#
+# They register into SEVEN Hermes toolsets — `dran_pages`, `dran_goals`,
+# `dran_tasks`, `dran_plans`, `dran_services`, `dran_skills`, `dran_brain` —
+# NOT into a single `dran` (v1.5: the all-or-nothing switch was the whole
+# point of splitting). Toolsets are derived by Hermes from `entry.toolset`
+# (`hermes_cli/plugins.py::get_plugin_toolsets`), so nothing declares them
+# here; the group table (`_TOOL_GROUPS` in __init__.py) is the source of
+# truth and each group also has a bool in the config panel.
 # ONLY register()-registered tools belong here: the memory tools
 # (dran_memory_search/add/update/feedback) come from the provider's
 # get_tool_schemas(), not from register(), so they are deliberately absent —
