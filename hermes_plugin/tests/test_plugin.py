@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import sys
+import time
 import types
 import urllib.error
 from pathlib import Path
@@ -65,6 +67,21 @@ def plugin():
     return _load_plugin_module()
 
 
+@pytest.fixture(autouse=True)
+def hermetic_dran_home(plugin, tmp_path, monkeypatch):
+    """Ningún test lee el config REAL del usuario.
+
+    El gate de grupos resuelve el home del perfil en cada llamada: sin esto, un
+    `~/.hermes/dran/config.json` con un grupo apagado cambiaría el resultado de
+    toda la suite. Cada test arranca con un home vacío — todo ON por default.
+    """
+    home = tmp_path / "hermes_home"
+    home.mkdir()
+    monkeypatch.setattr(plugin, "_active_hermes_home", lambda: str(home))
+    plugin._TOGGLES_CACHE.clear()
+    return home
+
+
 class FakeCtx:
     """Records what register(ctx) registers."""
 
@@ -79,7 +96,8 @@ class FakeCtx:
 
     def register_tool(self, name, toolset, schema, handler, **kwargs):
         self.tools.append(
-            {"name": name, "toolset": toolset, "schema": schema, "handler": handler}
+            {"name": name, "toolset": toolset, "schema": schema, "handler": handler,
+             "check_fn": kwargs.get("check_fn")}
         )
 
     def register_system_prompt_section(self, section_id, content, **kwargs):
@@ -162,8 +180,12 @@ def test_every_registered_tool_has_valid_schema(plugin):
         assert schema["name"] == tool["name"]
         params = schema.get("parameters", {})
         assert isinstance(params, dict), f"{tool['name']}: parameters must be an object"
-        assert tool["toolset"] == "dran"
+        # Un TOOLSET por grupo: es la superficie que el operador corta desde
+        # `hermes tools disable dran_<group>` / platform_toolsets.
+        group = plugin._TOOL_TO_GROUP[tool["name"]]
+        assert tool["toolset"] == f"dran_{group}"
         assert callable(tool["handler"])
+        assert callable(tool["check_fn"]), f"{tool['name']}: sin gate de grupo"
 
 
 def test_register_does_not_drop_provider_when_tool_registration_fails(plugin):
@@ -1211,3 +1233,147 @@ def test_skill_not_found_is_an_error_never_an_invented_body(plugin):
     assert "error" in out
     assert "ajeno-privado" in out["error"]
     assert "body" not in out
+
+
+# ── Grupos: un interruptor por superficie (panel + toolset) ──────────────────
+# Dos caminos al MISMO interruptor:
+#   * el panel del plugin — `tools.<group>` en $HERMES_HOME/dran/config.json,
+#     leído por el `check_fn` de cada tool y por el guard del handler;
+#   * el operador — un TOOLSET de Hermes por grupo (`dran_pages`, `dran_goals`,
+#     ...), así `hermes tools disable dran_pages`, `platform_toolsets` y
+#     `agent.disabled_toolsets` cortan la misma superficie.
+
+def _write_dran_config(plugin, home, payload):
+    """El panel escribe $HERMES_HOME/dran/config.json — el test hace lo mismo."""
+    path = Path(home) / "dran" / "config.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    plugin._TOGGLES_CACHE.clear()
+    return path
+
+
+def test_group_table_covers_every_registered_tool(plugin):
+    """El mapeo es total: un tool sin grupo volvería al switch todo-o-nada."""
+    ctx = FakeCtx()
+    plugin.register(ctx)
+    registered = {t["name"] for t in ctx.tools}
+
+    assert plugin._TOOL_GROUP_NAMES == (
+        "pages", "goals", "tasks", "plans", "services", "skills", "brain",
+    )
+    assert set(plugin._TOOL_TO_GROUP) == registered
+    assert sum(len(tools) for _n, tools in plugin._TOOL_GROUPS) == len(registered)
+
+
+def test_every_group_has_a_toggle_in_the_panel_schema(plugin):
+    """La tabla (runtime) y los campos del panel (config_schema.py) no derivan."""
+    source = (_PLUGIN_DIR / "config_schema.py").read_text(encoding="utf-8")
+    assert 'group="Tools"' in source
+    declared = set(re.findall(r'key="([a-z_]+)"', source))
+    for group in plugin._TOOL_GROUP_NAMES:
+        assert group in declared, f"el panel no declara el toggle del grupo {group}"
+
+
+def test_group_gate_reads_the_panel_config(plugin, hermetic_dran_home):
+    _write_dran_config(plugin, hermetic_dran_home, {"tools": {"pages": False}})
+
+    assert plugin._group_enabled("pages") is False
+    assert plugin._group_enabled("tasks") is True
+    assert plugin._group_enabled("brain") is True
+
+
+def test_group_gate_is_fail_open(plugin, hermetic_dran_home):
+    """Sin config (o con basura) todo sigue prendido: esto no es un guard de seguridad."""
+    assert plugin._group_toggles() == {g: True for g in plugin._TOOL_GROUP_NAMES}
+
+    for payload in ({"tools": {"pages": "no"}}, {"tools": "no"}, {"tools": {"otra": False}}):
+        _write_dran_config(plugin, hermetic_dran_home, payload)
+        assert plugin._group_enabled("pages") is True, payload
+
+
+def test_ctx_config_and_disk_config_merge_per_key(plugin, hermetic_dran_home):
+    """`plugins.entries.dran.settings` y el panel del perfil no se pisan en bloque."""
+    _write_dran_config(plugin, hermetic_dran_home, {"tools": {"plans": False}})
+    ctx = FakeCtx(config={"tools": {"tasks": False}})
+
+    toggles = plugin._group_toggles(ctx)
+    assert toggles["tasks"] is False
+    assert toggles["plans"] is False
+    assert toggles["pages"] is True
+
+
+def test_disk_config_wins_over_ctx_config_on_conflict(plugin, hermetic_dran_home):
+    """El panel del perfil manda: es el que el usuario acaba de tocar."""
+    _write_dran_config(plugin, hermetic_dran_home, {"tools": {"tasks": True}})
+    ctx = FakeCtx(config={"tools": {"tasks": False}})
+
+    assert plugin._group_toggles(ctx)["tasks"] is True
+
+
+def test_disabled_group_check_fn_hides_its_tools(plugin, hermetic_dran_home):
+    """`check_fn` False = Hermes saca la tool del prompt Y del catálogo de tool_search."""
+    ctx = FakeCtx()
+    plugin.register(ctx)
+    checks = {t["name"]: t["check_fn"] for t in ctx.tools}
+
+    _write_dran_config(plugin, hermetic_dran_home, {"tools": {"pages": False}})
+    assert checks["dran_create_page"]() is False
+    assert checks["dran_create_task"]() is True
+
+    # Encender de nuevo no necesita reiniciar nada: el veredicto es de la config.
+    _write_dran_config(plugin, hermetic_dran_home, {"tools": {"pages": True}})
+    assert checks["dran_create_page"]() is True
+
+
+def test_group_check_fn_is_marked_uncached(plugin, monkeypatch):
+    """Sin `no_cache_check_fn` Hermes serviría el último True por ~60 s tras apagar."""
+    calls = []
+
+    def no_cache_check_fn(fn):
+        calls.append(fn)
+        return fn
+
+    fake_registry = types.ModuleType("tools.registry")
+    setattr(fake_registry, "no_cache_check_fn", no_cache_check_fn)
+    fake_tools = types.ModuleType("tools")
+    fake_tools.__path__ = []
+    monkeypatch.setitem(sys.modules, "tools", fake_tools)
+    monkeypatch.setitem(sys.modules, "tools.registry", fake_registry)
+
+    check = plugin._make_group_check("pages")
+
+    assert calls == [check]
+    assert check.__name__ == "dran_group_pages_enabled"
+
+
+def test_disabled_group_refuses_the_call_before_the_client(plugin, hermetic_dran_home):
+    """El dispatch de Hermes NO re-evalúa check_fn: el guard tiene que negarse solo.
+
+    Un prompt congelado a mitad de sesión todavía conoce la tool, así que el
+    único cierre real está en el handler — y antes de construir el cliente.
+    """
+    ctx = FakeCtx()
+    plugin.register(ctx)
+    handlers = {t["name"]: t["handler"] for t in ctx.tools}
+
+    _write_dran_config(plugin, hermetic_dran_home, {"tools": {"pages": False, "tasks": True}})
+
+    with mock.patch.object(plugin, "_client_for",
+                           side_effect=AssertionError("no debe construir cliente")):
+        out = json.loads(handlers["dran_create_page"]({"title": "x"}, ctx=ctx))
+
+    assert out["group"] == "pages"
+    assert "disabled" in out["error"]
+    assert "dran_pages" in out["hint"]
+
+
+def test_toggle_cache_follows_the_file(plugin, hermetic_dran_home):
+    """El cache es por firma del archivo: editar el JSON cambia el veredicto."""
+    path = _write_dran_config(plugin, hermetic_dran_home, {"tools": {"pages": False}})
+    assert plugin._group_enabled("pages") is False
+
+    path.write_text(json.dumps({"tools": {"pages": True}}), encoding="utf-8")
+    future = time.time() + 5
+    os.utime(path, (future, future))
+
+    assert plugin._group_enabled("pages") is True

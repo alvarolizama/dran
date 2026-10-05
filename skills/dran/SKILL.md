@@ -19,10 +19,15 @@ tasks, plans). The agent's local execution discipline (ledger, briefs,
 delegation) is riel — this suite owns only the Dran call sequences.
 
 The agent consumes Dran through the **Hermes plugin tools** (`dran_*`); the
-The plugin registers its toolset via `register(ctx)` in
+The plugin registers its toolsets via `register(ctx)` in
 `hermes_plugin/dran/__init__.py`, so the tools are available whenever the
-`dran` plugin is enabled for the profile. Every tool is a thin client over
-Dran's REST API — there is no other protocol surface.
+`dran` plugin is enabled for the profile. Since v1.5 they register into
+**seven toolsets, one per surface** (`dran_pages`, `dran_goals`, `dran_tasks`,
+`dran_plans`, `dran_services`, `dran_skills`, `dran_brain`): a group the
+operator switched off in the panel or with `hermes tools disable dran_<group>`
+is invisible to the model — treat the missing tool as "this surface is off",
+not as "Dran is broken". Every tool is a thin client over Dran's REST API —
+there is no other protocol surface.
 
 ## Entry router
 
@@ -177,11 +182,12 @@ subject:
 
 - **Absorbing a flow you were routed away from** — the router is the
   contract; hand off.
-- **Assuming a tool exists because it sounds natural** — the plugin's
-  toolset is the truth (`hermes_plugin/dran/__init__.py`); read the
-  registered names instead of guessing.
+- **Assuming a tool exists because it sounds natural** — the plugin's group
+  table (`_TOOL_GROUPS` in `hermes_plugin/dran/__init__.py`) is the truth:
+  read the registered names instead of guessing, and remember a group the
+  operator switched off is simply absent from your tool surface.
 - **Expecting the knowledge tools to cover memory** — memory is
-  `dran_memory_*` from the provider; the knowledge toolset has no memory
+  `dran_memory_*` from the provider; the knowledge toolsets have no memory
   operations.
 - **Looking for a developer skill** — there are none: the suite carries no
   `dran-dev-*` (nothing about changing Dran's code). To change the code, read

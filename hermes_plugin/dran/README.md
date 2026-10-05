@@ -165,10 +165,15 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
 ## Tools del plugin
 
 Desde la v1.1 el módulo expone `register(ctx)`, que registra **dos
-superficies en el mismo plugin**: el memory provider (arriba) y un toolset
-`dran` con las operaciones de conocimiento (cliente delgado sobre la API
-REST de Dran):
+superficies en el mismo plugin**: el memory provider (arriba) y las
+operaciones de conocimiento (cliente delgado sobre la API REST de Dran):
 estas tools son el consumo del agente.
+
+Desde la v1.5 esas tools viven en **SIETE toolsets de Hermes, uno por
+superficie** — `dran_pages`, `dran_goals`, `dran_tasks`, `dran_plans`,
+`dran_services`, `dran_skills`, `dran_brain` — en vez del único `dran`
+todo-o-nada, y cada superficie se apaga desde el panel del plugin o desde
+`hermes tools` (ver [Apagar superficies](#apagar-superficies-el-switch-por-grupo)).
 
 | Tool | Qué hace |
 |---|---|
@@ -263,6 +268,52 @@ Cada tool escribe por `_DranClient`, así que **todo write lleva
 `X-Hermes-Agent`** con el nombre del perfil. El handler recibe `(args, **kw)`
 — Hermes no pasa el nombre de la tool — así que `register()` ata el nombre
 por closure (`_make_handler`).
+
+### Apagar superficies (el switch por grupo)
+
+Las 46 tools son **siete superficies**, y cada una tiene **dos interruptores
+sobre la misma cosa** — la tabla `_TOOL_GROUPS` de `__init__.py` es la única
+fuente de verdad de a qué grupo pertenece cada tool:
+
+1. **El panel del plugin** (Desktop → Settings → Memory & Context → Tools;
+   también `hermes memory setup`). Cada campo escribe `tools.<group>` en
+   `$HERMES_HOME/dran/config.json`, y el plugin lo aplica con un `check_fn`
+   por tool: Hermes saca las tools del grupo del prompt **y del catálogo de
+   `tool_search`**. Precedencia: el panel del perfil gana sobre
+   `plugins.entries.dran.settings`, clave por clave. Un grupo ausente, un JSON
+   ilegible o un valor que no es booleano dejan el grupo **encendido**
+   (fail-open: esto es comodidad del operador, no una frontera de seguridad).
+2. **El operador, desde Hermes** — un TOOLSET por grupo:
+
+   ```bash
+   hermes tools disable dran_pages dran_brain   # por plataforma (cli, telegram, ...)
+   hermes tools enable  dran_pages
+   ```
+
+   `dran_pages` … `dran_brain` son toolsets de plugin normales: también se
+   pueden cortar por `platform_toolsets.<plataforma>` o
+   `agent.disabled_toolsets` en `config.yaml`.
+
+Los dos switches son independientes y no se pisan: el de Hermes decide **qué
+ve el modelo**; el del panel además **niega la llamada** en el handler. Esa
+segunda mitad es necesaria porque Hermes no re-evalúa el `check_fn` al
+despachar (`tools/registry.py::dispatch`) y el prompt de una sesión en vuelo
+está congelado: si el modelo llama igual a una tool apagada, recibe un error
+estructurado (`{"error": "tool disabled: the '<group>' group is off…"}`) y
+ningún efecto. Los tests leen el panel como JSON y verifican las dos mitades.
+
+**Cuándo aplica:** en la **siguiente** sesión (build del agente). La sesión en
+vuelo conserva su superficie de tools — Hermes no reescribe el prompt a mitad
+de conversación (invariante de prompt caching).
+
+**Nota de migración (v1.4 → v1.5):** el toolset `dran` ya no existe; quien lo
+tuviera deshabilitado en `platform_toolsets`/`agent.disabled_toolsets`
+recupera las 46 tools, porque las claves nuevas son desconocidas y Hermes las
+enciende por default. Volver a apagarlas es una línea por superficie:
+
+```bash
+hermes tools disable dran_pages dran_goals dran_tasks dran_plans dran_services dran_skills dran_brain
+```
 
 ## Identidad y contextos
 
