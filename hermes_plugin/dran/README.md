@@ -4,56 +4,84 @@ Memoria compartida multi-agente respaldada por tu instancia de Dran. El plugin
 es transporte delgado: dedupe, trust, search híbrido y extracción de facts
 viven server-side en Dran (`/api/memory`).
 
-## Un plugin, un archivo de config, dos superficies
+## Un plugin, dos archivos de config, dos superficies
 
 No hay un segundo plugin ni una segunda instalación: las dos superficies viven
-en **este** directorio y leen/escriben el **mismo**
-`$HERMES_HOME/dran/config.json` (+ el token en el `.env` del perfil).
+en **este** directorio, comparten **un solo token** (`DRAN_API_KEY` en el
+`.env` del perfil) y reparten la configuración así:
+
+| Qué | Dónde se edita | Dónde se guarda |
+|---|---|---|
+| **Runtime** (`__init__.py`) | — | — |
+| **Tarjeta**: instancia, destino de escritura, los 7 toggles, token | **Capabilities → Plugins → Dran → engranaje** (o el TUI) | `plugins.entries.dran.settings` del perfil (`config.yaml`); el token al `.env` |
+| **Panel de memoria**: recall (auto recall/capture, topes, cadencia) | **Settings → Memory & Context** → `Memory provider: dran` | `$HERMES_HOME/dran/config.json` |
 
 - **Runtime** (`__init__.py`): el MemoryProvider (sus tools salen de
   `get_tool_schemas()`) y las tools de agente que registra `register(ctx)`.
   Headless por construcción: archivos + `DRAN_API_KEY`, sin UI propia.
+- **Tarjeta** (`plugin.yaml` → `config_schema`): declarada en el manifiesto,
+  así que la fila del plugin en el hub — donde el plugin también se
+  activa/desactiva — gana su engranaje de settings. Claves **planas**
+  (`pages`, no `tools.pages`): `plugins_settings.py` guarda las dotted
+  anidadas y las re-lee planas, así que una clave dotted mostraría el default
+  sobre el valor guardado.
 - **Panel** (`config_schema.py`): Hermes lo lee **del disco, al lado de este
   archivo** (`plugins/memory/__init__.py::find_provider_dir` →
   `get_provider_config_schema`) y lo renderiza como el panel de configuración
-  del proveedor de memoria. Escribe **ese mismo** `config.json`.
+  del proveedor de memoria. Escribe **su** `config.json`.
+
+**Precedencia, por clave:** defaults ← tarjeta ← `config.json` (gana). El JSON
+es lo que el panel de memoria escribió históricamente y lo que un archivo
+editado a mano sigue diciendo: un setup ya existente no cambia de sentido.
 
 El panel se direcciona **por nombre de proveedor**, y por eso no puede vivir en
 otro plugin: pertenece al proveedor que configura. Como el pedido del panel
 viaja con el perfil (`?profile=<nombre>`), configura **el perfil que el app
 tenga seleccionado, remotos incluidos** — sin plugin extra y sin código extra.
+La tarjeta también es por perfil: el runtime lee la del perfil activo, y el
+proveedor — que no recibe `ctx` — la resuelve por `get_hermes_home()`.
 
-No hay un segundo archivo de config ni una segunda credencial: **un solo token**
+No hay un segundo archivo de config para la credencial: **un solo token**
 (`DRAN_API_KEY`, el `api_token` de la cuenta) para las dos superficies (W9/A10).
 
 > **Single-workspace (W5):** la instancia de Dran ES el workspace — no hay
 > elección de workspace ni matriz workspaces×nivel. Toda llamada apunta a la
 > instancia; ya no existe un setting `workspace` en la config del plugin.
 
-## Configuración — el panel de memoria del perfil
+## Configuración — la tarjeta del plugin y el panel de memoria
 
-El plugin trae `config_schema.py`, así que Hermes renderiza el panel solo. En el
-**app desktop**: **Settings → Memory & Context** → elegí **Memory provider:
-`dran`** y el panel de Dran aparece **justo debajo**. El panel compacto lista los
-campos `inline` **en orden y sin cabeceras** (11 filas: API key, Base URL, Write
-scope, Group slug + los siete toggles de tools); los knobs de recall (Auto
-recall, Auto capture, Max recall results, Recall char budget, Recall cadence)
-viven en el botón **"Full config…"**, que abre el modal con las cuatro secciones
-(`Connection` / `Write destination` / `Tools` / `Memory`) — el modal existe
-justamente porque hay campos no-`inline`. Guarda campo por campo (autosave).
+**La tarjeta** (`plugin.yaml` → `config_schema`): **Capabilities → Plugins →
+Dran → engranaje** (el mismo engranaje aparece sólo si el manifiesto declara
+`config_schema`; el TUI tiene la misma puerta). Ahí viven la instancia, el
+destino de escritura, la credencial y los **siete toggles** de tools. Se guarda
+por campo, en `plugins.entries.dran.settings` del perfil (`config.yaml`); el
+token va al `.env` por la ruta de credenciales, nunca al YAML.
+
+**El panel de memoria** (`config_schema.py`): **Settings → Memory & Context** →
+elegí **Memory provider: `dran`** y el panel de Dran aparece **justo debajo**,
+con **sólo** lo de memoria — API key, Auto recall, Auto capture, Max recall
+results, Recall char budget, Recall cadence. Los seis campos son `inline`, así
+que se listan en orden, sin cabeceras y **sin** el botón "Full config…".
+Guarda campo por campo (autosave), en `$HERMES_HOME/dran/config.json`.
 
 Por **perfil**, remotos incluidos: el panel se pide con el perfil activo
 (`GET/PUT /api/memory/providers/dran/config?surface=declared&profile=<perfil>`),
 así que si el app está conectado a un gateway remoto, estás editando **la config
 de ESE perfil** — la que vive en el `config.json` de su host. Nada extra que
 instalar del lado del app: alcanza con que el plugin esté instalado y con
-`memory.provider: dran` en ese perfil.
+`memory.provider: dran` en ese perfil. La tarjeta es igual de perfil-scoped: el
+runtime lee la del perfil activo, y el proveedor — que no recibe `ctx` — la
+resuelve por `get_hermes_home()`.
 
-También funciona `hermes memory setup` → elegir "dran" (CLI, mismo archivo).
+También funciona `hermes memory setup` → elegir "dran" (CLI): camina el schema
+del **proveedor**, así que pregunta la credencial, la instancia y los knobs de
+recall, y escribe el `config.json` — que gana por clave sobre la tarjeta.
 
-Se persiste en `$HERMES_HOME/dran/config.json` (la credencial al `.env` del
-perfil — `DRAN_API_KEY`, único hogar del token, compartido por el runtime y
-todas las tools).
+**Precedencia, por clave:** defaults ← tarjeta ← `config.json` (gana). El JSON
+es lo que el panel escribió históricamente y lo que un archivo editado a mano
+sigue diciendo: un setup ya existente no cambia de sentido bajo el usuario.
+Mover un valor a la tarjeta no lo borra del JSON — si querés que la tarjeta
+mande, sacá la clave del JSON.
 
 ## La instancia es el workspace
 
@@ -75,9 +103,9 @@ vocabulario de la **intención**, no la columna de almacenamiento:
 El servidor traduce `scope` a `visibility` + un share en `content_shares`,
 **valida la membresía y falla cerrado (422)** si el grupo no existe o no es
 tuyo. El grupo viaja por **slug** (su identidad estable y copiable);
-`GET /api/groups` (W7) lista los grupos donde sos miembro. En el panel, el
-default del perfil se elige con los campos **Write scope** y **Group slug**
-(el slug solo aplica cuando el scope es `group`).
+`GET /api/groups` (W7) lista los grupos donde sos miembro. En la **tarjeta del
+plugin**, el default del perfil se elige con los campos **Write scope** y
+**Group slug** (el slug solo aplica cuando el scope es `group`).
 
 **Si tu token es el de un GRUPO, no configures nada.** Un grupo puede tener su
 propia credencial (`Admin → Groups → Token`): esa credencial ya está atada a su
@@ -116,22 +144,24 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
    ```
 
    Ese mismo valor lo consume el plugin entero (memory provider + tools).
-3. Configura el resto desde el **app desktop**: **Settings → Memory & Context**
-   → elegí Memory provider **`dran`** y completá el panel que aparece justo
-   debajo (o `hermes memory setup` → "dran"). El token pégalo en el campo del
-   panel — va al `.env`, no al JSON. Los knobs de recall quedan en el botón
-   **"Full config…"** del mismo panel (agrupados en secciones).
-   **Perfil remoto**: lo mismo con el app apuntando a ese perfil; el panel
-   escribe la config de ESE host (el perfil viaja en el pedido).
+3. Configura el resto desde el **app desktop**:
+   - **Capabilities → Plugins → Dran → engranaje**: instancia (`base_url`),
+     destino de escritura (`scope` + `scope_group`) y los **siete toggles** de
+     tools. El token, si lo cargás acá, va al **mismo** `.env` que el paso 2.
+   - **Settings → Memory & Context** → elegí Memory provider **`dran`**: el
+     panel que aparece justo debajo tiene **sólo** los knobs de recall (Auto
+     recall, Auto capture, Max recall results, Recall char budget, Recall
+     cadence) y el campo del token.
 
-   Editada a mano, la config vive en `$HERMES_HOME/dran/config.json`:
+   La alternativa CLI es `hermes memory setup` → "dran": pregunta credencial,
+   instancia y knobs de recall, y escribe el `config.json`.
+   **Perfil remoto**: lo mismo con el app apuntando a ese perfil; la tarjeta y
+   el panel escriben la config de ESE host (el perfil viaja en el pedido).
+
+   Editada a mano, la config de memoria vive en `$HERMES_HOME/dran/config.json`:
 
    ```json
    {
-     "base_url": "http://localhost:4000",
-     "scope": "private",
-     "scope_group": "",
-
      "auto_recall": true,
      "auto_capture": true,
      "max_recall_results": 5,
@@ -187,7 +217,7 @@ estas tools son el consumo del agente.
 Desde la v1.5 esas tools viven en **SIETE toolsets de Hermes, uno por
 superficie** — `dran_pages`, `dran_goals`, `dran_tasks`, `dran_plans`,
 `dran_services`, `dran_skills`, `dran_brain` — en vez del único `dran`
-todo-o-nada, y cada superficie se apaga desde el panel del plugin o desde
+todo-o-nada, y cada superficie se apaga desde la tarjeta del plugin o desde
 `hermes tools` (ver [Apagar superficies](#apagar-superficies-el-switch-por-grupo)).
 
 | Tool | Qué hace |
@@ -210,7 +240,7 @@ REST. El **destino de una escritura** se declara con `scope` (`private` —
 default — o `public`) o con `group` (el slug del grupo donde el dueño es
 miembro): el servidor valida la membresía y falla cerrado con 422. En el **alta**
 de un goal o un plan, si la herramienta no declara destino se aplica el default
-del perfil (los campos *Write scope* / *Group slug* del panel); una **edición** no
+del perfil (los campos *Write scope* / *Group slug* de la tarjeta); una **edición** no
 mueve el destino salvo que lo declare. Para elegir el grupo por nombre hay
 `dran_list_groups` (`GET /api/groups` → `[{slug, name}]` de tus membresías): el
 slug es lo que después viaja en `group`.
@@ -290,15 +320,16 @@ Las 46 tools son **siete superficies**, y cada una tiene **dos interruptores
 sobre la misma cosa** — la tabla `_TOOL_GROUPS` de `__init__.py` es la única
 fuente de verdad de a qué grupo pertenece cada tool:
 
-1. **El panel del plugin** (Desktop → Settings → Memory & Context; los siete
-   toggles son filas del panel compacto, la sección `Tools` del modal "Full
-   config…"; también `hermes memory setup`). Cada campo escribe `tools.<group>` en
-   `$HERMES_HOME/dran/config.json`, y el plugin lo aplica con un `check_fn`
-   por tool: Hermes saca las tools del grupo del prompt **y del catálogo de
-   `tool_search`**. Precedencia: el panel del perfil gana sobre
-   `plugins.entries.dran.settings`, clave por clave. Un grupo ausente, un JSON
-   ilegible o un valor que no es booleano dejan el grupo **encendido**
-   (fail-open: esto es comodidad del operador, no una frontera de seguridad).
+1. **La tarjeta del plugin** (Desktop/TUI → Capabilities → Plugins → Dran →
+   engranaje; cada toggle es una clave **plana** — `pages`, `goals`, …). Escribe
+   `plugins.entries.dran.settings` en el `config.yaml` del perfil, y el plugin lo
+   aplica con un `check_fn` por tool: Hermes saca las tools del grupo del prompt
+   **y del catálogo de `tool_search`**. El interruptor legacy —`tools.<group>` en
+   `$HERMES_HOME/dran/config.json`, lo que escribía el panel de memoria— se sigue
+   leyendo y sigue **ganando por clave**: un config ya escrito no cambia de
+   sentido. Un grupo ausente, un JSON ilegible o un valor que no es booleano
+   dejan el grupo **encendido** (fail-open: esto es comodidad del operador, no
+   una frontera de seguridad).
 2. **El operador, desde Hermes** — un TOOLSET por grupo:
 
    ```bash
@@ -311,12 +342,13 @@ fuente de verdad de a qué grupo pertenece cada tool:
    `agent.disabled_toolsets` en `config.yaml`.
 
 Los dos switches son independientes y no se pisan: el de Hermes decide **qué
-ve el modelo**; el del panel además **niega la llamada** en el handler. Esa
+ve el modelo**; el de la tarjeta además **niega la llamada** en el handler. Esa
 segunda mitad es necesaria porque Hermes no re-evalúa el `check_fn` al
 despachar (`tools/registry.py::dispatch`) y el prompt de una sesión en vuelo
 está congelado: si el modelo llama igual a una tool apagada, recibe un error
 estructurado (`{"error": "tool disabled: the '<group>' group is off…"}`) y
-ningún efecto. Los tests leen el panel como JSON y verifican las dos mitades.
+ningún efecto. Los tests leen la tarjeta como `ctx.config` (y el JSON legacy
+como archivo) y verifican las dos mitades.
 
 **Cuándo aplica:** en la **siguiente** sesión (build del agente). La sesión en
 vuelo conserva su superficie de tools — Hermes no reescribe el prompt a mitad
@@ -354,3 +386,10 @@ cuesta el provider), el header en cada path de escritura, las rutas REST, el
 manejo de errores como JSON y la **discovery de page types efectivos** desde
 `/api/agent/config` (con fallback a los 4 built-in y rechazo fail-closed de un
 tipo retirado al crear).
+
+Y el reparto de la configuración: que la tarjeta (`plugin.yaml`) declare los
+siete toggles y que el panel de memoria conserve **sólo** lo de memoria, más la
+resolución en capas — `defaults ← tarjeta ← config.json` (gana por clave) — que
+el proveedor y las tools comparten. Un `config.json` con un solo knob de
+memoria no debe arrastrar `base_url` al default de localhost: hay un test para
+eso.

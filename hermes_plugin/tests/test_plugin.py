@@ -78,6 +78,11 @@ def hermetic_dran_home(plugin, tmp_path, monkeypatch):
     home = tmp_path / "hermes_home"
     home.mkdir()
     monkeypatch.setattr(plugin, "_active_hermes_home", lambda: str(home))
+    # La tarjeta se lee del config.yaml del perfil ACTIVO cuando la llamada no
+    # trae ctx: que ningún test lea el config real del usuario (misma razón que
+    # el home hermético), y que el `register()` previo no se filtre entre tests.
+    monkeypatch.setitem(sys.modules, "hermes_cli", None)
+    monkeypatch.setattr(plugin, "_PLUGIN_CTX", None)
     plugin._TOGGLES_CACHE.clear()
     return home
 
@@ -1265,13 +1270,43 @@ def test_group_table_covers_every_registered_tool(plugin):
     assert sum(len(tools) for _n, tools in plugin._TOOL_GROUPS) == len(registered)
 
 
-def test_every_group_has_a_toggle_in_the_panel_schema(plugin):
-    """La tabla (runtime) y los campos del panel (config_schema.py) no derivan."""
-    source = (_PLUGIN_DIR / "config_schema.py").read_text(encoding="utf-8")
-    assert 'group="Tools"' in source
-    declared = set(re.findall(r'key="([a-z_]+)"', source))
+def _card_schema_keys() -> list:
+    """Claves de nivel superior del `config_schema` de plugin.yaml.
+
+    Se lee el FUENTE (sin PyYAML, que sólo existe dentro de Hermes): acá
+    interesa QUÉ claves declara la tarjeta, no cómo las resuelve el parser.
+    """
+    source = (_PLUGIN_DIR / "plugin.yaml").read_text(encoding="utf-8")
+    block = source.split("\nconfig_schema:\n", 1)[1]
+    return [match.group(1) for match in re.finditer(r"^  ([a-z_]+):$", block, re.M)]
+
+
+def test_every_group_has_a_toggle_in_the_card_schema(plugin):
+    """La tabla (runtime) y la TARJETA (plugin.yaml) no derivan.
+
+    Los siete toggles dejaron el panel de memoria: viven en la tarjeta del
+    plugin, con claves PLANAS (`pages`, no `tools.pages`) porque
+    `plugins_settings.py` guarda las dotted anidadas y las re-lee planas — el
+    formulario mostraría el default sobre el valor guardado.
+    """
+    declared = _card_schema_keys()
     for group in plugin._TOOL_GROUP_NAMES:
-        assert group in declared, f"el panel no declara el toggle del grupo {group}"
+        assert group in declared, f"la tarjeta no declara el toggle del grupo {group}"
+
+    panel = (_PLUGIN_DIR / "config_schema.py").read_text(encoding="utf-8")
+    assert 'group="Tools"' not in panel, "los toggles volvieron al panel de memoria"
+    for group in plugin._TOOL_GROUP_NAMES:
+        assert f"tools.{group}" not in declared, "clave dotted: el formulario mentiría"
+
+
+def test_card_declares_the_connection_and_the_destination(plugin):
+    """Instancia y destino también son de la tarjeta; el token va al MISMO .env."""
+    declared = _card_schema_keys()
+
+    assert declared[:4] == ["api_key", "base_url", "scope", "scope_group"]
+    source = (_PLUGIN_DIR / "plugin.yaml").read_text(encoding="utf-8")
+    assert "env: DRAN_API_KEY" in source, "el secret de la tarjeta debe resolver al mismo var"
+    assert "choices:" in source, "Write scope se elige, no se escribe"
 
 
 def _declared_panel_fields():
@@ -1290,34 +1325,101 @@ def _declared_panel_fields():
     return fields
 
 
-def test_panel_split_puts_the_recall_knobs_in_the_grouped_modal(plugin):
-    """11 filas en el panel compacto; los 5 knobs de recall sólo en 'Full config…'.
+def test_memory_panel_keeps_only_the_memory_surface(plugin):
+    """Bajo `memory.provider` se ve SÓLO lo de memoria — más el token.
 
-    El panel compacto pinta los campos inline **planos** — no dibuja cabeceras
-    de grupo — y el modal es el ÚNICO lugar donde `group` se usa como sección.
-    Ese botón existe sólo mientras haya al menos UN campo no-inline: si los 16
-    vuelven a ser inline, desaparece y los grupos quedan de adorno.
+    Todos los campos son `inline`, así que el panel compacto los pinta planos
+    y no aparece el botón "Full config…": lo que el usuario ve ahí es
+    exactamente esta lista, sin instancia, sin destino y sin toggles.
     """
     fields = _declared_panel_fields()
-    inline = [key for key, is_inline, _group in fields if is_inline]
-    modal = [key for key, is_inline, _group in fields if not is_inline]
 
-    assert inline == [
-        "api_key", "base_url", "scope", "scope_group",
-        "pages", "goals", "tasks", "plans", "services", "skills", "brain",
+    assert [key for key, _inline, _group in fields] == [
+        "api_key", "auto_recall", "auto_capture",
+        "max_recall_results", "max_recall_chars", "recall_cadence",
     ]
-    assert modal == [
-        "auto_recall", "auto_capture", "max_recall_results",
-        "max_recall_chars", "recall_cadence",
-    ]
-    # Sin campos no-inline no hay "Full config…" — y sin modal, no hay secciones.
-    assert modal, "el panel se vería como un bloque plano, sin secciones"
+    assert all(is_inline for _key, is_inline, _group in fields), "un campo no-inline abriría el modal"
+    assert all(group for _key, _inline, group in fields), "un campo sin grupo cae en 'Other'"
+    assert "scope" not in [key for key, _i, _g in fields], "el destino ya no es del panel"
 
-    # Todo campo lleva `group`: el que no lo lleva cae en 'Other' dentro del modal.
-    assert all(group for _key, _inline, group in fields)
-    assert list(dict.fromkeys(group for _key, _inline, group in fields)) == [
-        "Connection", "Write destination", "Tools", "Memory",
-    ]
+
+# ── La TARJETA llega al runtime (no sólo a las tools) ────────────────────────
+
+def test_card_settings_reach_the_runtime(plugin, hermetic_dran_home):
+    """Instancia y destino de la tarjeta llegan al proveedor.
+
+    El proveedor NO recibe `ctx` (se registra una vez por perfil), así que si
+    la resolución leyera sólo el JSON, mover `base_url` a la tarjeta lo dejaba
+    apuntando al default de localhost.
+    """
+    ctx = FakeCtx(config={
+        "base_url": "https://dran.example",
+        "scope": "group",
+        "scope_group": "research-team",
+        "api_key": "dran_card",
+    })
+
+    config = plugin._load_dran_config(str(hermetic_dran_home), ctx)
+
+    assert config["base_url"] == "https://dran.example"
+    assert config["scope"] == "group"
+    assert config["scope_group"] == "research-team"
+    assert config["api_key"] == "dran_card"
+
+
+def test_card_is_read_from_the_captured_ctx_without_a_config_door(plugin, hermetic_dran_home, monkeypatch):
+    """Sin `hermes_cli` (o sin ctx en la llamada) manda el ctx de `register()`."""
+    monkeypatch.setattr(plugin, "_PLUGIN_CTX", FakeCtx(config={"base_url": "https://solo-ctx.example"}))
+
+    assert plugin._load_dran_config(str(hermetic_dran_home))["base_url"] == "https://solo-ctx.example"
+
+
+def test_panel_json_wins_over_the_card_per_key(plugin, hermetic_dran_home):
+    """Un config.json ya escrito no cambia de sentido bajo el usuario."""
+    _write_dran_config(plugin, hermetic_dran_home, {"base_url": "https://viejo.example"})
+    ctx = FakeCtx(config={"base_url": "https://nuevo.example", "scope": "public"})
+
+    config = plugin._load_dran_config(str(hermetic_dran_home), ctx)
+
+    assert config["base_url"] == "https://viejo.example"  # el JSON gana
+    assert config["scope"] == "public"                    # la clave que el JSON no tiene: la tarjeta
+
+
+def test_builtin_defaults_never_outrank_the_card(plugin, hermetic_dran_home):
+    """El JSON materializa defaults: si ganaran por merge, la tarjeta no serviría.
+
+    Un `config.json` que sólo trae un knob de memoria NO debe arrastrar
+    `base_url` al default de localhost por el hecho de existir.
+    """
+    _write_dran_config(plugin, hermetic_dran_home, {"auto_recall": False})
+    ctx = FakeCtx(config={"base_url": "https://dran.example"})
+
+    config = plugin._load_dran_config(str(hermetic_dran_home), ctx)
+
+    assert config["base_url"] == "https://dran.example"
+    assert config["auto_recall"] is False
+
+
+def test_group_toggles_read_the_flat_card_keys(plugin, hermetic_dran_home):
+    """El switch de la tarjeta apaga el grupo; el JSON del panel sigue ganando."""
+    ctx = FakeCtx(config={"pages": False, "goals": True})
+    plugin._TOGGLES_CACHE.clear()
+
+    assert plugin._group_toggles(ctx)["pages"] is False
+    assert plugin._group_toggles(ctx)["tasks"] is True
+
+    _write_dran_config(plugin, hermetic_dran_home, {"tools": {"pages": True}})
+    plugin._TOGGLES_CACHE.clear()
+
+    assert plugin._group_toggles(ctx)["pages"] is True, "el JSON del panel gana por clave"
+
+
+def test_group_toggles_read_the_legacy_nested_card(plugin, hermetic_dran_home):
+    """Una tarjeta escrita en el molde viejo (`tools: {…}`) sigue gobernando."""
+    ctx = FakeCtx(config={"tools": {"skills": False}})
+    plugin._TOGGLES_CACHE.clear()
+
+    assert plugin._group_toggles(ctx)["skills"] is False
 
 
 def test_group_gate_reads_the_panel_config(plugin, hermetic_dran_home):

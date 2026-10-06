@@ -111,3 +111,76 @@ requires_env:
   - name: DRAN_API_KEY
     description: "Dran account token (Dran → Settings → Account → API token) — one credential per account (W3, users.api_token). Shared by the memory provider and the knowledge tools: same token, same attribution; no per-agent key is created."
     prompt: "Dran account token (dran_…)"
+# ── La TARJETA del plugin: toda la configuración que no es de memoria ────────
+# Declared here (not in config_schema.py) so the plugins hub gives the row a
+# settings gear (plugins_tab: "only plugins with a page in Settings ▸ Plugins
+# (config_schema or a registered page) get one") — the surface where the plugin
+# is ALSO turned on/off. Values land under `plugins.entries.dran.settings` of
+# the profile (config.yaml); the `secret` field goes to the profile .env
+# instead, through the credential route, never into config.yaml.
+#
+# Keys are FLAT on purpose (``pages``, not ``tools.pages``): `plugins_settings.py`
+# writes dotted keys NESTED but re-reads them with a flat ``current.get(key)``,
+# so a dotted key would render its schema default over the stored value.
+#
+# Precedence, per key (same rule the tools and the provider share):
+#   defaults ← esta tarjeta ← `$HERMES_HOME/dran/config.json` (gana, legacy).
+# The JSON is what the memory provider's panel writes; it keeps winning so a
+# hand-edited or pre-existing config file never changes meaning under the user.
+config_schema:
+  api_key:
+    type: secret
+    env: DRAN_API_KEY
+    label: API key
+    description: "Dran account token (Dran → Settings → Account → API token). One credential per account: the same token backs the memory provider and every tool. Stored in the profile .env, never in config.yaml."
+  base_url:
+    type: str
+    default: "http://localhost:4000"
+    label: Base URL
+    description: "Dran instance URL."
+  scope:
+    type: str
+    choices: ["private", "public", "group"]
+    default: "private"
+    label: Write scope
+    description: "Default destination of this profile's writes: private (only your account), public (everyone on the instance) or group (only the members of Group slug). An empty or unknown slug fails closed (422), never private in silence."
+  scope_group:
+    type: str
+    default: ""
+    label: Group slug
+    description: "Slug of the group this profile's writes go to when Write scope is 'group'. `GET /api/groups` (or the agent tool dran_list_groups) lists your groups; the slug is the group's stable, copyable id."
+  pages:
+    type: bool
+    default: true
+    label: Pages & relations
+    description: "Search, list, read, create, update, delete and relink knowledge pages (dran_search, dran_*_page, dran_rename_slug, dran_reaugment_page, dran_*_relation, dran_get_links). Hermes toolset: dran_pages."
+  goals:
+    type: bool
+    default: true
+    label: Goals
+    description: "The container of work: list, read, create, update and delete goals, plus dran_list_groups (the destination slugs a goal or plan write can target). Hermes toolset: dran_goals."
+  tasks:
+    type: bool
+    default: true
+    label: Tasks & capture
+    description: "List, read, create, update, move and delete tasks, plus dran_capture (quick capture: a task into the inbox goal). Hermes toolset: dran_tasks."
+  plans:
+    type: bool
+    default: true
+    label: Plans & checklists
+    description: "List, read, create, update and delete plans, and tick their checklist (dran_set_plan_checklist, dran_toggle_checklist). Hermes toolset: dran_plans."
+  services:
+    type: bool
+    default: true
+    label: Connected services
+    description: "Inspect the connected services, emit a connect link, DISCOVER a toolkit's tool catalog and run one of its tools (dran_services*). The catalog travels as data — never one tool per toolkit. Hermes toolset: dran_services."
+  skills:
+    type: bool
+    default: true
+    label: Remote skills
+    description: "List the workspace's skills, load one body by slug, and save or delete one (dran_skills, dran_skill, dran_skill_save, dran_skill_delete). Hermes toolset: dran_skills."
+  brain:
+    type: bool
+    default: true
+    label: Brain & workers
+    description: "The agent-side brain: start an autonomous worker session and read it back, regenerate cluster summaries, audit the workspace's structure and read the dashboard numbers (dran_start_worker, dran_get_worker_session, dran_generate_cluster_summaries, dran_lint_brain, dran_stats). Hermes toolset: dran_brain."

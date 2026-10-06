@@ -40,6 +40,9 @@ _TYPE_CACHE: Dict[str, Any] = {}
 CONFIG_FILENAME = "dran_memory.json"
 CANONICAL_CONFIG_DIR = "dran"
 CANONICAL_CONFIG_FILENAME = "config.json"
+# The plugin's own id: the key it lives under in the plugins hub
+# (`plugins.entries.dran.settings`), which is where its CARD writes.
+PLUGIN_ID = "dran"
 # Single-source-of-truth credential: profile .env's DRAN_API_KEY, the same
 # var the plugin resolves for its REST calls.
 API_KEY_ENV_VAR = "DRAN_API_KEY"
@@ -135,8 +138,74 @@ def _read_raw_config(hermes_home: str) -> dict:
     return config
 
 
-def _load_dran_config(hermes_home: str) -> dict:
-    config = _read_raw_config(hermes_home)
+def _read_file_config(hermes_home: str) -> dict:
+    """ONLY what the file says — no defaults welded in.
+
+    The layered resolver below needs that distinction: `_default_config()`
+    materializes ``base_url``/``scope``/``tools``, so merging a defaults-filled
+    dict would let the BUILT-IN default silently outrank the plugin card.
+    """
+    for path in _config_paths(hermes_home):
+        if not path.exists():
+            continue
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            logger.debug("Failed to parse %s", path, exc_info=True)
+            return {}
+        return {k: v for k, v in raw.items() if v is not None} if isinstance(raw, dict) else {}
+    return {}
+
+
+def _card_settings(ctx: Any = None) -> dict:
+    """The plugin CARD's settings — Capabilities → Plugins → Dran → gear.
+
+    Hermes hands the settings of ``plugins.entries.<id>.settings`` to the
+    plugin as ``ctx.config`` (what `register(ctx)` receives, and what the tool
+    dispatcher passes per call). Precedence INSIDE this layer:
+
+    1. the ``ctx`` of the call — it belongs to the profile running the turn;
+    2. else the ACTIVE profile's ``config.yaml``, read fresh (the provider has
+       no ctx: it is registered once for whichever profile loaded the plugin,
+       so a captured ctx would answer for the wrong profile under a
+       multiplexing gateway);
+    3. else the ctx captured at ``register()`` — the tools' historical source,
+       kept so a Hermes without the config door still resolves the card.
+    """
+    try:
+        settings = dict(getattr(ctx, "config", None) or {})
+        if settings:
+            return settings
+    except Exception:
+        pass
+
+    try:
+        from hermes_cli.config import cfg_get, load_config_readonly
+
+        settings = cfg_get(load_config_readonly(), "plugins", "entries", PLUGIN_ID, "settings", default={})
+        if isinstance(settings, dict) and settings:
+            return dict(settings)
+    except Exception:
+        pass
+
+    try:
+        return dict(getattr(_PLUGIN_CTX, "config", None) or {})
+    except Exception:
+        return {}
+
+
+def _load_dran_config(hermes_home: str, ctx: Any = None) -> dict:
+    """Resolve the profile's config in THREE layers, per key:
+
+        built-in defaults ← the plugin CARD ← ``dran/config.json`` (wins)
+
+    The card is where a user configures the plugin today (instance, write
+    destination, the seven tool surfaces); the JSON is what the memory panel
+    writes and what pre-existing installs already have, and it keeps winning
+    per key so a hand-edited file never changes meaning under the user.
+    """
+    config = _deep_merge(_default_config(), _card_settings(ctx))
+    config = _deep_merge(config, _read_file_config(hermes_home))
 
     config["base_url"] = str(config.get("base_url") or DEFAULT_BASE_URL).strip().rstrip("/")
     # Single-source-of-truth for the credential: omit api_key (or leave the
@@ -1378,15 +1447,19 @@ class DranMemoryProvider(MemoryProvider):
 # ── Grupos: un interruptor por superficie y un TOOLSET de Hermes por grupo ──
 #
 # Las 46 tools registradas no son un solo interruptor: son SIETE superficies,
-# cada una con su switch en el panel del plugin (Desktop → Settings → Memory &
-# Context → Tools, escribe `tools.<group>` en $HERMES_HOME/dran/config.json) y
-# con su propio TOOLSET de Hermes (`dran_<group>`), para que el operador pueda
-# cortar una superficie desde `hermes tools disable dran_pages`,
-# `platform_toolsets` o `agent.disabled_toolsets` — por perfil y por plataforma.
+# cada una con su switch en la TARJETA del plugin (Desktop/TUI →
+# Capabilities → Plugins → Dran → engranaje; escribe la clave PLANA `<group>`
+# en `plugins.entries.dran.settings`) y con su propio TOOLSET de Hermes
+# (`dran_<group>`), para que el operador pueda cortar una superficie desde
+# `hermes tools disable dran_pages`, `platform_toolsets` o
+# `agent.disabled_toolsets` — por perfil y por plataforma. El interruptor
+# legacy del panel de memoria (`tools.<group>` en `$HERMES_HOME/dran/config.json`)
+# sigue leyéndose y sigue ganando por clave: un config ya escrito no cambia de
+# sentido bajo el usuario.
 #
-# La TABLA es la única fuente de verdad: los campos bool del panel viven en
-# config_schema.py (que no puede importar este módulo) y los tests los
-# comparan contra ella; los conjuntos del dispatcher (más abajo) se derivan de
+# La TABLA es la única fuente de verdad: los campos bool de la tarjeta viven en
+# plugin.yaml (que no puede importar este módulo) y los tests los comparan
+# contra ella; los conjuntos del dispatcher (más abajo) se derivan de
 # aquí. Un tool sin grupo caería al toolset pelado `dran` — el viejísimo
 # interruptor todo-o-nada — y los tests verifican que los 46 estén mapeados.
 _TOOL_GROUPS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
@@ -1460,21 +1533,21 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def _client_for(ctx) -> Optional[_DranClient]:
-    """Build a client from plugin config, falling back to the memory provider config.
+    """Build a client for the TOOLS from the profile's resolved config.
 
     Uses the same `workspace` for both surfaces of the plugin: the memory
     provider's facts and the knowledge tools' pages/relations/workers. One
     setting, one workspace.
+
+    The resolution is the shared one (`_load_dran_config`: card ← JSON), with
+    the caller's ctx as the card — so a tool call reads exactly what the
+    profile it is serving has configured, in the same precedence the provider
+    applies.
     """
-    config: Dict[str, Any] = {}
     try:
-        config = dict(ctx.config or {})
+        config = _load_dran_config(_active_hermes_home(), ctx)
     except Exception:
         config = {}
-    try:
-        config = _deep_merge(config, _load_dran_config(_active_hermes_home()))
-    except Exception:
-        pass
     api_key = config.get("api_key") or _resolve_secret()
     if not api_key:
         return None
@@ -1509,9 +1582,14 @@ _TOGGLES_CACHE: Dict[str, Any] = {}
 
 
 def _config_signature(hermes_home: str) -> Tuple[Tuple[str, Any, Any], ...]:
-    """Identity of the config candidates (path, mtime_ns, size) — cache key."""
+    """Identity of the config sources (path, mtime_ns, size) — cache key.
+
+    Both sources count: the JSON the memory panel writes AND the profile's
+    ``config.yaml``, which is where the plugin card stores its settings — a
+    card edit has to bust the toggle cache too.
+    """
     signature = []
-    for path in _config_paths(hermes_home):
+    for path in (*_config_paths(hermes_home), Path(hermes_home) / "config.yaml"):
         try:
             stat = path.stat()
             signature.append((str(path), stat.st_mtime_ns, stat.st_size))
@@ -1526,9 +1604,18 @@ def _group_toggles(ctx: Any = None) -> Dict[str, bool]:
     Fail-open by design: this is a switch for the operator's convenience, not
     a security boundary — a config that cannot be read (or that lost the
     `tools` section) must leave the agent's surface as it was, never empty it.
-    Precedence follows `_client_for`: the plugin context's config first, the
-    profile's `$HERMES_HOME/dran/config.json` last (the panel writes that one,
-    and it wins per key, not wholesale).
+
+    Three sources, in ascending precedence (the same layering as
+    `_load_dran_config`, so a toggle cannot mean one thing to the tools and
+    another to the provider):
+
+    1. the plugin CARD's FLAT keys (`pages`, `goals`, …) — `plugin.yaml`'s
+       ``config_schema``, written by the plugins hub;
+    2. the card's legacy NESTED shape (`tools: {pages: false}`), for a card
+       written before the keys moved;
+    3. the profile's `$HERMES_HOME/dran/config.json` (wins per key, not
+       wholesale) — what the memory panel wrote historically and what a
+       hand-edited file still says.
     """
     toggles = {name: True for name in _TOOL_GROUP_NAMES}
     hermes_home = _active_hermes_home()
@@ -1537,13 +1624,11 @@ def _group_toggles(ctx: Any = None) -> Dict[str, bool]:
     if cached is not None and cached[0] == signature:
         return dict(cached[1])
 
-    sources: List[Any] = []
+    card = _card_settings(ctx)
+    nested = card.get("tools")
+    sources: List[Any] = [card, nested if isinstance(nested, dict) else None]
     try:
-        sources.append(dict((ctx or _PLUGIN_CTX).config or {}).get("tools"))
-    except Exception:
-        pass
-    try:
-        sources.append(_load_dran_config(hermes_home).get("tools"))
+        sources.append(_load_dran_config(hermes_home, ctx).get("tools"))
     except Exception:
         pass
 
