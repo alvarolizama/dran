@@ -1,10 +1,28 @@
+<div align="center">
+
+<img src="priv/static/logo.png" width="96" height="96" alt="Dran" />
+
 # Dran
 
-*Dran* — Tibetan for "remember". What one agent learns, none forget.
+### *Dran* — Tibetan for "remember". What one agent learns, none forget.
+
+### Shared memory & knowledge base for AI agents
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.0.0-9FE88D.svg)](./mix.exs)
+[![Elixir](https://img.shields.io/badge/Elixir-1.20+-4B275F?logo=elixir&logoColor=white)](https://elixir-lang.org)
+[![Phoenix](https://img.shields.io/badge/Phoenix-1.8_LiveView-FD4F00?logo=phoenixframework&logoColor=white)](https://www.phoenixframework.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+
+</div>
+
+## What is Dran
 
 **The knowledge base and the memory your personal AI assistants share**: one
-instance holding both the knowledge (a wiki graph) and the memory (facts) that
-your assistants read and write. You run it yourself, next to them.
+instance holding both the knowledge (a typed wiki graph) and the memory
+(trust-scored facts) that your agents read and write over the REST API or the
+Hermes plugin, and you browse as a wiki in the browser. You run it yourself,
+next to them.
 
 ## What's inside
 
@@ -111,32 +129,8 @@ skills:
 
 Details: [skills/README.md](skills/README.md).
 
-## The activation lines
-
-Paste into your agent's system prompt — the same block lives in
-[`system-prompt.md`](system-prompt.md):
-
-```text
-## Frameworks — activation lines
-
-- **Riel (steering)** — when operating any LLM conversation or task, load the
-  `riel-protocol` skill and whichever apply: `riel-ledger` (multi-phase tasks),
-  `riel-contract` (DAGs), `riel-briefs`/`riel-delegate` (delegation),
-  `riel-cli` (ledger, packets and digest via `rielctl`). Riel does not create
-  capability — it prevents it from being lost.
-- **Dran (second brain)** — when operating the Dran workspace (knowledge
-  pages, typed relations, memories, its workers, the user's own connected
-  services, the work surface: goals, tasks and plans, or the skills the
-  instance serves to agents), load the `dran` skill and whichever apply:
-  `dran-knowledge-flow` (pages), `dran-relations-flow` (typed links),
-  `dran-memory-flow` (durable facts), `dran-workers-flow`
-  (curator / link_gardener / graph_rag), `dran-services-flow` (the user's apps:
-  connect and run), `dran-goal-flow` (goals · tasks · destination),
-  `dran-plan-flow` (plans · checklist), `dran-skills-flow` — **the Dran skills
-  are REMOTE**: list them with `dran_skills` and follow the one that applies
-  with `dran_skill`; nothing is copied to disk. Dran stores and returns what
-  is known — it does not decide it.
-```
+Point the agent at them with the activation lines in
+[`system-prompt.md`](system-prompt.md).
 
 ## Configuration
 
