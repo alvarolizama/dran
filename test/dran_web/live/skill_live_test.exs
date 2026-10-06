@@ -62,9 +62,10 @@ defmodule DranWeb.SkillLiveTest do
       assert has_element?(view, "#skill-row-#{private.id}")
       assert has_element?(view, "#skill-row-#{public.id}")
 
-      # El destino sólo se anuncia cuando NO es el default.
-      refute has_element?(view, "#skill-#{private.id}-visibility")
-      assert has_element?(view, "#skill-#{public.id}-visibility")
+      # El destino se anuncia en TODAS las filas, privado incluido: la columna
+      # «Destination» del listado no puede quedar vacía para el default.
+      assert has_element?(view, "#skill-#{private.id}-visibility", t("Private"))
+      assert has_element?(view, "#skill-#{public.id}-visibility", t("Public"))
     end
 
     test "el filtro de destino vive en la URL y el default no se escribe", %{

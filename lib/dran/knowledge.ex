@@ -282,6 +282,7 @@ defmodule Dran.Knowledge do
             on_behalf_of: p.on_behalf_of,
             archived: p.archived,
             pinned: p.pinned,
+            visibility: p.visibility,
             inserted_at: p.inserted_at,
             updated_at: p.updated_at
           }

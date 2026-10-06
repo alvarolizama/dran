@@ -403,7 +403,15 @@ defmodule DranWeb.ResourceComponents do
 
   attr :due_on, :any, default: nil, doc: "vencimiento (%Date{}); se pinta en rojo si ya pasó"
   attr :overdue?, :boolean, default: false
-  attr :visibility, :string, default: nil, doc: "el destino; la píldora se oculta en privado"
+
+  attr :visibility, :string,
+    default: nil,
+    doc: "el destino; la píldora se oculta en privado salvo en un listado"
+
+  attr :visibility_always, :boolean,
+    default: false,
+    doc:
+      "el LISTADO muestra el scope de cada fila, `private` incluido (ver `resource_visibility_pill/1`)"
 
   slot :footer
   slot :footer_actions
@@ -448,7 +456,11 @@ defmodule DranWeb.ResourceComponents do
         <div class="flex flex-wrap items-center gap-1.5 min-w-0">
           <.progress_chip :if={@progress} progress={@progress} />
           <.due_chip :if={@due_on} due_on={@due_on} overdue?={@overdue?} />
-          <.resource_visibility_pill visibility={@visibility} id={@id && "#{@id}-visibility"} />
+          <.resource_visibility_pill
+            visibility={@visibility}
+            always={@visibility_always}
+            id={@id && "#{@id}-visibility"}
+          />
           {render_slot(@footer)}
         </div>
         <div class="flex items-center gap-2 shrink-0">
@@ -718,13 +730,23 @@ defmodule DranWeb.ResourceComponents do
   end
 
   @doc """
-  The destination PILL of a detail view: icon + translated label, and NOTHING
-  when the level is `private` (the default is not announced). The raw column
-  value is never printed.
+  La PÍLDORA del destino: icono + etiqueta traducida, nunca el valor crudo de la
+  columna. DOS modos con un solo molde:
+
+  * `always={false}` (default) — la VISTA DE DETALLE: nada cuando el nivel es
+    `private`, porque el default no se anuncia (el recurso que acabas de abrir
+    no necesita decirte que es tuyo).
+  * `always={true}` — el LISTADO: el scope se pinta en TODAS las filas,
+    `private` incluido. Ahí el lector compara destinos entre filas y un hueco
+    no se lee como «privado», se lee como «sin dato».
   """
   attr :visibility, :string, default: nil
   attr :id, :string, default: nil
   attr :testid, :string, default: nil
+
+  attr :always, :boolean,
+    default: false,
+    doc: "pinta también el nivel `private` (listados); el detalle lo deja en silencio"
 
   attr :inherited, :boolean,
     default: false,
@@ -734,7 +756,7 @@ defmodule DranWeb.ResourceComponents do
   def resource_visibility_pill(assigns) do
     ~H"""
     <span
-      :if={@visibility && @visibility != "private"}
+      :if={@visibility && (@always || @visibility != "private")}
       id={@id}
       data-testid={@testid}
       data-inherited={to_string(@inherited)}

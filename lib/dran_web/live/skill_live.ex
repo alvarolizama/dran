@@ -145,6 +145,7 @@ defmodule DranWeb.SkillLive do
                 <td>
                   <.resource_visibility_pill
                     visibility={skill.visibility}
+                    always={true}
                     id={"skill-#{skill.id}-visibility"}
                   />
                 </td>

@@ -378,6 +378,7 @@ defmodule DranWeb.PlanLive do
       due_on={@plan.due_on}
       overdue?={overdue?(@plan)}
       visibility={@plan.visibility}
+      visibility_always={true}
       meta={updated_meta(@plan.updated_at)}
     />
     """

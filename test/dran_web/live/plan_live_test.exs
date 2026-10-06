@@ -398,7 +398,7 @@ defmodule DranWeb.PlanLiveTest do
       assert has_element?(view, "#{card}-visibility")
     end
 
-    test "privado no pinta la píldora del destino y lo vencido va en rojo", %{
+    test "el listado pinta el destino de cada fila, privado incluido, y lo vencido va en rojo", %{
       author: author,
       conn: conn
     } do
@@ -409,7 +409,9 @@ defmodule DranWeb.PlanLiveTest do
 
       {:ok, view, _html} = live(login(conn, author), ~p"/plans")
 
-      refute has_element?(view, "#plan-card-#{private.id}-visibility")
+      # El scope se ve en TODAS las filas: en un listado el lector compara
+      # destinos y el hueco de `private` se leía como «sin dato».
+      assert has_element?(view, "#plan-card-#{private.id}-visibility", t("Private"))
 
       # Vencido = fecha pasada y sin cerrar: la ficha se pinta en error.
       assert has_element?(view, "#plan-card-#{late.id} [data-chip='due'].bg-red-100")

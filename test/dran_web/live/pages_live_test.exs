@@ -149,6 +149,32 @@ defmodule DranWeb.PagesLiveTest do
       refute has_element?(view, "[data-testid='page-card-#{plan.slug}']", t("Plan"))
     end
 
+    test "el listado muestra el destino de cada página, privado incluido", %{conn: conn, ws: ws} do
+      {:ok, privada} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Privada",
+          body: "",
+          page_type: "note"
+        })
+
+      {:ok, publica} =
+        Knowledge.create_page(%{
+          workspace_id: ws.id,
+          title: "Pública",
+          body: "",
+          page_type: "note",
+          visibility: "public"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/notes")
+
+      # El scope se ve en cada tarjeta del listado. La columna viaja en el
+      # `select` acotado de `list_pages/1`: sin ella la píldora no tendría dato.
+      assert has_element?(view, "[data-testid='page-card-#{privada.slug}']", t("Private"))
+      assert has_element?(view, "[data-testid='page-card-#{publica.slug}']", t("Public"))
+    end
+
     test "no kind filter dropdown is rendered (the vocabulary is gone)", %{conn: conn, ws: ws} do
       {:ok, _view, html} = live(conn, ~p"/notes")
 

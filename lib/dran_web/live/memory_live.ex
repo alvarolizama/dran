@@ -733,10 +733,12 @@ defmodule DranWeb.MemoryLive do
         <span title={absolute_timestamp(@memory.inserted_at)}>{relative_time(@memory.inserted_at)}</span>
 
         <%!-- El destino del hecho, con la píldora COMPARTIDA: nunca el valor
-        crudo de la columna, y nada cuando el nivel es `private` (el default no
-        se anuncia). --%>
+        crudo de la columna. Va en el LISTADO, así que el nivel se anuncia en
+        todas las filas — `private` incluido: acá el lector compara destinos y
+        un hueco no se lee como «privado», se lee como «sin dato». --%>
         <.resource_visibility_pill
           visibility={@memory.visibility}
+          always={true}
           id={"memory-visibility-#{@memory.id}"}
         />
 

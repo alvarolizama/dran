@@ -320,11 +320,13 @@ defmodule DranWeb.MemoryLiveTest do
       {:ok, owner: owner, guest: guest, memory: memory, context: context}
     end
 
-    test "un hecho privado no anuncia su nivel y uno público usa la píldora compartida", ctx do
+    test "el listado anuncia el nivel de cada hecho (privado incluido) y el público usa la píldora compartida",
+         ctx do
       {:ok, view, _html} = live(login(ctx.conn, ctx.owner), ~p"/memory")
 
-      # `private` es el default: la píldora NO se dibuja (nada que anunciar).
-      refute has_element?(view, "#memory-visibility-#{ctx.memory.id}")
+      # `private` es el default y el listado lo dice: el scope se ve fila por
+      # fila (antes el hueco se leía como «sin dato»).
+      assert has_element?(view, "#memory-visibility-#{ctx.memory.id}", t("Private"))
 
       {:ok, public_memory} = Memory.set_scope(ctx.memory, "public")
       {:ok, view, _html} = live(login(ctx.conn, ctx.owner), ~p"/memory")

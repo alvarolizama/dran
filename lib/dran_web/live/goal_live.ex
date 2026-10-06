@@ -491,6 +491,7 @@ defmodule DranWeb.GoalLive do
       due_on={@goal.due_on}
       overdue?={overdue?(@goal)}
       visibility={@goal.visibility}
+      visibility_always={true}
       meta={updated_meta(@goal.updated_at)}
     >
       <%!-- El horizonte es de goal (el plan no lo tiene): entra como ficha

@@ -295,6 +295,8 @@ defmodule DranWeb.PageListComponents do
       badge={type_badge_label(@context, @page)}
       summary={@page.summary}
       meta={@page.updated_at && Calendar.strftime(@page.updated_at, "%b %d")}
+      visibility={@page.visibility}
+      visibility_always={true}
       testid={"page-card-" <> @page.slug}
     >
       <:footer>
