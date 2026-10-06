@@ -84,6 +84,7 @@ def hermetic_dran_home(plugin, tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "hermes_cli", None)
     monkeypatch.setattr(plugin, "_PLUGIN_CTX", None)
     plugin._TOGGLES_CACHE.clear()
+    plugin._MEMORY_CACHE.clear()
     return home
 
 
@@ -1303,10 +1304,56 @@ def test_card_declares_the_connection_and_the_destination(plugin):
     """Instancia y destino también son de la tarjeta; el token va al MISMO .env."""
     declared = _card_schema_keys()
 
-    assert declared[:4] == ["api_key", "base_url", "scope", "scope_group"]
+    assert declared[:5] == ["api_key", "base_url", "scope", "scope_group", "memory"]
     source = (_PLUGIN_DIR / "plugin.yaml").read_text(encoding="utf-8")
     assert "env: DRAN_API_KEY" in source, "el secret de la tarjeta debe resolver al mismo var"
     assert "choices:" in source, "Write scope se elige, no se escribe"
+
+
+def test_memory_toggle_defaults_on_and_the_json_wins(plugin, hermetic_dran_home):
+    """El switch de memoria: ausente = encendido, y el JSON legacy gana por clave."""
+    assert plugin._memory_enabled() is True
+
+    ctx = FakeCtx(config={"memory": False})
+    assert plugin._memory_enabled(ctx) is False
+
+    _write_dran_config(plugin, hermetic_dran_home, {"memory": True})
+    plugin._MEMORY_CACHE.clear()
+    assert plugin._memory_enabled(ctx) is True, "el JSON del panel gana por clave"
+
+
+def test_memory_toggle_gates_the_provider_and_its_tools(plugin, hermetic_dran_home, monkeypatch):
+    """Apagado: el provider no está disponible, sus tools salen del listado y niegan la llamada.
+
+    Hermes no agrega un provider que no está disponible (`agent_init`:
+    `if _mp and _mp.is_available()`), así que no hay recall ni captura; y una
+    sesión en vuelo —que conserva su lista de tools— recibe el error
+    estructurado en vez de un efecto.
+    """
+    card = FakeCtx(config={"memory": False, "api_key": "dran_card"})
+    # El proveedor NO recibe ctx: resuelve la tarjeta del perfil activo (acá, el
+    # ctx capturado en register(), porque el entorno de test no tiene hermes_cli).
+    monkeypatch.setattr(plugin, "_PLUGIN_CTX", card)
+
+    provider = plugin.DranMemoryProvider()
+
+    assert plugin._memory_enabled() is False
+    assert plugin._memory_enabled(card) is False
+    assert provider.is_available() is False, "con el switch apagado no se carga"
+    assert "switched OFF" in provider.unavailable_reason()
+    assert provider.get_tool_schemas() == [], "las cuatro tools de memoria salen del listado"
+    assert provider.system_prompt_block() == ""
+    assert provider.prefetch("cualquiera") == ""
+
+    denied = json.loads(provider.handle_tool_call("dran_memory_search", {"query": "hola"}))
+    assert "tool disabled" in denied["error"]
+
+    # Encendido, la misma instancia vuelve a exponer su superficie.
+    monkeypatch.setattr(plugin, "_PLUGIN_CTX", FakeCtx(config={"memory": True, "api_key": "dran_card"}))
+    plugin._MEMORY_CACHE.clear()  # en producción el cambio del archivo la invalida
+
+    assert provider.is_available() is True
+    assert len(provider.get_tool_schemas()) == 4
 
 
 def _declared_panel_fields():
@@ -1326,20 +1373,25 @@ def _declared_panel_fields():
 
 
 def test_memory_panel_keeps_only_the_memory_surface(plugin):
-    """Bajo `memory.provider` se ve SÓLO lo de memoria — más el token.
+    """Bajo `memory.provider` se ve SÓLO lo de memoria — y ni la credencial.
 
     Todos los campos son `inline`, así que el panel compacto los pinta planos
     y no aparece el botón "Full config…": lo que el usuario ve ahí es
-    exactamente esta lista, sin instancia, sin destino y sin toggles.
+    exactamente esta lista. El token vive en la tarjeta del plugin (escribe el
+    mismo `DRAN_API_KEY` del `.env` que resuelve el proveedor), así que no hay
+    nada que pueda divergir entre las dos superficies.
     """
     fields = _declared_panel_fields()
 
     assert [key for key, _inline, _group in fields] == [
-        "api_key", "auto_recall", "auto_capture",
+        "auto_recall", "auto_capture",
         "max_recall_results", "max_recall_chars", "recall_cadence",
     ]
     assert all(is_inline for _key, is_inline, _group in fields), "un campo no-inline abriría el modal"
     assert all(group for _key, _inline, group in fields), "un campo sin grupo cae en 'Other'"
+
+    panel = (_PLUGIN_DIR / "config_schema.py").read_text(encoding="utf-8")
+    assert 'key="api_key"' not in panel, "la credencial no se declara en las dos superficies"
     assert "scope" not in [key for key, _i, _g in fields], "el destino ya no es del panel"
 
 

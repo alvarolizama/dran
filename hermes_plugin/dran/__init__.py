@@ -43,6 +43,10 @@ CANONICAL_CONFIG_FILENAME = "config.json"
 # The plugin's own id: the key it lives under in the plugins hub
 # (`plugins.entries.dran.settings`), which is where its CARD writes.
 PLUGIN_ID = "dran"
+# The card's switch for the memory half (`memory`), and its cache:
+# (signature, bool) per home, invalidated by `_config_signature/1`.
+MEMORY_TOGGLE_KEY = "memory"
+_MEMORY_CACHE: Dict[str, Any] = {}
 # Single-source-of-truth credential: profile .env's DRAN_API_KEY, the same
 # var the plugin resolves for its REST calls.
 API_KEY_ENV_VAR = "DRAN_API_KEY"
@@ -951,13 +955,23 @@ class DranMemoryProvider(MemoryProvider):
         return "dran"
 
     def is_available(self) -> bool:
+        # El switch de la tarjeta manda: apagado, Hermes NO agrega el provider
+        # (`agent_init`: `if _mp and _mp.is_available()`), así que no hay
+        # recall al inicio del turno ni captura al cerrar la sesión.
+        if not _memory_enabled():
+            return False
         self._config = _load_dran_config(self._hermes_home())
         return bool(self._config.get("api_key"))
 
     def unavailable_reason(self) -> str:
-        return ("Dran memory is not configured — set api_key (and optionally "
-                "base_url / workspace) via `hermes memory setup` or "
-                f"$HERMES_HOME/{CANONICAL_CONFIG_DIR}/{CANONICAL_CONFIG_FILENAME}")
+        if not _memory_enabled():
+            return ("Dran memory is switched OFF in the plugin's card "
+                    "(Capabilities → Plugins → Dran → gear → Memory): turn it on "
+                    "to recall and capture again.")
+        return ("Dran memory is not configured — set the API key on the plugin's "
+                "card (Capabilities → Plugins → Dran → gear; it lands in the "
+                "profile .env as DRAN_API_KEY), or export DRAN_API_KEY for the "
+                "profile directly.")
 
     # -- Config surface (dashboard panel + `hermes memory setup`) -------------
 
@@ -1073,6 +1087,8 @@ class DranMemoryProvider(MemoryProvider):
     # -- System prompt + prefetch -------------------------------------------
 
     def system_prompt_block(self) -> str:
+        if not _memory_enabled():
+            return ""  # la superficie de memoria no se anuncia si está apagada
         return (
             "Shared memory: a Dran workspace stores durable facts shared by all "
             "your agents. Relevant memories are injected automatically at turn "
@@ -1087,6 +1103,8 @@ class DranMemoryProvider(MemoryProvider):
         )
 
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
+        if not _memory_enabled():
+            return  # apagada: ni la búsqueda se arma
         if not (self._config.get("auto_recall") and self._client and query and query.strip()):
             return
 
@@ -1153,6 +1171,8 @@ class DranMemoryProvider(MemoryProvider):
         return enriched[-300:]
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
+        if not _memory_enabled():
+            return ""  # el cache queda intacto: si se re-enciende, vuelve solo
         with self._prefetch_lock:
             cached = self._prefetch_cache
             injected_ids = getattr(self, "_prefetch_ids", frozenset())
@@ -1187,6 +1207,10 @@ class DranMemoryProvider(MemoryProvider):
     # -- Tools ---------------------------------------------------------------
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
+        if not _memory_enabled():
+            # Apagada: las cuatro tools de memoria SALEN del listado (prompt +
+            # catálogo de tool_search), igual que un grupo apagado.
+            return []
         return [
             {
                 "name": "dran_memory_search",
@@ -1239,6 +1263,12 @@ class DranMemoryProvider(MemoryProvider):
 
     def handle_tool_call(self, tool_name: str, args: Dict[str, Any], **kwargs) -> str:
         try:
+            if not _memory_enabled():
+                # La sesión en vuelo conserva su lista de tools: si llama igual,
+                # recibe el error estructurado y ningún efecto.
+                return json.dumps({"error": "tool disabled: Dran memory is off in "
+                                            "the plugin's configuration (Capabilities → "
+                                            "Plugins → Dran)"})
             if tool_name == "dran_memory_search":
                 query = str((args or {}).get("query", "")).strip()
                 if not query:
@@ -1317,6 +1347,8 @@ class DranMemoryProvider(MemoryProvider):
     # -- Session end ----------------------------------------------------------
 
     def on_session_end(self, messages: List[Dict[str, Any]]) -> None:
+        if not _memory_enabled():
+            return  # apagada: el transcript no se ingesta
         if self._agent_context != "primary":
             return  # subagent/cron sessions must not pollute shared memory
         if not (self._config.get("auto_capture") and self._client):
@@ -1530,6 +1562,46 @@ def _deep_merge(base: dict, override: dict) -> dict:
     for key, value in (override or {}).items():
         merged[key] = value
     return merged
+
+
+def _memory_enabled(ctx: Any = None) -> bool:
+    """Is the plugin's memory half ON? Default ON, and MISSING means ON.
+
+    The switch lives on the plugin's CARD (Capabilities → Plugins → Dran → gear)
+    as the FLAT key ``memory``; the legacy `$HERMES_HOME/dran/config.json` key
+    wins per key, like every other switch in this plugin. Fail-open, like the
+    group toggles: this is the operator's convenience, not a security boundary.
+
+    Semantics — what "off" really does:
+      * the provider stops being AVAILABLE (`is_available()` False), so Hermes
+        never adds it (`agent_init`: `if _mp and _mp.is_available()`): no recall
+        at turn start, no transcript capture at session end;
+      * its four memory tools leave `get_tool_schemas()`, so they vanish from the
+        prompt and the tool catalog;
+      * and the live guards (prefetch, capture, dispatch) refuse anyway, because
+        a session already in flight has its tool list frozen and its provider
+        already registered.
+    """
+    hermes_home = _active_hermes_home()
+    # Un `ctx` explícito lo sabe mejor que el cache (el perfil de la llamada):
+    # ahí se recalcula, y el cache queda para el camino del proveedor (sin ctx).
+    signature = _config_signature(hermes_home) if ctx is None else None
+    if signature is not None:
+        cached = _MEMORY_CACHE.get(hermes_home)
+        if cached is not None and cached[0] == signature:
+            return cached[1]
+
+    enabled = True
+    for source in (_card_settings(ctx), _load_dran_config(hermes_home, ctx)):
+        if not isinstance(source, dict):
+            continue
+        value = source.get(MEMORY_TOGGLE_KEY)
+        if isinstance(value, bool):
+            enabled = value
+
+    if signature is not None:
+        _MEMORY_CACHE[hermes_home] = (signature, enabled)
+    return enabled
 
 
 def _client_for(ctx) -> Optional[_DranClient]:

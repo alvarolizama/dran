@@ -149,6 +149,11 @@ config_schema:
     default: ""
     label: Group slug
     description: "Slug of the group this profile's writes go to when Write scope is 'group'. `GET /api/groups` (or the agent tool dran_list_groups) lists your groups; the slug is the group's stable, copyable id."
+  memory:
+    type: bool
+    default: true
+    label: Memory (recall & capture)
+    description: "The plugin's memory half: recall at turn start, transcript capture at session end, and the four dran_memory_* tools. Off, Hermes does not even load the provider — the memory tools leave the listing and `memory.provider: dran` has nothing to run (the panel under Memory & Context keeps its recall knobs, they just have no effect)."
   pages:
     type: bool
     default: true

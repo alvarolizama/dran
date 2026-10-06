@@ -13,7 +13,7 @@ en **este** directorio, comparten **un solo token** (`DRAN_API_KEY` en el
 | Qué | Dónde se edita | Dónde se guarda |
 |---|---|---|
 | **Runtime** (`__init__.py`) | — | — |
-| **Tarjeta**: instancia, destino de escritura, los 7 toggles, token | **Capabilities → Plugins → Dran → engranaje** (o el TUI) | `plugins.entries.dran.settings` del perfil (`config.yaml`); el token al `.env` |
+| **Tarjeta**: instancia, destino de escritura, el switch de memoria, los 7 toggles, token | **Capabilities → Plugins → Dran → engranaje** (o el TUI) | `plugins.entries.dran.settings` del perfil (`config.yaml`); el token al `.env` |
 | **Panel de memoria**: recall (auto recall/capture, topes, cadencia) | **Settings → Memory & Context** → `Memory provider: dran` | `$HERMES_HOME/dran/config.json` |
 
 - **Runtime** (`__init__.py`): el MemoryProvider (sus tools salen de
@@ -28,7 +28,9 @@ en **este** directorio, comparten **un solo token** (`DRAN_API_KEY` en el
 - **Panel** (`config_schema.py`): Hermes lo lee **del disco, al lado de este
   archivo** (`plugins/memory/__init__.py::find_provider_dir` →
   `get_provider_config_schema`) y lo renderiza como el panel de configuración
-  del proveedor de memoria. Escribe **su** `config.json`.
+  del proveedor de memoria. Escribe **su** `config.json`, y declara **sólo**
+  los cinco knobs de recall: la credencial y la instancia son de la tarjeta,
+  así que no hay ninguna clave repetida entre las dos superficies.
 
 **Precedencia, por clave:** defaults ← tarjeta ← `config.json` (gana). El JSON
 es lo que el panel de memoria escribió históricamente y lo que un archivo
@@ -59,8 +61,8 @@ token va al `.env` por la ruta de credenciales, nunca al YAML.
 
 **El panel de memoria** (`config_schema.py`): **Settings → Memory & Context** →
 elegí **Memory provider: `dran`** y el panel de Dran aparece **justo debajo**,
-con **sólo** lo de memoria — API key, Auto recall, Auto capture, Max recall
-results, Recall char budget, Recall cadence. Los seis campos son `inline`, así
+con **sólo** lo de memoria — Auto recall, Auto capture, Max recall
+results, Recall char budget, Recall cadence. Los cinco campos son `inline`, así
 que se listan en orden, sin cabeceras y **sin** el botón "Full config…".
 Guarda campo por campo (autosave), en `$HERMES_HOME/dran/config.json`.
 
@@ -82,6 +84,33 @@ es lo que el panel escribió históricamente y lo que un archivo editado a mano
 sigue diciendo: un setup ya existente no cambia de sentido bajo el usuario.
 Mover un valor a la tarjeta no lo borra del JSON — si querés que la tarjeta
 mande, sacá la clave del JSON.
+
+## El switch de memoria (la mitad de memoria del plugin)
+
+La tarjeta tiene el campo **Memory (recall & capture)**. Apagado, Hermes **no
+carga el proveedor**: `is_available()` devuelve `false`, así que el manager no
+lo agrega (`agent_init`: `if _mp and _mp.is_available()`) y quedan sin efecto el
+recall del inicio del turno y la captura del transcript al cerrar la sesión.
+Además:
+
+- las **cuatro tools de memoria** (`dran_memory_search`, `dran_memory_add`,
+  `dran_memory_update`, `dran_memory_feedback`) salen de `get_tool_schemas()`:
+  desaparecen del prompt **y del catálogo de `tool_search`**, igual que un grupo
+  apagado;
+- y las guardas vivas rechazan igual (prefetch, captura y dispatch), porque una
+  sesión en vuelo ya tiene su proveedor registrado y su lista de tools
+  congelada: recibe un error estructurado y ningún efecto.
+
+Encendido es el default, y **ausente es encendido** (fail-open, como los siete
+grupos). La clave vive en la tarjeta (plana: `memory`); el `config.json` legacy
+también la acepta y gana por clave.
+
+Lo que este switch **no** hace: el panel de `Memory & Context` sigue existiendo y
+sigue mostrando sus cinco knobs — sin proveedor cargado, sus valores no afectan
+nada. Y no puede hacerlo desaparecer: el panel se monta porque
+`memory.provider: dran`, y **eso no se puede mover a la tarjeta** (elegir
+proveedor es config del core; el writer de plugins sólo acepta claves
+plugin-relativas).
 
 ## La instancia es el workspace
 
@@ -146,12 +175,13 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
    Ese mismo valor lo consume el plugin entero (memory provider + tools).
 3. Configura el resto desde el **app desktop**:
    - **Capabilities → Plugins → Dran → engranaje**: instancia (`base_url`),
-     destino de escritura (`scope` + `scope_group`) y los **siete toggles** de
-     tools. El token, si lo cargás acá, va al **mismo** `.env` que el paso 2.
+     destino de escritura (`scope` + `scope_group`), el switch **Memory (recall
+     & capture)** y los **siete toggles** de tools. El token, si lo cargás acá,
+     va al **mismo** `.env` que el paso 2.
    - **Settings → Memory & Context** → elegí Memory provider **`dran`**: el
      panel que aparece justo debajo tiene **sólo** los knobs de recall (Auto
      recall, Auto capture, Max recall results, Recall char budget, Recall
-     cadence) y el campo del token.
+     cadence) — ni la instancia ni el token: todo eso vive en la tarjeta.
 
    La alternativa CLI es `hermes memory setup` → "dran": pregunta credencial,
    instancia y knobs de recall, y escribe el `config.json`.
@@ -354,6 +384,11 @@ como archivo) y verifican las dos mitades.
 vuelo conserva su superficie de tools — Hermes no reescribe el prompt a mitad
 de conversación (invariante de prompt caching).
 
+**El tercer switch, aparte de los siete grupos:** el de **memoria** (tarjeta →
+Memory). Apaga la mitad de memoria completa — recall, captura y las cuatro tools
+`dran_memory_*` — y su semántica está en
+[El switch de memoria](#el-switch-de-memoria-la-mitad-de-memoria-del-plugin).
+
 **Nota de migración (v1.4 → v1.5):** el toolset `dran` ya no existe; quien lo
 tuviera deshabilitado en `platform_toolsets`/`agent.disabled_toolsets`
 recupera las 46 tools, porque las claves nuevas son desconocidas y Hermes las
@@ -388,8 +423,10 @@ manejo de errores como JSON y la **discovery de page types efectivos** desde
 tipo retirado al crear).
 
 Y el reparto de la configuración: que la tarjeta (`plugin.yaml`) declare los
-siete toggles y que el panel de memoria conserve **sólo** lo de memoria, más la
-resolución en capas — `defaults ← tarjeta ← config.json` (gana por clave) — que
-el proveedor y las tools comparten. Un `config.json` con un solo knob de
-memoria no debe arrastrar `base_url` al default de localhost: hay un test para
-eso.
+siete toggles y el switch de memoria, que el panel de memoria conserve **sólo**
+lo de memoria (sin la credencial), más la resolución en capas —
+`defaults ← tarjeta ← config.json` (gana por clave) — que el proveedor y las
+tools comparten. Un `config.json` con un solo knob de memoria no debe arrastrar
+`base_url` al default de localhost: hay un test para eso. Y otro que fija qué
+hace el switch apagado: `is_available()` false, `get_tool_schemas()` vacío y la
+llamada rechazada.
