@@ -97,6 +97,40 @@ defmodule DranWeb.ResourceAuthorization do
 
   defp mode_allowed?(level, mode), do: level_allowed?(level, mode)
 
+  @doc """
+  Row-level WRITE authority (W3, contract auditoria-fixes): the row-level
+  layer the role matrix above never had. Reads resolve their row through the
+  reader's scope (no existence leak), but resolving a row never meant owning
+  it — "Shares and visibility only move READ access"
+  (`Dran.ContentVisibility`, `Dran.Sharing`). `SkillController.can_write?/2`
+  was the only surface that enforced it; this is the shared shape for the
+  rest.
+
+    * `:all` (privileged reader) writes any row it can read — instance policy.
+    * `{:group, gid}` writes exactly what its group can read: the group is a
+      PRINCIPAL and the group-shared content IS its own (the decision the
+      skills surface already made). The share-grant guard lives in
+      `ContentVisibility.filter/3` — a row not actually shared with the group
+      never resolved for this reader.
+    * `{:reader, id}` writes only rows whose `owner_user_id == id`.
+    * anything else (nil scope, malformed row) does NOT write — fail closed.
+
+  `row` is a map or struct carrying at least `:owner_user_id` (tasks carry
+  their goal's owner — resolve it before calling).
+  """
+  @spec can_write_row?(Dran.ContentVisibility.scope(), map() | struct() | nil) :: boolean()
+  def can_write_row?(:all, _row), do: true
+
+  def can_write_row?({:group, gid}, row) when is_integer(gid) and is_map(row) do
+    Map.get(row, :visibility) == "shared"
+  end
+
+  def can_write_row?({:reader, reader_id}, row) when is_integer(reader_id) and is_map(row) do
+    Map.get(row, :owner_user_id) == reader_id
+  end
+
+  def can_write_row?(_scope, _row), do: false
+
   # ── Workspace resolution ──────────────────────────────────────────────────
 
   defp resolve_workspace_id(%Dran.Workspace{id: id}), do: id

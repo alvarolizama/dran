@@ -75,6 +75,16 @@ tuyo. El grupo viaja por **slug** (su identidad estable y copiable);
 default del perfil se elige con los campos **Write scope** y **Group slug**
 (el slug solo aplica cuando el scope es `group`).
 
+**Si tu token es el de un GRUPO, no configures nada.** Un grupo puede tener su
+propia credencial (`Admin → Groups → Token`): esa credencial ya está atada a su
+grupo, así que el servidor **impone** el destino — con o sin `scope`, todo lo que
+escribas cae en el grupo, y cualquier otro destino (`public`, `private`, otro
+grupo) es `422`, nunca un `private` en silencio. La lectura es igual de acotada:
+**exactamente lo compartido a ese grupo**, sin lo público de la instancia ni lo
+privado ajeno. Los campos **Write scope** / **Group slug** del perfil quedan sin
+efecto (son del token de cuenta), y no hace falta llamar a `GET /api/groups`
+para elegir destino.
+
 La misma respuesta trae los **page types efectivos** de la instancia
 (`page_types` y `page_type_defs`: los 4 built-in — `note`, `entity`, `concept`,
 `reference` — más los tipos custom que la instancia declare). El plugin los lee

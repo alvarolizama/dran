@@ -467,6 +467,21 @@ ES = {
     "Wire": "Wire",
     "Write the instructions an agent should follow.": "Escribe las instrucciones que un agente debe seguir.",
     "Worker limits, semantic thresholds and summary language for this instance. Applies to autonomous workers, the page augmenter and the nightly cron jobs.": "Límites de workers, umbrales semánticos e idioma de los resúmenes para esta instancia. Aplica a los workers autónomos, al page augmenter y a los crons nocturnos.",
+    # ── El token del GRUPO (contrato grupo-credencial, W4) ─────────────────
+    # Tres de estas llegaron con un `msgstr` heredado por fuzzy-merge («Could
+    # not generate the group token.» traía la traducción de «Could not rename
+    # the group.»): la entrada del diccionario es lo que las corrige.
+    "An agent using this token writes only into this group and reads exactly what is shared with it — nothing else.": "Un agente que use este token escribe sólo en este grupo y lee exactamente lo que está compartido con él — nada más.",
+    "Could not generate the group token.": "No se pudo generar el token del grupo.",
+    "Generate a new token? Every client using the current one stops working immediately.": "¿Generar un token nuevo? Todo cliente que use el actual deja de funcionar de inmediato.",
+    "Generating…": "Generando…",
+    "See the group's token": "Ver el token del grupo",
+    "This group has no credential yet: nothing can authenticate as it.": "Este grupo todavía no tiene credencial: nada puede autenticarse como él.",
+    "Token": "Token",
+    "Token generated. The previous one stopped working.": "Token generado. El anterior dejó de funcionar.",
+    "Token of %{name}": "Token de %{name}",
+    # ── La credencial de la instancia en Settings › General (Fase 0) ───────
+    "The credential of the whole instance.": "La credencial de toda la instancia.",
 }
 
 STR = re.compile(r'"((?:[^"\\]|\\.)*)"')
@@ -532,13 +547,20 @@ def main() -> int:
     open(PO, "w", encoding="utf-8").write("\n\n".join(blocks))
     print(f"es: translations written: {touched}")
 
+    # El catálogo inglés se normaliza SIEMPRE, incluso en la pasada que pide
+    # agregar strings al diccionario: si no, el `fuzzy` que deja el merge se
+    # queda pegado hasta la próxima corrida (y un `fuzzy` en `en` es basura que
+    # el próximo `extract --merge` arrastra).
+    en_report = clear_identity_catalog()
+
     if untranslated:
         print(f"es: {len(untranslated)} msgid(s) have NO translation — add them to ES:")
         for msgid in sorted(untranslated):
             print(f"  * {msgid!r}")
+        print(f"en: {en_report}")
         return 1
 
-    print(f"en: {clear_identity_catalog()}")
+    print(f"en: {en_report}")
     return 0
 
 

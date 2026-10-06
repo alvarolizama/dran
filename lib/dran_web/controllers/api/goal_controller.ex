@@ -61,14 +61,14 @@ defmodule DranWeb.API.GoalController do
 
   @doc "POST /api/goals — crea un goal con el dueño de la credencial."
   def create(conn, params) do
-    {scoped?, scope, params} = Instance.pop_write_scope(params)
+    {scoped?, scope, params} = Instance.write_scope(conn, params)
 
     attrs =
       params
       |> Instance.permit_goal_params()
       |> Map.merge(Instance.owner_attrs(conn))
 
-    case create_with_scope(attrs, scoped?, scope) do
+    case create_with_scope(attrs, scoped?, scope, conn.assigns[:user]) do
       {:ok, goal} ->
         conn |> put_status(:created) |> json(%{data: goal})
 
@@ -91,7 +91,7 @@ defmodule DranWeb.API.GoalController do
   """
   def update(conn, %{"slug" => segment} = params) do
     scope = Instance.scope_for(conn, :goal)
-    {scoped?, write_scope, params} = Instance.pop_write_scope(params)
+    {scoped?, write_scope, params} = Instance.write_scope(conn, params)
     attrs = params |> Instance.permit_goal_params() |> Map.delete("visibility")
 
     case fetch_goal(segment, scope) do
@@ -99,18 +99,23 @@ defmodule DranWeb.API.GoalController do
         not_found(conn, "goal not found")
 
       goal ->
-        case update_with_scope(goal, attrs, scoped?, write_scope) do
-          {:ok, updated} ->
-            json(conn, %{data: updated})
+        # W3 (contract auditoria-fixes): resolver la fila no es poseerla.
+        if DranWeb.ResourceAuthorization.can_write_row?(scope, goal) do
+          case update_with_scope(goal, attrs, scoped?, write_scope, conn.assigns[:user]) do
+            {:ok, updated} ->
+              json(conn, %{data: updated})
 
-          {:error, {:scope, message}} ->
-            unprocessable(conn, %{detail: message})
+            {:error, {:scope, message}} ->
+              unprocessable(conn, %{detail: message})
 
-          {:error, {:update, %Ecto.Changeset{} = changeset}} ->
-            unprocessable(conn, format_errors(changeset))
+            {:error, {:update, %Ecto.Changeset{} = changeset}} ->
+              unprocessable(conn, format_errors(changeset))
 
-          {:error, {:update, reason}} ->
-            unprocessable(conn, %{detail: to_string(reason)})
+            {:error, {:update, reason}} ->
+              unprocessable(conn, %{detail: to_string(reason)})
+          end
+        else
+          forbidden(conn)
         end
     end
   end
@@ -124,8 +129,13 @@ defmodule DranWeb.API.GoalController do
         not_found(conn, "goal not found")
 
       goal ->
-        {:ok, _} = Goals.delete_goal(goal)
-        send_resp(conn, :no_content, "")
+        # W3 (contract auditoria-fixes): lo legible-ajeno no se destruye.
+        if DranWeb.ResourceAuthorization.can_write_row?(scope, goal) do
+          {:ok, _} = Goals.delete_goal(goal)
+          send_resp(conn, :no_content, "")
+        else
+          forbidden(conn)
+        end
     end
   end
 
@@ -143,28 +153,30 @@ defmodule DranWeb.API.GoalController do
 
   # El insert y la traducción del `scope` van en UNA transacción: un destino
   # inválido (grupo inexistente o ajeno) revierte el goal — nada de huérfanos.
-  defp create_with_scope(attrs, scoped?, scope) do
+  # La IDENTIDAD viaja hasta la frontera: una credencial atada a un destino (el
+  # token de un grupo) sólo puede honrar el suyo (`apply_scope/4`).
+  defp create_with_scope(attrs, scoped?, scope, identity) do
     Repo.transaction(fn ->
       case Goals.create_goal(attrs) do
-        {:ok, goal} -> translate_scope(goal, scope, scoped?)
+        {:ok, goal} -> translate_scope(goal, scope, scoped?, identity)
         {:error, reason} -> Repo.rollback({:create, reason})
       end
     end)
   end
 
-  defp update_with_scope(goal, attrs, scoped?, scope) do
+  defp update_with_scope(goal, attrs, scoped?, scope, identity) do
     Repo.transaction(fn ->
       case Goals.update_goal(goal, attrs) do
-        {:ok, updated} -> translate_scope(updated, scope, scoped?)
+        {:ok, updated} -> translate_scope(updated, scope, scoped?, identity)
         {:error, reason} -> Repo.rollback({:update, reason})
       end
     end)
   end
 
-  defp translate_scope(goal, _scope, false), do: goal
+  defp translate_scope(goal, _scope, false, _identity), do: goal
 
-  defp translate_scope(goal, scope, true) do
-    case Sharing.apply_scope(goal, scope, :goal) do
+  defp translate_scope(goal, scope, true, identity) do
+    case Sharing.apply_scope(goal, scope, :goal, identity) do
       {:ok, goal} -> goal
       {:error, message} -> Repo.rollback({:scope, message})
     end

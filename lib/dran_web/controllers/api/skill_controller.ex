@@ -47,11 +47,11 @@ defmodule DranWeb.API.SkillController do
   changeset.
   """
   def create(conn, params) do
-    {scoped?, scope, params} = Instance.pop_write_scope(params, drop_visibility: true)
+    {scoped?, scope, params} = Instance.write_scope(conn, params, drop_visibility: true)
     attrs = Instance.permit_skill_params(params)
     owner_id = reader_id(conn)
 
-    case create_with_scope(attrs, owner_id, scoped?, scope) do
+    case create_with_scope(attrs, owner_id, scoped?, scope, conn.assigns[:user]) do
       {:ok, skill} ->
         conn
         |> put_status(:created)
@@ -75,7 +75,7 @@ defmodule DranWeb.API.SkillController do
   skill legible pero ajeno es 403 — la lectura de lo público no da la escritura.
   """
   def update(conn, %{"slug" => slug} = params) do
-    {scoped?, write_scope, params} = Instance.pop_write_scope(params, drop_visibility: true)
+    {scoped?, write_scope, params} = Instance.write_scope(conn, params, drop_visibility: true)
     attrs = Instance.permit_skill_params(params)
 
     case writable_skill(slug, conn) do
@@ -86,7 +86,7 @@ defmodule DranWeb.API.SkillController do
         forbidden(conn)
 
       skill ->
-        case update_with_scope(skill, attrs, scoped?, write_scope) do
+        case update_with_scope(skill, attrs, scoped?, write_scope, conn.assigns[:user]) do
           {:ok, updated} ->
             json(conn, %{data: Skills.show_payload(updated, reader_id(conn))})
 
@@ -126,30 +126,31 @@ defmodule DranWeb.API.SkillController do
 
   # El insert y la traducción del `scope` van en UNA transacción: un destino que
   # no se puede honrar (grupo inexistente o ajeno) revierte la fila y devuelve
-  # 422, nunca un `private` en silencio.
-  defp create_with_scope(attrs, owner_id, scoped?, scope) do
+  # 422, nunca un `private` en silencio. La IDENTIDAD viaja hasta la frontera:
+  # una credencial atada a un destino (el token de un grupo) sólo honra el suyo.
+  defp create_with_scope(attrs, owner_id, scoped?, scope, identity) do
     Dran.Repo.transaction(fn ->
       case Skills.create_skill(attrs, owner_user_id: owner_id) do
-        {:ok, skill} -> translate_scope(skill, scope, scoped?)
+        {:ok, skill} -> translate_scope(skill, scope, scoped?, identity)
         {:error, reason} -> Dran.Repo.rollback({:create, reason})
       end
     end)
   end
 
-  defp update_with_scope(skill, attrs, scoped?, scope) do
+  defp update_with_scope(skill, attrs, scoped?, scope, identity) do
     Dran.Repo.transaction(fn ->
       case Skills.update_skill(skill, attrs) do
-        {:ok, updated} -> translate_scope(updated, scope, scoped?)
+        {:ok, updated} -> translate_scope(updated, scope, scoped?, identity)
         {:error, :rename} -> Dran.Repo.rollback({:rename})
         {:error, reason} -> Dran.Repo.rollback({:update, reason})
       end
     end)
   end
 
-  defp translate_scope(skill, _scope, false), do: skill
+  defp translate_scope(skill, _scope, false, _identity), do: skill
 
-  defp translate_scope(skill, scope, true) do
-    case Dran.Sharing.apply_scope(skill, scope, :skill) do
+  defp translate_scope(skill, scope, true, identity) do
+    case Dran.Sharing.apply_scope(skill, scope, :skill, identity) do
       {:ok, skill} -> skill
       {:error, message} -> Dran.Repo.rollback({:scope, message})
     end
@@ -167,16 +168,22 @@ defmodule DranWeb.API.SkillController do
 
   defp can_write?(%Skill{} = skill, conn) do
     case Instance.scope_for(conn, :skill) do
-      :all -> true
-      {:reader, reader_id} -> is_integer(reader_id) and skill.owner_user_id == reader_id
+      :all ->
+        true
+
+      # Una credencial atada a un grupo lee EXACTAMENTE lo compartido a su
+      # grupo: eso ES el contenido del grupo, y el grupo es un principal — lo
+      # que puede leer puede reescribirlo (el token de cuenta no cambia).
+      {:group, _gid} ->
+        true
+
+      {:reader, reader_id} ->
+        is_integer(reader_id) and skill.owner_user_id == reader_id
     end
   end
 
-  defp forbidden(conn) do
-    conn
-    |> put_status(:forbidden)
-    |> json(%{errors: %{detail: "forbidden"}})
-  end
+  # `forbidden/1` vive en `DranWeb.ControllerHelpers` (W3, contract
+  # auditoria-fixes): este controller lo usaba en privado, ahora es la casa.
 
   # El id del lector, resuelto en el punto único de la credencial: `nil` cuando
   # el token no tiene dueño (el admin legacy). Nunca sale del body.

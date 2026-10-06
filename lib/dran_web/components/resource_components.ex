@@ -285,6 +285,7 @@ defmodule DranWeb.ResourceComponents do
   `actions` slot, which renders BEFORE the CTA — the same order pages uses.
   """
   attr :title, :string, required: true
+  attr :subtitle, :string, default: nil
   attr :new_path, :string, default: nil
   attr :new_event, :string, default: nil
   attr :new_id, :string, default: nil
@@ -295,7 +296,10 @@ defmodule DranWeb.ResourceComponents do
   def resource_list_header(assigns) do
     ~H"""
     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <h1 class="text-title">{@title}</h1>
+      <div class="min-w-0">
+        <h1 class="text-title">{@title}</h1>
+        <p :if={@subtitle} class="text-caption mt-1">{@subtitle}</p>
+      </div>
       <div class="flex gap-2">
         {render_slot(@actions)}
         <.link
@@ -380,7 +384,12 @@ defmodule DranWeb.ResourceComponents do
   """
   attr :icon, :string, required: true
   attr :title, :string, required: true
-  attr :href, :string, required: true
+
+  attr :href, :string,
+    default: nil,
+    doc:
+      "la ruta del detalle; `nil` deja la ficha SIN link (una entidad que no tiene página propia)"
+
   attr :badge, :string, default: nil
   attr :badge_class, :string, default: "bg-base-300 text-base-content/60"
   attr :summary, :string, default: nil
@@ -412,11 +421,15 @@ defmodule DranWeb.ResourceComponents do
           <.icon name={@icon} class="size-4 text-primary" />
         </span>
         <.link
+          :if={@href}
           navigate={@href}
           class="font-medium leading-snug flex-1 hover:text-primary transition-colors"
         >
           {@title}
         </.link>
+        <span :if={!@href} class="font-medium leading-snug flex-1 truncate">
+          {@title}
+        </span>
         <span
           :if={@badge}
           class={["text-[11px] font-medium px-2 py-0.5 rounded-full", @badge_class]}

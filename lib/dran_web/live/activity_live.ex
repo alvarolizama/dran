@@ -22,17 +22,10 @@ defmodule DranWeb.ActivityLive do
       Phoenix.PubSub.subscribe(Dran.PubSub, "brain:#{context.id}")
     end
 
-    entries =
-      if context do
-        Knowledge.list_log(workspace_id: context.id, limit: 50)
-      else
-        []
-      end
-
     {:ok,
      assign(socket,
        context: context,
-       entries: entries,
+       entries: load_entries(socket, context),
        active_nav: "activity",
        page_title: gettext("Activity")
      )}
@@ -42,16 +35,28 @@ defmodule DranWeb.ActivityLive do
   def handle_info({:page_changed, _action, _page}, socket) do
     # A page changed — reload the log to pick up the new entry created by
     # Knowledge.create_page / update_page / delete_page (which log before broadcast).
-    context = socket.assigns.context
+    {:noreply, assign(socket, entries: load_entries(socket, socket.assigns.context))}
+  end
 
-    entries =
-      if context do
+  # W5 (contract auditoria-fixes): el log es telemetría de instancia. Privados
+  # de instancia (owner/admin) ven el feed COMPLETO; los demás lectores ven
+  # sólo las entradas de páginas que SÍ pueden leer (la entrada de una página
+  # borrada/archivada sin fila viva se oculta a lectores: la fila ya no se
+  # puede autorizar).
+  defp load_entries(socket, context) do
+    if context do
+      if Dran.ContentVisibility.privileged?(socket.assigns[:user], context) do
         Knowledge.list_log(workspace_id: context.id, limit: 50)
       else
-        []
+        Knowledge.list_readable_log(context.id, personal_scope(socket), 50)
       end
+    else
+      []
+    end
+  end
 
-    {:noreply, assign(socket, entries: entries)}
+  defp personal_scope(socket) do
+    Dran.ContentVisibility.personal_scope(socket.assigns[:user])
   end
 
   @impl true

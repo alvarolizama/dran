@@ -1,10 +1,7 @@
 defmodule DranWeb.API.PageController do
   use DranWeb, :controller
 
-  import Ecto.Query, only: [where: 3]
-
   alias Dran.Knowledge
-  alias Dran.Knowledge.Page
   alias Dran.Repo
   alias DranWeb.API.Instance
 
@@ -20,10 +17,7 @@ defmodule DranWeb.API.PageController do
       |> maybe_put(:status, conn.query_params["status"])
       |> maybe_put(:owner, conn.query_params["owner"])
       |> maybe_put(:created_by, conn.query_params["created_by"])
-      |> maybe_put(
-        :limit,
-        conn.query_params["limit"] && String.to_integer(conn.query_params["limit"])
-      )
+      |> maybe_put(:limit, parse_limit(conn.query_params["limit"]))
       |> maybe_put(:include_body, conn.query_params["include"] == "body")
 
     pages = Knowledge.list_pages(opts)
@@ -75,7 +69,7 @@ defmodule DranWeb.API.PageController do
     # Sin `scope`, la escritura conserva el default `private` (y el
     # `visibility` legacy de la superficie de páginas); con `scope`, este
     # gobierna y el servidor valida membresía, fallando cerrado con 422.
-    {scoped?, scope, params} = Instance.pop_write_scope(params, drop_visibility: true)
+    {scoped?, scope, params} = Instance.write_scope(conn, params, drop_visibility: true)
 
     # W5: writes always target the instance workspace.
     params = Map.put(params, "workspace_id", Instance.instance_context_id())
@@ -92,7 +86,7 @@ defmodule DranWeb.API.PageController do
       |> Map.put("owner_user_id", Dran.Auth.resolve_owner_user_id(user))
       |> Map.put("agent_name", Dran.Auth.agent_name_from_headers(conn.req_headers))
 
-    case create_with_scope(params, scoped?, scope) do
+    case create_with_scope(params, scoped?, scope, conn.assigns[:user]) do
       {:ok, page} ->
         conn
         |> put_status(:created)
@@ -117,13 +111,15 @@ defmodule DranWeb.API.PageController do
 
   # El insert y la traducción del `scope` van en UNA transacción: un destino
   # inválido (grupo inexistente o ajeno) revierte la página — nada de
-  # huérfanos, y nunca cae a `private` en silencio (P20).
-  defp create_with_scope(params, scoped?, scope) do
+  # huérfanos, y nunca cae a `private` en silencio (P20). La IDENTIDAD viaja
+  # hasta la frontera para que una credencial atada a un destino (el token de un
+  # grupo) sólo pueda honrar el suyo.
+  defp create_with_scope(params, scoped?, scope, identity) do
     Repo.transaction(fn ->
       case Knowledge.create_page(params) do
         {:ok, page} ->
           if scoped? do
-            case Dran.Sharing.apply_scope(page, scope, :page) do
+            case Dran.Sharing.apply_scope(page, scope, :page, identity) do
               {:ok, page} -> page
               {:error, message} -> Repo.rollback({:scope, message})
             end
@@ -140,30 +136,42 @@ defmodule DranWeb.API.PageController do
   @doc "PUT /api/knowledge-pages/:slug — update a page"
   def update(conn, %{"slug" => slug} = params) do
     with_context(conn, nil, fn conn, context ->
-      case fetch_page(slug, context.id, nil) do
+      # W1 (contract grupo-credencial): la fila se resuelve con el scope del
+      # LECTOR. Con `nil` cualquier token con rol `editor` sobrescribía una
+      # página privada ajena por slug — el aislamiento era decorativo.
+      scope = reader_scope(conn)
+
+      case fetch_page(slug, context.id, scope) do
         nil ->
           conn
           |> put_status(:not_found)
           |> json(%{errors: %{detail: "page not found"}})
 
         page ->
-          # SEC-006: whitelist instead of blacklist — only these fields are
-          # client-settable. Prevents mass assignment of workspace_id, owner,
-          # created_by, etc. updated_by is injected server-side from the
-          # authenticated actor (never taken from the client).
-          params =
-            params
-            |> Instance.permit_page_params()
-            |> Map.put("updated_by", Dran.Auth.resolve_created_by(conn.assigns[:user]))
+          # W3 (contract auditoria-fixes): resolver la fila no es poseerla —
+          # «Shares and visibility only move READ access». Lo legible-ajeno es
+          # 403 (el molde de skills).
+          if DranWeb.ResourceAuthorization.can_write_row?(scope, page) do
+            # SEC-006: whitelist instead of blacklist — only these fields are
+            # client-settable. Prevents mass assignment of workspace_id, owner,
+            # created_by, etc. updated_by is injected server-side from the
+            # authenticated actor (never taken from the client).
+            params =
+              params
+              |> Instance.permit_page_params()
+              |> Map.put("updated_by", Dran.Auth.resolve_created_by(conn.assigns[:user]))
 
-          case Knowledge.update_page(page, params) do
-            {:ok, updated} ->
-              json(conn, %{data: updated})
+            case Knowledge.update_page(page, params) do
+              {:ok, updated} ->
+                json(conn, %{data: updated})
 
-            {:error, changeset} ->
-              conn
-              |> put_status(:unprocessable_entity)
-              |> json(%{errors: format_errors(changeset)})
+              {:error, changeset} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{errors: format_errors(changeset)})
+            end
+          else
+            forbidden(conn)
           end
       end
     end)
@@ -178,21 +186,29 @@ defmodule DranWeb.API.PageController do
   @doc "DELETE /api/knowledge-pages/:slug — delete a page"
   def delete(conn, %{"slug" => slug}) do
     with_context(conn, nil, fn conn, context ->
-      case fetch_page(slug, context.id, nil) do
+      scope = reader_scope(conn)
+
+      case fetch_page(slug, context.id, scope) do
         nil ->
           conn
           |> put_status(:not_found)
           |> json(%{errors: %{detail: "page not found"}})
 
         page ->
-          case Knowledge.delete_page(page) do
-            {:ok, _} ->
-              conn |> send_resp(:no_content, "")
+          # W3 (contract auditoria-fixes): lo legible-ajeno no se destruye —
+          # 403, el molde de skills.
+          if DranWeb.ResourceAuthorization.can_write_row?(scope, page) do
+            case Knowledge.delete_page(page) do
+              {:ok, _} ->
+                conn |> send_resp(:no_content, "")
 
-            {:error, _} ->
-              conn
-              |> put_status(:internal_server_error)
-              |> json(%{errors: %{detail: "could not delete"}})
+              {:error, _} ->
+                conn
+                |> put_status(:internal_server_error)
+                |> json(%{errors: %{detail: "could not delete"}})
+            end
+          else
+            forbidden(conn)
           end
       end
     end)
@@ -216,23 +232,29 @@ defmodule DranWeb.API.PageController do
           |> json(%{errors: %{detail: "new_slug is required"}})
 
         true ->
-          case fetch_page(slug, context.id, nil) do
+          scope = reader_scope(conn)
+
+          case fetch_page(slug, context.id, scope) do
             nil ->
               conn
               |> put_status(:not_found)
               |> json(%{errors: %{detail: "page not found"}})
 
             page ->
-              # Rename rewrites `![[old-slug]]` embeds across the workspace —
-              # irreversible-ish, which is why the skills gate it behind an ASK.
-              case Knowledge.rename_slug(page, String.trim(new_slug)) do
-                %{slug: renamed} = updated ->
-                  json(conn, %{data: updated, renamed_from: slug, renamed_to: renamed})
+              if DranWeb.ResourceAuthorization.can_write_row?(scope, page) do
+                # Rename rewrites `![[old-slug]]` embeds across the workspace —
+                # irreversible-ish, which is why the skills gate it behind an ASK.
+                case Knowledge.rename_slug(page, String.trim(new_slug)) do
+                  %{slug: renamed} = updated ->
+                    json(conn, %{data: updated, renamed_from: slug, renamed_to: renamed})
 
-                other ->
-                  conn
-                  |> put_status(:unprocessable_entity)
-                  |> json(%{errors: %{detail: "rename failed: #{inspect(other)}"}})
+                  other ->
+                    conn
+                    |> put_status(:unprocessable_entity)
+                    |> json(%{errors: %{detail: "rename failed: #{inspect(other)}"}})
+                end
+              else
+                forbidden(conn)
               end
           end
       end
@@ -242,22 +264,28 @@ defmodule DranWeb.API.PageController do
   @doc "POST /api/knowledge-pages/:slug/reaugment — refresh embeddings/summary."
   def reaugment(conn, %{"slug" => slug}) do
     with_context(conn, nil, fn conn, context ->
-      case fetch_page(slug, context.id, nil) do
+      scope = reader_scope(conn)
+
+      case fetch_page(slug, context.id, scope) do
         nil ->
           conn
           |> put_status(:not_found)
           |> json(%{errors: %{detail: "page not found"}})
 
         page ->
-          # Clear the embedding hash so the augmenter treats the page as
-          # stale, then schedule the async pipeline (same as the plugin tool).
-          page
-          |> Ecto.Changeset.change(embedding_hash: nil)
-          |> Dran.Repo.update!()
+          if DranWeb.ResourceAuthorization.can_write_row?(scope, page) do
+            # Clear the embedding hash so the augmenter treats the page as
+            # stale, then schedule the async pipeline (same as the plugin tool).
+            page
+            |> Ecto.Changeset.change(embedding_hash: nil)
+            |> Dran.Repo.update!()
 
-          Dran.PageAugmenter.schedule(page)
+            Dran.PageAugmenter.schedule(page)
 
-          json(conn, %{data: %{slug: page.slug, scheduled: true}})
+            json(conn, %{data: %{slug: page.slug, scheduled: true}})
+          else
+            forbidden(conn)
+          end
       end
     end)
   end
@@ -287,7 +315,7 @@ defmodule DranWeb.API.PageController do
   @doc "GET /api/knowledge-pages/:slug/links — inbound + outbound relations"
   def links(conn, %{"slug" => slug}) do
     with_context(conn, nil, fn conn, context ->
-      case fetch_page(slug, context.id, nil) do
+      case fetch_page(slug, context.id, reader_scope(conn)) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -309,7 +337,7 @@ defmodule DranWeb.API.PageController do
   @doc "GET /api/knowledge-pages/:slug/graph — subgraph centered on a page"
   def graph(conn, %{"slug" => slug}) do
     with_context(conn, nil, fn conn, context ->
-      case fetch_page(slug, context.id, nil) do
+      case fetch_page(slug, context.id, reader_scope(conn)) do
         nil ->
           conn
           |> put_status(:not_found)
@@ -346,12 +374,26 @@ defmodule DranWeb.API.PageController do
     }
   end
 
+  # W3 (contract auditoria-fixes): el 403 de autoridad vive en
+  # `DranWeb.ControllerHelpers.forbidden/1` (importado por `use DranWeb, :controller`).
+
   defp page_without_body(page) do
     %{page | body: nil}
   end
 
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, val), do: Keyword.put(opts, key, val)
+
+  # W6 (contract auditoria-fixes): límite tolerante y acotado — el query string
+  # no revienta 500 y `?limit=100000` no pasa a SQL tal cual.
+  defp parse_limit(nil), do: nil
+
+  defp parse_limit(value) do
+    case Integer.parse(to_string(value)) do
+      {n, _} when n > 0 -> min(n, 100)
+      _ -> nil
+    end
+  end
 
   # ── Canonical addressing (W4a, F31) ───────────────────────────────────────
   #
@@ -378,19 +420,16 @@ defmodule DranWeb.API.PageController do
 
   defp cast_uuid(_), do: :error
 
+  # W1: el scope del LECTOR de esta petición — el único que resuelve filas.
+  defp reader_scope(conn), do: Instance.scope_for(conn, :pages)
+
   # Scoped by-id fetch (single policy): a row outside the reader's scope reads
-  # as missing — same no-existence-leak contract as the slug path.
-  defp fetch_page_by_id(uuid, nil), do: Knowledge.get_page(uuid)
+  # as missing — same no-existence-leak contract as the slug path. There is NO
+  # unscoped variant: a resolver without a scope IS the hole W1 closed.
+  defp fetch_page_by_id(uuid, scope), do: Knowledge.get_page(uuid, scope: scope)
 
-  defp fetch_page_by_id(uuid, scope) do
-    Page
-    |> where([p], p.id == ^uuid)
-    |> Dran.ContentVisibility.filter(scope, :page)
-    |> Repo.one()
-  end
-
+  # Fail-closed: without an instance context there is nothing to scope against.
   defp fetch_page_by_slug(_slug, nil, _scope), do: nil
-  defp fetch_page_by_slug(slug, context_id, nil), do: Knowledge.get_page_by_slug(slug, context_id)
 
   defp fetch_page_by_slug(slug, context_id, scope),
     do: Knowledge.get_page_by_slug(slug, context_id, scope: scope)

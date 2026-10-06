@@ -60,6 +60,10 @@ defmodule DranWeb.E2EAuthTest do
   test "user api_token works for all assigned contexts", %{user: user, ctx1: ctx1} do
     assert {:ok, authed} = Accounts.valid_token?(user.api_token)
     assert authed.id == user.id
+
+    # W2 (contract auditoria-fixes): el lookup de auth ya no pre-carga
+    # `:workspaces` — el caller que quiera la asociación la pide.
+    authed = Dran.Repo.preload(authed, :workspaces)
     assert Enum.map(authed.workspaces, & &1.id) |> Enum.member?(ctx1.id)
   end
 

@@ -282,6 +282,11 @@ defmodule Dran.AccountsTest do
 
       assert {:ok, authed} = Accounts.valid_token?(user.api_token)
 
+      # W2 (contract auditoria-fixes): el lookup de auth ya NO pre-carga
+      # `:workspaces` (peso muerto del modelo multi-workspace) — el caller que
+      # quiera la asociación la pide.
+      authed = Dran.Repo.preload(authed, :workspaces)
+
       assert Enum.map(authed.workspaces, & &1.id) |> Enum.sort() ==
                Enum.sort([ctx1.id, ctx2.id])
     end

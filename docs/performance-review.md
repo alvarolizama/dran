@@ -6,7 +6,9 @@ small — 8 pages, 13 relations, 2 tasks, 107 indexes in `public` — so the
 plans say `Seq Scan` almost everywhere and the execution times are
 microseconds. The value of the measurement is the **plan structure** (which
 index a query can and cannot use), not the absolute cost; the volume verdict
-is explicit in each row.
+is explicit in each row. **Q6 (2026-10-05)** is the exception: it measured a
+synthetic dataset with production-like cardinality, inserted and analyzed
+inside a transaction that was rolled back — noted in its own block.
 
 ## The hot queries of the listings, measured
 
@@ -61,6 +63,50 @@ is explicit in each row.
   source_id)` covering index could help the second arm at volume, but
   measuring that win needs a relations table two orders of magnitude
   bigger than this one — not created here.
+
+### Q6 — the group-filtered listing (W3, contract `grupo-credencial`)
+
+`Dran.ContentVisibility.filter/3` with `{:group, gid}` — lo que ve una
+credencial de grupo (`GET /api/knowledge-pages` con un token de grupo):
+
+```sql
+WHERE workspace_id = $1 AND archived = false AND visibility = 'shared'
+  AND EXISTS (SELECT 1 FROM content_shares s
+               WHERE s.resource_type = 'page' AND s.resource_id = p.id
+                 AND s.user_group_id = $2)
+ORDER BY updated_at DESC LIMIT 50
+```
+
+**Medido sobre un dataset sintético de cardinalidad realista** (20.008
+`knowledge_pages`, 5.000 `content_shares`, un grupo), insertado, `ANALYZE`-ado y
+consultado DENTRO de una transacción que se revierte: el árbol y la base de dev
+quedan intactos. Método distinto al del resto del archivo por una razón medida —
+la base de `dran_dev` tiene **8 páginas y 0 grupos**, y un EXPLAIN de este
+filtro ahí no dice nada.
+
+- **Plan (medido):** `Nested Loop Semi Join`. El `EXISTS` correlacionado lo
+  resuelve `Index Scan using content_shares_resource_type_resource_id_index`
+  (`Index Cond: resource_type + resource_id`, `Filter: user_group_id`), 50
+  index searches para las 50 filas del LIMIT; la lista la sirve
+  `knowledge_pages_context_updated_at_idx` en `Index Scan Backward`, así que el
+  costo es O(limit), no O(tabla).
+- **Tiempos (misma corrida):** grupo **0.295 ms** / 161 buffers. El lector de
+  CUENTA —el mismo listado con `{:reader, id}` y su `ANY(group_ids)`— **0.625 ms**
+  / 57 buffers: su variante arma un SubPlan hash sobre un `Seq Scan` completo de
+  `content_shares`. El modo de lectura del grupo es el más barato de los dos.
+- **Antes/después del índice triple:** con
+  `content_shares_resource_type_resource_id_user_group_id_index` → **0.295 ms**;
+  con ese índice DROP-eado dentro de la transacción → **0.152 ms**, el MISMO
+  plan y los MISMOS 161 buffers. La diferencia es ruido de caché (ambos por
+  debajo del milisegundo) y prueba lo que importa: **el planificador no usa el
+  índice triple para esta consulta** — le basta el de dos columnas y filtra
+  `user_group_id` en memoria.
+- **Verdict: no index added.** El índice que un `EXISTS` por grupo necesitaría
+  (`content_shares (resource_type, resource_id, user_group_id)`) **ya existe**
+  desde una ola anterior, y la medición dice que ni siquiera hace falta: el de
+  dos columnas sirve el `EXISTS` por fila y el `LIMIT 50` corta la búsqueda.
+  Crear otro sería un índice sin medición que lo justifique (constraint 9), y
+  esta ola corre UNA sola migración (constraint 10).
 
 ## What was NOT touched
 

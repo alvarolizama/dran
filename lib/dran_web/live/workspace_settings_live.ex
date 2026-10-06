@@ -24,6 +24,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
   alias Dran.Accounts.UserWorkspace
   alias Dran.Knowledge
   alias Dran.Repo
+  alias Dran.Settings
   alias Dran.Workspace
   alias DranWeb.Plugs.Auth
 
@@ -116,6 +117,7 @@ defmodule DranWeb.WorkspaceSettingsLive do
       |> assign_settings_form()
       |> assign_services_form()
       |> assign_general_form()
+      |> assign_instance_token_form()
       |> assign_custom_type_form()
       |> assign_workspace_members()
       |> assign_all_users()
@@ -201,8 +203,12 @@ defmodule DranWeb.WorkspaceSettingsLive do
             </div>
 
             <%!-- Tab content --%>
-            <div :if={@active_tab == :general}>
+            <div :if={@active_tab == :general} class="space-y-6">
               <.general_section form={@general_form} />
+              <%!-- La credencial de la INSTANCIA: mudada desde /admin/system
+                     (Fase 0). Es política de instancia y vive con el nombre,
+                     no en la página de monitoreo. --%>
+              <.instance_token_section form={@instance_token_form} />
             </div>
 
             <div :if={@active_tab == :page_types}>
@@ -276,6 +282,34 @@ defmodule DranWeb.WorkspaceSettingsLive do
          |> assign(general_form: to_form(changeset, as: :workspace))
          |> put_flash(:error, gettext("Could not save settings"))}
     end
+  end
+
+  # -- La credencial de la instancia (mudada de /admin/system) ---------------
+  #
+  # Las MISMAS puertas de antes (mismo nombre de evento, mismo form y mismos
+  # ids): un campo editable con el token vigente donde vacío = deshabilitado, y
+  # el botón que genera uno aleatorio, lo persiste y lo manda al portapapeles.
+
+  @impl true
+  def handle_event("save_instance", %{"instance" => params}, socket) do
+    put_or_delete("api_token", normalize(params["api_token"]))
+
+    {:noreply,
+     socket
+     |> assign_instance_token_form()
+     |> put_flash(:info, gettext("Instance configuration saved."))}
+  end
+
+  @impl true
+  def handle_event("generate_token", _params, socket) do
+    token = Dran.Auth.generate_token()
+    Settings.put("api_token", token)
+
+    {:noreply,
+     socket
+     |> assign_instance_token_form()
+     |> push_event("copy_to_clipboard", %{text: token})
+     |> put_flash(:info, gettext("Token generated and copied to the clipboard."))}
   end
 
   # -- Custom page types ------------------------------------------------------
@@ -661,6 +695,70 @@ defmodule DranWeb.WorkspaceSettingsLive do
                 {gettext("Shown on the home page and as the browser title.")}
               </p>
             </div>
+          </div>
+
+          <div class="flex justify-end pt-3 border-t border-base-content/10">
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm transition-colors active:scale-95"
+              phx-disable-with={gettext("Saving…")}
+            >
+              <.icon name="hero-check" class="size-4" />
+              {gettext("Save")}
+            </button>
+          </div>
+        </.form>
+      </div>
+    </section>
+    """
+  end
+
+  # La credencial DE LA INSTANCIA (Fase 0: mudada de /admin/system).
+  #
+  # Va en su propia tarjeta, al lado de la del nombre, porque cada una tiene SU
+  # formulario — el molde no admite forms anidados — y porque el token no es un
+  # campo más del nombre: es la credencial más privilegiada de la casa (lee todo
+  # y escribe en cualquier lado), con su propia advertencia y su propia puerta.
+  attr :form, :any, required: true
+
+  defp instance_token_section(assigns) do
+    ~H"""
+    <section id="instance-token-section" class="surface-2 rounded-2xl overflow-hidden">
+      <header class="flex items-start gap-3 px-5 py-4 border-b border-base-content/10">
+        <div class="shrink-0 size-8 rounded-lg flex items-center justify-center bg-primary/10">
+          <.icon name="hero-key" class="size-4 text-primary" />
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-heading">{gettext("API")}</h2>
+          <p class="text-caption mt-1">
+            {gettext("The credential of the whole instance.")}
+          </p>
+        </div>
+      </header>
+
+      <div class="px-5 py-5">
+        <.form for={@form} id="instance-form" phx-submit="save_instance" class="space-y-5">
+          <div>
+            <.input
+              field={@form[:api_token]}
+              type="text"
+              label={gettext("API admin token")}
+              placeholder={gettext("(blank = disabled)")}
+            />
+            <p class="text-xs text-base-content/60 mt-1.5">
+              {gettext(
+                "Legacy bearer for the API with full-owner access. Blank = disabled; per-user tokens keep working."
+              )}
+            </p>
+            <button
+              type="button"
+              id="generate-instance-token"
+              phx-click="generate_token"
+              class="btn btn-xs btn-ghost hover:bg-primary/10 mt-2 gap-1.5"
+            >
+              <.icon name="hero-key" class="size-3.5" />
+              {gettext("Generate token")}
+            </button>
           </div>
 
           <div class="flex justify-end pt-3 border-t border-base-content/10">
@@ -2041,6 +2139,34 @@ defmodule DranWeb.WorkspaceSettingsLive do
     changeset = Workspace.changeset(workspace, %{})
     assign(socket, general_form: to_form(changeset, as: :workspace))
   end
+
+  # ── La credencial de la instancia (Fase 0: mudada desde /admin/system) ─────
+  #
+  # El token admin legacy es una credencial DE LA INSTANCIA, así que vive con
+  # su nombre (tab General) y no en la página de monitoreo, donde estaba sólo
+  # porque ahí vivía el setting. El setting NO cambia (`settings['api_token']`):
+  # es una mudanza de la puerta, no del modelo.
+
+  defp assign_instance_token_form(socket) do
+    assign(
+      socket,
+      instance_token_form: to_form(%{"api_token" => setting_or_empty("api_token")}, as: :instance)
+    )
+  end
+
+  defp setting_or_empty(key) do
+    case Settings.get(key) do
+      value when is_binary(value) -> value
+      _ -> ""
+    end
+  end
+
+  defp put_or_delete(key, ""), do: Settings.delete(key)
+  defp put_or_delete(key, value), do: Settings.put(key, value)
+
+  defp normalize(nil), do: ""
+  defp normalize(value) when is_binary(value), do: String.trim(value)
+  defp normalize(_), do: ""
 
   # Loads all users that are members of this workspace, with their role.
   defp assign_workspace_members(socket) do

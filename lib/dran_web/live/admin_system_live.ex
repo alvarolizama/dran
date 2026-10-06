@@ -4,18 +4,19 @@ defmodule DranWeb.AdminSystemLive do
 
     * Monitoreo — DB size, table count, disk, BEAM memory, uptime and process
       counts, refreshed on demand.
-    * Instancia — the legacy admin API token (Settings key, persisted in DB).
-      The default workspace is NOT here: it is the workspace flagged as
-      instance row, created by the release setup when the database has none.
     * Entorno — read-only inference/workers/uploads config loaded from env
       vars at startup, plus an inference connection test button.
+
+  La credencial de la INSTANCIA **ya no vive acá**: se emite y se rota en
+  Settings › General (`/admin/instance`, tab General), junto al nombre — es la
+  credencial de la instancia, no parte del monitoreo. Su setting sigue siendo
+  `settings['api_token']` (ver `DranWeb.WorkspaceSettingsLive`).
   """
 
   use DranWeb, :live_view
 
   alias Dran.Inference.Client
   alias Dran.Inference.Config
-  alias Dran.Settings
   alias DranWeb.Plugs.Auth
 
   @impl true
@@ -28,54 +29,8 @@ defmodule DranWeb.AdminSystemLive do
       |> assign(inference_test: nil)
       |> assign(composio_test: nil)
       |> assign(monitoring: nil)
-      |> assign_instance_form()
 
     {:ok, socket}
-  end
-
-  # ── Instance settings (Settings-backed, editable) ─────────────────────────
-
-  defp assign_instance_form(socket) do
-    assign(
-      socket,
-      instance_form:
-        to_form(
-          %{"api_token" => setting_or_empty("api_token")},
-          as: :instance
-        )
-    )
-  end
-
-  defp setting_or_empty(key) do
-    case Settings.get(key) do
-      value when is_binary(value) -> value
-      _ -> ""
-    end
-  end
-
-  # ── Instance settings events ───────────────────────────────────────────────
-
-  @impl true
-  def handle_event("save_instance", %{"instance" => params}, socket) do
-    token = normalize(params["api_token"])
-    put_or_delete("api_token", token)
-
-    {:noreply,
-     socket
-     |> assign_instance_form()
-     |> put_flash(:info, gettext("Instance configuration saved."))}
-  end
-
-  @impl true
-  def handle_event("generate_token", _params, socket) do
-    token = Dran.Auth.generate_token()
-    Settings.put("api_token", token)
-
-    {:noreply,
-     socket
-     |> assign_instance_form()
-     |> push_event("copy_to_clipboard", %{text: token})
-     |> put_flash(:info, gettext("Token generated and copied to the clipboard."))}
   end
 
   @impl true
@@ -117,12 +72,6 @@ defmodule DranWeb.AdminSystemLive do
     {:noreply, assign(socket, composio_test: result)}
   end
 
-  # ── Instance settings helpers ──────────────────────────────────────────────
-
-  defp put_or_delete(key, ""), do: Settings.delete(key)
-
-  defp put_or_delete(key, value), do: Settings.put(key, value)
-
   # ── Render ─────────────────────────────────────────────────────────────────
 
   @impl true
@@ -147,47 +96,6 @@ defmodule DranWeb.AdminSystemLive do
           </div>
 
           <.monitoring_widgets monitoring={@monitoring} />
-
-          <.section
-            title={gettext("Instance")}
-            icon="hero-adjustments-horizontal"
-            caption={gettext("Legacy API admin token for instance-wide agent access.")}
-          >
-            <.form
-              for={@instance_form}
-              id="instance-form"
-              phx-submit="save_instance"
-              class="space-y-5"
-            >
-              <div>
-                <.input
-                  field={@instance_form[:api_token]}
-                  type="text"
-                  label={gettext("API admin token")}
-                  placeholder={gettext("(blank = disabled)")}
-                />
-                <p class="text-xs text-base-content/60 mt-1.5">
-                  {gettext(
-                    "Legacy bearer for the API with full-owner access. Blank = disabled; per-user tokens keep working."
-                  )}
-                </p>
-                <button
-                  type="button"
-                  phx-click="generate_token"
-                  class="btn btn-xs btn-ghost hover:bg-primary/10 mt-2 gap-1.5"
-                >
-                  <.icon name="hero-key" class="size-3.5" />
-                  {gettext("Generate token")}
-                </button>
-              </div>
-
-              <div class="flex justify-end">
-                <button type="submit" class="btn btn-primary btn-sm">
-                  {gettext("Save")}
-                </button>
-              </div>
-            </.form>
-          </.section>
 
           <.config_section
             icon="hero-squares-plus"
@@ -612,10 +520,6 @@ defmodule DranWeb.AdminSystemLive do
   end
 
   # ── Shared helpers ─────────────────────────────────────────────────────────
-
-  defp normalize(nil), do: ""
-  defp normalize(v) when is_binary(v), do: String.trim(v)
-  defp normalize(_), do: ""
 
   defp format_bytes(bytes) when is_integer(bytes) do
     cond do

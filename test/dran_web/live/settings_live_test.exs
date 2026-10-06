@@ -954,7 +954,7 @@ defmodule DranWeb.SettingsLiveTest do
   end
 
   # Tests L222, L229, L236 → /admin/system
-  test "the System header exists with monitoring and instance sections", %{conn: conn} do
+  test "the System header exists with monitoring, and no instance section", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/admin/system")
 
     # t("System") — NOT a Spanish literal: the msgid is English and the page
@@ -963,9 +963,13 @@ defmodule DranWeb.SettingsLiveTest do
     # "Sistema" and the English UI showed Spanish.)
     assert html =~ t("System")
     assert html =~ t("Monitoring, instance configuration and environment.")
-    assert html =~ t("Instance")
     assert html =~ t("Database")
     assert html =~ t("Uptime")
+
+    # La sección «Instance» (el token admin legacy) se mudó a Settings › General
+    # con su nombre: acá quedaron monitoreo y entorno (Fase 0).
+    refute html =~ ~s|id="instance-form"|
+    refute html =~ t("API admin token")
   end
 
   test "inference test button is present in the Inference API section", %{conn: conn} do
@@ -985,15 +989,18 @@ defmodule DranWeb.SettingsLiveTest do
     assert html =~ "disabled"
   end
 
-  # Instance settings (Settings-backed) + monitoring on /admin/system
-  describe "admin system: instancia y monitoreo" do
-    test "renders the instance form and monitoring widgets", %{conn: conn} do
+  # Monitoring + environment on /admin/system. La credencial de la instancia ya
+  # NO vive acá: se emite en Settings › General (`/admin/instance`), bajo el
+  # nombre (Fase 0).
+  describe "admin system: monitoreo y entorno" do
+    test "renders the monitoring widgets and no instance credential", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/admin/system")
 
-      assert has_element?(view, "#instance-form")
-      assert has_element?(view, "#instance_api_token")
-      assert has_element?(view, "button[phx-click='generate_token']")
       assert has_element?(view, "button[phx-click='refresh_monitoring']")
+
+      refute has_element?(view, "#instance-form")
+      refute has_element?(view, "#instance_api_token")
+      refute has_element?(view, "button[phx-click='generate_token']")
     end
 
     test "carries no default-workspace control — that lives in /admin/workspaces", %{conn: conn} do
@@ -1016,47 +1023,6 @@ defmodule DranWeb.SettingsLiveTest do
       # Table count and disk usage appear after a real collect_monitoring run.
       assert html =~ t("tables")
       assert html =~ "used ·"
-    end
-
-    test "save_instance persists the admin token only", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/admin/system")
-
-      html =
-        render_submit(view, "save_instance", %{
-          "instance" => %{"api_token" => "instancia-test-token"}
-        })
-
-      assert html =~ t("Instance configuration saved.")
-      assert Dran.Settings.get("api_token") == "instancia-test-token"
-      # The default workspace is not configured from this form — nor from any
-      # settings key: the legacy override is gone.
-      assert is_nil(Dran.Settings.get("default_workspace_slug"))
-      refute Dran.Settings.get("default_workspace_name")
-    end
-
-    test "generate_token stores a random token in settings", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/admin/system")
-
-      html = render_click(view, "generate_token")
-
-      assert html =~ t("Token generated and copied to the clipboard.")
-      token = Dran.Settings.get("api_token")
-      assert is_binary(token) and byte_size(token) >= 20
-      assert Dran.Auth.valid_token?(token)
-    end
-
-    test "clearing the token field disables the legacy admin token", %{conn: conn} do
-      # Put the token BEFORE mount so the form carries it, then clear it.
-      Dran.Settings.put("api_token", "old-token")
-      {:ok, view, _html} = live(conn, ~p"/admin/system")
-
-      render_submit(view, "save_instance", %{
-        "instance" => %{"api_token" => ""}
-      })
-
-      assert is_nil(Dran.Settings.get("api_token"))
-      refute Dran.Auth.valid_token?("old-token")
-      refute Dran.Auth.valid_token?("dran-token")
     end
   end
 

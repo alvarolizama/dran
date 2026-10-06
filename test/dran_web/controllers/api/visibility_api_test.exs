@@ -13,7 +13,7 @@ defmodule DranWeb.API.VisibilityAPITest do
 
   use DranWeb.ConnCase, async: false
 
-  alias Dran.{Accounts, Knowledge, Sharing}
+  alias Dran.{Accounts, Knowledge, Memory, Sharing}
 
   setup do
     ws = Dran.DataCase.ensure_workspace!()
@@ -207,6 +207,167 @@ defmodule DranWeb.API.VisibilityAPITest do
         |> get("/api/knowledge-pages/#{ctx.shared_with_owner.slug}")
 
       assert %{"data" => _} = json_response(conn, 200)
+    end
+  end
+
+  describe "la mutación no alcanza la fila ajena (W1, contract grupo-credencial)" do
+    setup ctx do
+      title = "Ajena Privada #{u()}"
+
+      {:ok, stranger_private} =
+        Knowledge.create_page(%{
+          workspace_id: ctx.ws.id,
+          title: title,
+          page_type: "note",
+          owner_user_id: ctx.stranger.id,
+          visibility: "private"
+        })
+
+      Map.merge(ctx, %{stranger_private: stranger_private, stranger_title: title})
+    end
+
+    test "PUT por slug → 404 y la fila queda intacta", ctx do
+      conn =
+        conn_for(ctx.owner)
+        |> put("/api/knowledge-pages/#{ctx.stranger_private.slug}", %{"title" => "Hijacked"})
+
+      assert %{"errors" => %{"detail" => "page not found"}} = json_response(conn, 404)
+      assert Knowledge.get_page!(ctx.stranger_private.id).title == ctx.stranger_title
+    end
+
+    test "PUT por uuid → 404 y la fila queda intacta", ctx do
+      conn =
+        conn_for(ctx.owner)
+        |> put("/api/knowledge-pages/#{ctx.stranger_private.id}", %{"title" => "Hijacked"})
+
+      assert json_response(conn, 404)
+      assert Knowledge.get_page!(ctx.stranger_private.id).title == ctx.stranger_title
+    end
+
+    test "DELETE por slug → 404 y la fila sigue viva", ctx do
+      conn = conn_for(ctx.owner) |> delete("/api/knowledge-pages/#{ctx.stranger_private.slug}")
+
+      assert json_response(conn, 404)
+      assert Knowledge.get_page(ctx.stranger_private.id)
+    end
+
+    # Los hermanos del mismo agujero: rename y reaugment ESCRIBEN, links y
+    # graph RESUELVEN la fila igual — todos con el scope del lector.
+    test "rename, reaugment, links y graph → 404 sobre la fila ajena", ctx do
+      slug = ctx.stranger_private.slug
+
+      assert json_response(
+               conn_for(ctx.owner)
+               |> post("/api/knowledge-pages/#{slug}/rename", %{"new_slug" => "robado"}),
+               404
+             )
+
+      assert json_response(
+               conn_for(ctx.owner) |> post("/api/knowledge-pages/#{slug}/reaugment"),
+               404
+             )
+
+      assert json_response(conn_for(ctx.owner) |> get("/api/knowledge-pages/#{slug}/links"), 404)
+      assert json_response(conn_for(ctx.owner) |> get("/api/knowledge-pages/#{slug}/graph"), 404)
+
+      assert Knowledge.get_page!(ctx.stranger_private.id).slug == slug
+    end
+
+    test "lo propio y lo compartido siguen siendo escribibles y legibles", ctx do
+      {:ok, mine} =
+        Knowledge.create_page(%{
+          workspace_id: ctx.ws.id,
+          title: "Mía #{u()}",
+          page_type: "note",
+          owner_user_id: ctx.owner.id,
+          visibility: "private"
+        })
+
+      conn =
+        conn_for(ctx.owner)
+        |> put("/api/knowledge-pages/#{mine.slug}", %{"title" => "Mía editada"})
+
+      assert %{"data" => %{"title" => "Mía editada"}} = json_response(conn, 200)
+
+      {:ok, shared} =
+        Knowledge.create_page(%{
+          workspace_id: ctx.ws.id,
+          title: "Compartida #{u()}",
+          page_type: "note",
+          owner_user_id: ctx.stranger.id,
+          visibility: "shared"
+        })
+
+      {:ok, :shared} = Sharing.share_with_user("page", shared.id, ctx.owner.id)
+
+      assert json_response(conn_for(ctx.owner) |> get("/api/knowledge-pages/#{shared.slug}"), 200)
+    end
+
+    # El barrido de W1 (P2): el MISMO agujero existía en las mutaciones de
+    # memorias y de aristas — las dos resolvían su fila por id o por slug.
+    test "una memoria privada ajena no se reescribe ni se borra", ctx do
+      conn =
+        conn_for(ctx.stranger)
+        |> post("/api/memory", %{"content" => "hecho privado ajeno #{u()}"})
+
+      assert %{"data" => memory} = json_response(conn, 201)
+      assert memory["visibility"] == "private"
+
+      hijack =
+        conn_for(ctx.owner)
+        |> patch("/api/memory/#{memory["id"]}", %{"content" => "robado"})
+
+      assert json_response(hijack, 404)
+      assert Memory.get_memory!(memory["id"]).content == memory["content"]
+
+      wipe = conn_for(ctx.owner) |> delete("/api/memory/#{memory["id"]}")
+      assert json_response(wipe, 404)
+      assert Memory.get_scoped_memory(memory["id"], ctx.ws.id)
+    end
+
+    test "las aristas entre páginas privadas ajenas ni se cablean ni se borran", ctx do
+      {:ok, source} =
+        Knowledge.create_page(%{
+          workspace_id: ctx.ws.id,
+          title: "Arista A #{u()}",
+          page_type: "note",
+          owner_user_id: ctx.stranger.id,
+          visibility: "private"
+        })
+
+      {:ok, target} =
+        Knowledge.create_page(%{
+          workspace_id: ctx.ws.id,
+          title: "Arista B #{u()}",
+          page_type: "note",
+          owner_user_id: ctx.stranger.id,
+          visibility: "private"
+        })
+
+      {:ok, _relation} =
+        Knowledge.create_relation_by_slugs(source.slug, target.slug, "related", ctx.ws.id)
+
+      # Cablearlas: una arista toca DOS páginas y las dos caen fuera del scope.
+      conn =
+        conn_for(ctx.owner)
+        |> post("/api/relations", %{
+          "source_slug" => source.slug,
+          "target_slug" => target.slug,
+          "relation_type" => "references",
+          "workspace" => "personal"
+        })
+
+      assert json_response(conn, 404)
+
+      # Y borrar las suyas tampoco: misma resolución, mismo 404 y la arista viva.
+      conn =
+        conn_for(ctx.owner)
+        |> delete(
+          "/api/relations?source_slug=#{source.slug}&target_slug=#{target.slug}&workspace=personal"
+        )
+
+      assert json_response(conn, 404)
+      assert %{outbound: [%Dran.Relation{} | _]} = Knowledge.list_relations_for_page(source.id)
     end
   end
 

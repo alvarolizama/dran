@@ -94,41 +94,65 @@ defmodule DranWeb.Router do
   # ── API token auth plug ──
 
   defp require_api_token(conn, _opts) do
+    # W7 (contract auditoria-fixes): la fila de instancia se resuelve UNA vez
+    # por request (caché en el proceso) — antes cada call-site del controlador
+    # re-queryaba (medido: 5× por GET).
+    DranWeb.API.Instance.cache_instance_for_request()
+
     case extract_token(conn) do
       {:ok, token} ->
-        cond do
-          # Legacy admin token (backward compat) — full owner, no user row
-          Plug.Crypto.secure_compare(token, Dran.Auth.api_token() || "") ->
-            assign(conn, :user, %{is_owner: true, email: "admin", contexts: :all})
-
+        # Legacy admin token (backward compat) — full owner, no user row.
+        # La guarda NO es cosmética: `Plug.Crypto.secure_compare("", "")` es
+        # true, así que sin ella un header `Authorization: Bearer *** (vacío)
+        # entraba como OWNER en una instancia sin `api_token` configurado.
+        if legacy_admin_token?(token) do
+          assign(conn, :user, %{is_owner: true, email: "admin", contexts: :all})
+        else
           # Account token — the ONE credential. Resolves to the user, but the
           # identity is a map (not the struct) because the agent identity is
-          # resolved here and nowhere else.
-          match?({:ok, _}, Dran.Accounts.valid_token?(token)) ->
-            {:ok, user} = Dran.Accounts.valid_token?(token)
+          # resolved here and nowhere else. W2 (contract auditoria-fixes): ONE
+          # lookup per credential family, not `match?` + re-bind — the user
+          # lookup (with its workspace preload) ran TWICE per request before.
+          # `Accounts.valid_token?/1` answers ONLY users, so the group lookup
+          # stays beside it (once).
+          case Dran.Accounts.valid_token?(token) do
+            {:ok, user} ->
+              agent_name = Dran.Auth.agent_name_from_headers(conn.req_headers)
 
-            agent_name = Dran.Auth.agent_name_from_headers(conn.req_headers)
+              assign(conn, :user, %{
+                id: user.id,
+                email: user.email,
+                is_owner: user.is_owner,
+                instance_role: user.instance_role,
+                # Attribution, resolved in this SINGLE point: created_by = header,
+                # else the email; owner_user_id = the credential's owner.
+                agent_name: agent_name,
+                created_by_user_id: user.id,
+                owner_user_id: user.id,
+                # The agent IS its owner's credential (no `actors` row).
+                actor: %{
+                  id: "account:#{user.id}",
+                  name: agent_name || user.email,
+                  display_name: user.name
+                }
+              })
 
-            assign(conn, :user, %{
-              id: user.id,
-              email: user.email,
-              is_owner: user.is_owner,
-              instance_role: user.instance_role,
-              # Attribution, resolved in this SINGLE point: created_by = header,
-              # else the email; owner_user_id = the credential's owner.
-              agent_name: agent_name,
-              created_by_user_id: user.id,
-              owner_user_id: user.id,
-              # The agent IS its owner's credential (no `actors` row).
-              actor: %{
-                id: "account:#{user.id}",
-                name: agent_name || user.email,
-                display_name: user.name
-              }
-            })
+            :error ->
+              # Group token — la tercera identidad (contract grupo-credencial).
+              # Un grupo es un PRINCIPAL: su credencial escribe SÓLO en él y lee
+              # EXACTAMENTE lo compartido a él. El privilegio NO se hereda del
+              # humano dueño del grupo — `is_owner: false` e `instance_role:
+              # "editor"` son FIJOS (Constraint 1), y el destino forzado viaja
+              # como el `scope` que la credencial impone, no como una regla del
+              # cuerpo.
+              case Dran.Sharing.get_group_by_token(token) do
+                %Dran.Accounts.UserGroup{} = group ->
+                  assign(conn, :user, group_identity(conn, group))
 
-          true ->
-            unauthorized(conn, "invalid token")
+                _ ->
+                  unauthorized(conn, "invalid token")
+              end
+          end
         end
 
       :error ->
@@ -141,6 +165,44 @@ defmodule DranWeb.Router do
       ["Bearer " <> token] -> {:ok, String.trim(token)}
       _ -> :error
     end
+  end
+
+  # El token admin legado coincide SÓLO con un token configurado y no vacío.
+  defp legacy_admin_token?(token) do
+    case Dran.Auth.api_token() do
+      configured when is_binary(configured) and configured != "" ->
+        Plug.Crypto.secure_compare(token, configured)
+
+      _ ->
+        false
+    end
+  end
+
+  # ── La identidad de un token de grupo (W2, contract grupo-credencial) ─────
+  #
+  # Se arma en el MISMO punto que las otras dos identidades, así que ni los
+  # roles ni el destino forzado se re-derivan en un controlador.
+  #
+  # `group_id` es lo que la política de lectura necesita para acotar la lectura
+  # al grupo; `write_scope` es el destino que la credencial IMPONE (un `scope`
+  # completo, para que quien fuerza el destino no tenga que saber qué es un
+  # grupo). `created_by_user_id` es el dueño humano del grupo: atribución del
+  # contenido escrito, nunca privilegio.
+  defp group_identity(conn, group) do
+    agent_name = Dran.Auth.agent_name_from_headers(conn.req_headers)
+    label = agent_name || "group:#{group.slug}"
+
+    %{
+      is_owner: false,
+      instance_role: "editor",
+      group_id: group.id,
+      group_slug: group.slug,
+      write_scope: Dran.Sharing.group_write_scope(group),
+      owner_user_id: group.owner_user_id,
+      created_by_user_id: group.owner_user_id,
+      agent_name: label,
+      actor: %{id: "group:#{group.id}", name: label, display_name: group.name}
+    }
   end
 
   defp unauthorized(conn, message) do
@@ -209,8 +271,9 @@ defmodule DranWeb.Router do
 
   defp get_requested_workspace_id(_conn) do
     # W5: the instance IS the workspace — there is exactly one container and
-    # no request-side id to resolve.
-    case Dran.Auth.instance_workspace() do
+    # no request-side id to resolve. W7 (contract auditoria-fixes): la fila
+    # viene de la caché del request (una query por request, no una por plug).
+    case DranWeb.API.Instance.instance_context() do
       %{id: id} -> id
       nil -> nil
     end

@@ -23,43 +23,67 @@ defmodule DranWeb.API.WorkerController do
 
   @doc "POST /api/workers — start a worker session."
   def create(conn, params) do
-    params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
-    workspace_id = params["workspace_id"]
-    worker_type = params["worker_type"] || params["type"]
-    input = params["input"] || ""
+    # W4 (contract auditoria-fixes): los workers son una operación de la
+    # INSTANCIA (leen y crean contenido a lo ancho, sin filtro de fila) — una
+    # credencial de GRUPO, cuyo alcance es EXACTAMENTE su grupo, no los opera.
+    # Antes el rol fijo `editor` del grupo dejaba pasar el arranque y el engine
+    # buscaba SIN scope: bypass directo del contract grupo-credencial.
+    if group_identity?(conn) do
+      forbidden(conn)
+    else
+      params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
+      workspace_id = params["workspace_id"]
+      worker_type = params["worker_type"] || params["type"]
+      input = params["input"] || ""
 
-    cond do
-      is_nil(workspace_id) ->
-        conn
-        |> put_status(:bad_request)
-        |> json(%{errors: %{detail: "workspace query param is required"}})
+      cond do
+        is_nil(workspace_id) ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{errors: %{detail: "workspace query param is required"}})
 
-      worker_type not in @worker_types ->
-        conn
-        |> put_status(:bad_request)
-        |> json(%{
-          errors: %{
-            detail: "worker_type must be one of #{Enum.join(@worker_types, ", ")}"
-          }
-        })
+        worker_type not in @worker_types ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{
+            errors: %{
+              detail: "worker_type must be one of #{Enum.join(@worker_types, ", ")}"
+            }
+          })
 
-      true ->
-        case start_worker(worker_type, input, workspace_id, params["opts"]) do
-          {:ok, session} ->
-            conn
-            |> put_status(:created)
-            |> json(%{data: render_session(session, [])})
+        true ->
+          case start_worker(worker_type, input, workspace_id, normalize_opts(params["opts"])) do
+            {:ok, session} ->
+              conn
+              |> put_status(:created)
+              |> json(%{data: render_session(session, [])})
 
-          {:error, reason} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{errors: %{detail: "failed to start worker: #{inspect(reason)}"}})
-        end
+            {:error, reason} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{errors: %{detail: "failed to start worker: #{inspect(reason)}"}})
+          end
+      end
     end
   end
 
   @doc "GET /api/workers/:id — poll a worker session (status, summary, steps)."
   def show(conn, %{"id" => session_id} = params) do
+    # W4: el grupo tampoco POLLea sesiones (la sesión opera la instancia entera).
+    if group_identity?(conn) do
+      forbidden(conn)
+    else
+      do_show(conn, session_id, params)
+    end
+  end
+
+  def show(conn, _params) do
+    conn
+    |> put_status(:bad_request)
+    |> json(%{errors: %{detail: "session id is required"}})
+  end
+
+  defp do_show(conn, session_id, params) do
     params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     case Ecto.UUID.cast(session_id) do
@@ -89,13 +113,16 @@ defmodule DranWeb.API.WorkerController do
     end
   end
 
-  def show(conn, _params) do
-    conn
-    |> put_status(:bad_request)
-    |> json(%{errors: %{detail: "session id is required"}})
-  end
-
   # ── Helpers ────────────────────────────────────────────────────────────────
+
+  # W4 (contract auditoria-fixes): ¿la credencial es de GRUPO? Lo arma el punto
+  # único de autenticación (require_api_token) — aquí sólo se lee.
+  defp group_identity?(conn) do
+    case conn.assigns[:user] do
+      %{group_id: group_id} when is_integer(group_id) -> true
+      _ -> false
+    end
+  end
 
   # Slug/UUID → workspace_id in the params, same convention as the other API
   # controllers (MemoryController.resolve_workspace_id/2).

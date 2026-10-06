@@ -106,12 +106,18 @@ defmodule DranWeb.API.TaskController do
         not_found(conn, "task not found")
 
       task ->
-        case Tasks.update_task(task, Instance.permit_task_params(params)) do
-          {:ok, updated} ->
-            json(conn, %{data: updated})
+        # W3 (contract auditoria-fixes): la task no lleva dueño propio — el
+        # dueño es el de su goal (Constraint 12), que ya pasó el scope.
+        if task_writable?(task, scope) do
+          case Tasks.update_task(task, Instance.permit_task_params(params)) do
+            {:ok, updated} ->
+              json(conn, %{data: updated})
 
-          {:error, %Ecto.Changeset{} = changeset} ->
-            unprocessable(conn, format_errors(changeset))
+            {:error, %Ecto.Changeset{} = changeset} ->
+              unprocessable(conn, format_errors(changeset))
+          end
+        else
+          forbidden(conn)
         end
     end
   end
@@ -128,6 +134,8 @@ defmodule DranWeb.API.TaskController do
     scope = Instance.scope_for(conn, :goal)
 
     with %{} = task <- Tasks.get_task(id, scope: scope),
+         # W3 (contract auditoria-fixes): mover es escribir — el dueño manda.
+         true <- task_writable?(task, scope) || {:error, :forbidden},
          {:ok, goal_id} <- target_goal_id(params["goal"], task, scope) do
       attrs =
         %{
@@ -156,6 +164,7 @@ defmodule DranWeb.API.TaskController do
     else
       nil -> not_found(conn, "task not found")
       {:error, :not_found} -> not_found(conn, "goal not found")
+      {:error, :forbidden} -> forbidden(conn)
     end
   end
 
@@ -168,8 +177,13 @@ defmodule DranWeb.API.TaskController do
         not_found(conn, "task not found")
 
       task ->
-        {:ok, _} = Tasks.delete_task(task)
-        send_resp(conn, :no_content, "")
+        # W3 (contract auditoria-fixes): lo legible-ajeno no se destruye.
+        if task_writable?(task, scope) do
+          {:ok, _} = Tasks.delete_task(task)
+          send_resp(conn, :no_content, "")
+        else
+          forbidden(conn)
+        end
     end
   end
 
@@ -210,6 +224,17 @@ defmodule DranWeb.API.TaskController do
   end
 
   defp target_goal_id(_segment, _task, _scope), do: {:error, :not_found}
+
+  # W3 (contract auditoria-fixes): la task NO lleva dueño propio — lo hereda de
+  # su goal (Constraint 12). El gate de fila corre sobre el goal contenedor:
+  # `:all` escribe, `{:group, _}` escribe lo de su grupo y `{:reader, id}`
+  # exige que el goal sea suyo.
+  defp task_writable?(task, scope) do
+    case Tasks.get_task_goal(task) do
+      nil -> false
+      goal -> DranWeb.ResourceAuthorization.can_write_row?(scope, goal)
+    end
+  end
 
   defp fetch_goal(segment, scope) do
     Instance.fetch_segment(

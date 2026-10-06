@@ -92,8 +92,23 @@ defmodule Dran.Auth do
 
   @doc """
   Checks a bearer token against the configured legacy API token (admin).
+
+  W8 (contract auditoria-fixes): `secure_compare`, no `==` — un token de
+  credencial no se compara con timing vulnerable. `secure_compare` exige
+  binarios de la MISMA longitud, así que la longitud se esconde tras un
+  `byte_size` previo (sólo filtra por tamaño, no por contenido).
   """
-  def valid_token?(token) when is_binary(token), do: token == api_token()
+  def valid_token?(token) when is_binary(token) do
+    case api_token() do
+      configured when is_binary(configured) and configured != "" ->
+        byte_size(configured) == byte_size(token) and
+          Plug.Crypto.secure_compare(token, configured)
+
+      _ ->
+        false
+    end
+  end
+
   def valid_token?(_), do: false
 
   # ── Owner / created_by resolution ──

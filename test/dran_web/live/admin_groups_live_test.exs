@@ -81,6 +81,9 @@ defmodule DranWeb.AdminGroupsLiveTest do
 
     group = Enum.find(Sharing.list_groups(), &(&1.name == "Equipo de diseño"))
     assert group
+    # El dueño del grupo sale de la SESIÓN (quien lo crea en este pipeline), no
+    # del formulario: es atribución, nunca privilegio.
+    assert group.owner_user_id == Accounts.get_user_by_email("groups_owner@test.dev").id
     assert has_element?(view, "#group-row-#{group.id}", "Equipo de diseño")
     # El slug sigue siendo la identidad copiable de la fila.
     assert has_element?(view, "#group-slug-#{group.id}[data-slug='#{group.slug}']")
@@ -181,6 +184,88 @@ defmodule DranWeb.AdminGroupsLiveTest do
     # el scroll queda adentro del cuerpo).
     assert modal =~ ~s| max-h-[calc(100vh-3rem)] sm:max-h-[calc(100vh-4rem)]|
     refute modal =~ ~s| h-[calc(100vh-3rem)]|
+  end
+
+  test "la página ocupa el ancho del shell: sin padding duplicado ni tope de ancho",
+       %{conn: conn} do
+    conn = owner_conn(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+    html = render(view)
+
+    # El contenedor es `w-full` — el SHELL ya pone el padding (`p-4 pb-16 sm:p-6`)
+    # y el ancho, así que el `p-6` de acá era padding DUPLICADO.
+    assert has_element?(view, "#groups-index.w-full")
+    refute html =~ "max-w-4xl"
+    refute has_element?(view, "#groups-index.p-6")
+  end
+
+  test "el subtítulo es del header compartido, no de un parche de margen",
+       %{conn: conn} do
+    conn = owner_conn(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+    html = render(view)
+
+    assert html =~ ~s|<p class="text-caption mt-1">Share content|
+    # El `-mt-4` existía para cancelar el `mb-4` del header: con el `subtitle`
+    # en el molde, el parche se va.
+    refute html =~ "-mt-4"
+  end
+
+  test "el token del grupo: se ve, se copia y se rota por estado de URL",
+       %{conn: conn} do
+    conn = owner_conn(conn)
+    group = group_fixture("Con token")
+
+    {:ok, view, _html} = live(conn, ~p"/admin/groups")
+
+    # La fila abre el panel por ESTADO DE URL (el token no se vuelca en la lista).
+    assert has_element?(view, "#group-token-#{group.id}")
+    view |> element("#group-token-#{group.id}") |> render_click()
+    assert_patch(view, ~p"/admin/groups?token=#{group.id}")
+
+    assert has_element?(view, "#group-token-panel", "Token of")
+    assert has_element?(view, "#group-token-panel", "Con token")
+    # Un grupo sin credencial lo dice, y no hay nada que copiar todavía.
+    refute has_element?(view, "#group-api-token-#{group.id}")
+    assert has_element?(view, "#rotate-group-token-btn", "Generate token")
+
+    view |> element("#rotate-group-token-btn") |> render_click()
+
+    emitted = Sharing.get_group!(group.id).api_token
+    assert is_binary(emitted)
+    assert has_element?(view, "#group-api-token-#{group.id}[data-token='#{emitted}']")
+    # El molde de copia del panel de la cuenta: `<code data-token>` + botón con
+    # el hook colocado (el selector de atributos no expone `phx-hook`, así que se
+    # mira el HTML del panel).
+    panel = view |> element("#group-token-body") |> render()
+    assert panel =~ ~s(phx-hook="DranWeb.AdminGroupsLive.CopyGroupToken")
+    assert panel =~ ~s(data-copy-target="group-api-token-#{group.id}")
+    assert has_element?(view, "#rotate-group-token-btn", "Regenerate")
+
+    # Rotar invalida el anterior en el acto: el panel queda abierto con el nuevo.
+    view |> element("#rotate-group-token-btn") |> render_click()
+
+    rotated = Sharing.get_group!(group.id).api_token
+    refute rotated == emitted
+    assert has_element?(view, "#group-api-token-#{group.id}[data-token='#{rotated}']")
+    refute Sharing.get_group_by_token(emitted)
+
+    # La ✕ cierra el panel y vuelve a la URL limpia.
+    view
+    |> element("#group-token-panel button[phx-click='close_token_panel']")
+    |> render_click()
+
+    assert_patch(view, ~p"/admin/groups")
+    refute has_element?(view, "#group-token-panel")
+  end
+
+  test "un ?token desconocido no abre el panel", %{conn: conn} do
+    conn = owner_conn(conn)
+    {:ok, view, _html} = live(conn, ~p"/admin/groups?token=999999")
+
+    refute has_element?(view, "#group-token-panel")
   end
 
   test "el modal de miembros: abre desde la fila y se cierra con el molde",

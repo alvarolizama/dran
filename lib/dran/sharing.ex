@@ -33,6 +33,53 @@ defmodule Dran.Sharing do
   @doc "Busca un grupo por su slug — la identidad que el cliente usa en `scope` (W6)."
   def get_group_by_slug(slug) when is_binary(slug), do: Repo.get_by(UserGroup, slug: slug)
 
+  # ── La credencial del grupo (W2, contract grupo-credencial) ────────────────
+
+  @doc """
+  El grupo cuya credencial es `token` — o `nil`.
+
+  Es el molde exacto de `Accounts.get_user_by_api_token/1`: un lookup por la
+  credencial y nada más. La IDENTIDAD (roles fijos, destino forzado) la arma el
+  punto de autenticación (`DranWeb.Router.require_api_token/2`), no este lookup:
+  un grupo sin token no autentica, y un token en blanco es `nil`, no una
+  coincidencia con la primera fila.
+  """
+  def get_group_by_token(token) when is_binary(token) do
+    case String.trim(token) do
+      "" -> nil
+      trimmed -> Repo.get_by(UserGroup, api_token: trimmed)
+    end
+  end
+
+  def get_group_by_token(_token), do: nil
+
+  @doc """
+  Emite (o ROTA) la credencial del grupo y la persiste.
+
+  Server-side de punta a punta: el token sale de `UserGroup.token_changeset/1` y
+  nunca del cliente. Rotar es la misma llamada — el token anterior deja de
+  resolver en el acto, porque la fila es la que guarda el valor vigente.
+  """
+  @spec issue_group_token(UserGroup.t()) ::
+          {:ok, UserGroup.t()} | {:error, Ecto.Changeset.t()}
+  def issue_group_token(%UserGroup{} = group) do
+    group
+    |> UserGroup.token_changeset()
+    |> Repo.update()
+  end
+
+  @doc """
+  El destino de escritura que IMPONE la credencial de un grupo.
+
+  Es un `scope` completo (`%{"group" => slug}`) y no una referencia al grupo: así
+  el punto que fuerza el destino (`Instance.write_scope/2`) no necesita saber qué
+  es un grupo — compara y fuerza un término opaco.
+  """
+  def group_write_scope(%UserGroup{slug: slug}) when is_binary(slug),
+    do: %{"group" => slug}
+
+  def group_write_scope(%UserGroup{}), do: nil
+
   @doc "¿`user_id` pertenece a `group_id`? La membresía que valida el scope por escritura."
   def group_member?(group_id, user_id) when is_integer(group_id) and is_integer(user_id) do
     Repo.exists?(
@@ -42,9 +89,17 @@ defmodule Dran.Sharing do
 
   def group_member?(_group_id, _user_id), do: false
 
-  def create_group(attrs) do
+  @doc """
+  Crea un grupo. `opts[:owner_user_id]` fija al humano que responde por él.
+
+  El dueño es ATRIBUCIÓN, nunca privilegio: la credencial del grupo no hereda
+  sus permisos (Constraint 1). Se pasa aparte del `attrs` porque no es campo de
+  escritura del cliente en ningún changeset.
+  """
+  def create_group(attrs, opts \\ []) do
     %UserGroup{}
     |> UserGroup.changeset(attrs)
+    |> Ecto.Changeset.put_change(:owner_user_id, Keyword.get(opts, :owner_user_id))
     |> Repo.insert()
   end
 
@@ -216,6 +271,23 @@ defmodule Dran.Sharing do
     )
   end
 
+  @doc """
+  ¿`resource` está compartido con ESE grupo? El grant de un grupo, sin pasar por
+  la membresía de nadie (W3: la lectura de una credencial de grupo ES su grupo).
+  """
+  def shared_with_group?(resource_type, resource_id, group_id) when is_integer(group_id) do
+    Repo.exists?(
+      from(s in ContentShare,
+        where:
+          s.resource_type == ^resource_type and
+            s.resource_id == ^resource_id and
+            s.user_group_id == ^group_id
+      )
+    )
+  end
+
+  def shared_with_group?(_resource_type, _resource_id, _group_id), do: false
+
   # ── Scope por escritura (W6) ───────────────────────────────────────────────
 
   # S32 (backfill): NO se crea migración. Medición sobre `dran_dev` — las
@@ -305,6 +377,60 @@ defmodule Dran.Sharing do
   def apply_scope(_resource, scope, _resource_type) do
     {:error,
      "invalid scope #{inspect(scope)}: expected \"private\", \"public\" or %{\"group\" => \"<slug>\"}"}
+  end
+
+  @doc """
+  Como `apply_scope/3`, pero con la IDENTIDAD que firmó la escritura.
+
+  Una credencial atada a un destino —hoy, el token de un grupo— sólo puede
+  honrar ESE destino: el `scope` pedido se compara con el suyo y cualquier otro
+  es `{:error, mensaje}` (422 en la frontera), nunca un fallback silencioso a
+  `private`. Sin atadura (el token de cuenta) delega tal cual en
+  `apply_scope/3`: su comportamiento no cambia.
+
+  La identidad de grupo ES el grupo, así que la validación de membresía del
+  DUEÑO (`ensure_group_member/2`) no aplica aquí: el share se crea contra el
+  grupo de la credencial y no contra la membresía de `resource.owner_user_id`.
+  """
+  @spec apply_scope(struct(), term(), atom(), map() | struct() | nil) ::
+          {:ok, struct()} | {:error, binary()}
+  def apply_scope(resource, scope, resource_type, identity) do
+    case bound_group(identity) do
+      nil -> apply_scope(resource, scope, resource_type)
+      {group_id, slug} -> apply_bound_scope(resource, scope, resource_type, group_id, slug)
+    end
+  end
+
+  # La identidad de grupo trae las dos piezas que arma el punto de autenticación:
+  # su `group_id` (para el share y para la lectura) y el `scope` que IMPONE.
+  defp bound_group(%{group_id: group_id, write_scope: %{"group" => slug}})
+       when is_integer(group_id) and is_binary(slug),
+       do: {group_id, slug}
+
+  defp bound_group(_identity), do: nil
+
+  defp apply_bound_scope(resource, scope, resource_type, group_id, slug) do
+    if scope in [%{"group" => slug}, %{group: slug}] do
+      share_with_bound_group(resource, resource_type, group_id)
+    else
+      {:error,
+       "this credential writes only to group #{inspect(slug)}: refused scope #{inspect(scope)}"}
+    end
+  end
+
+  # Sin `ensure_group_member/2`: la credencial ES el grupo — su dueño humano no
+  # tiene por qué estar en la lista de miembros para que el grupo reciba el share.
+  defp share_with_bound_group(resource, resource_type, group_id) do
+    case share_with_group(to_string(resource_type), resource.id, group_id) do
+      {:ok, :shared} ->
+        {:ok, put_visibility(resource, "shared")}
+
+      {:error, message} when is_binary(message) ->
+        {:error, message}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, "could not share: #{inspect(format_share_errors(changeset))}"}
+    end
   end
 
   @doc """

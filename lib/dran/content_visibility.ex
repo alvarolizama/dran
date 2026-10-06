@@ -24,6 +24,9 @@ defmodule Dran.ContentVisibility do
   ## The vocabulary: the scope
 
       {:reader, user_id}   a concrete user (or API-key owner) — the normal case
+      {:group, group_id}   a GROUP credential: EXACTAMENTE lo compartido a ese
+                           grupo, y nada más — ni lo público de la instancia, ni
+                           lo privado ajeno, ni lo de otro grupo (W2/W3)
       :all                 a privileged reader (instance owner/admin): everything
 
   `nil` identity (unknown shapes, legacy surfaces) resolves to `:all` only
@@ -42,7 +45,7 @@ defmodule Dran.ContentVisibility do
   alias Dran.Accounts.User
 
   @type kind :: :memory | :pages
-  @type scope :: :all | {:reader, integer() | nil}
+  @type scope :: :all | {:reader, integer() | nil} | {:group, integer()}
   @type identity :: struct() | map() | nil
 
   @roles_full_view ~w(owner admin)
@@ -57,6 +60,15 @@ defmodule Dran.ContentVisibility do
   """
   @spec scope(map() | struct() | nil, identity(), kind()) :: scope()
   def scope(_workspace, nil, _kind), do: :all
+
+  # Una credencial de GRUPO lee EXACTAMENTE lo compartido a su grupo (W2/W3,
+  # contract grupo-credencial). La cláusula va ARRIBA de las de privilegio por
+  # una razón medida: la identidad de grupo lleva los TRES campos —su
+  # `group_id`, un `is_owner` que nunca es true y el `owner_user_id` del humano
+  # dueño del grupo—, así que el ORDEN es lo único que impide que un grupo cuyo
+  # dueño es el owner de la instancia herede el `:all` de la cláusula siguiente.
+  def scope(_workspace, %{group_id: group_id}, _kind) when is_integer(group_id),
+    do: {:group, group_id}
 
   # Instance owner keeps the full view.
   def scope(_workspace, %{is_owner: true}, _kind), do: :all
@@ -106,6 +118,12 @@ defmodule Dran.ContentVisibility do
   """
   @spec personal_scope(identity()) :: scope()
   def personal_scope(nil), do: :all
+
+  # La credencial de un grupo no tiene "lo propio" más allá del grupo: su
+  # alcance personal ES el grupo. Arriba de `owner_user_id` por la misma razón
+  # de orden que `scope/3` — la identidad de grupo lleva ese campo.
+  def personal_scope(%{group_id: group_id}) when is_integer(group_id), do: {:group, group_id}
+
   def personal_scope(%User{id: id}) when is_integer(id), do: {:reader, id}
   def personal_scope(%{is_owner: true, id: id}) when is_integer(id), do: {:reader, id}
 
@@ -128,6 +146,22 @@ defmodule Dran.ContentVisibility do
   """
   @spec filter(Ecto.Queryable.t(), scope(), atom()) :: Ecto.Queryable.t()
   def filter(queryable, :all, _resource), do: queryable
+
+  # La lectura de un grupo es EXACTAMENTE su grupo (Constraint 3): `shared` Y un
+  # share con ESE `user_group_id`. Sin `public` y sin `owner_user_id`, que es lo
+  # que la vuelve un modo de lectura y no una variante del lector personal.
+  def filter(queryable, {:group, group_id}, resource) when is_integer(group_id) do
+    from(q in queryable,
+      where:
+        q.visibility == "shared" and
+          fragment(
+            "EXISTS (SELECT 1 FROM content_shares s WHERE s.resource_type = ? AND s.resource_id = ? AND s.user_group_id = ?)",
+            ^to_string(resource),
+            q.id,
+            ^group_id
+          )
+    )
+  end
 
   def filter(queryable, {:reader, reader_id}, resource) do
     group_ids = Dran.Sharing.group_ids_for(reader_id)
@@ -153,6 +187,13 @@ defmodule Dran.ContentVisibility do
   """
   @spec visible?(map() | struct() | nil, scope(), atom()) :: boolean()
   def visible?(_row, :all, _resource), do: true
+
+  # La fila de un grupo: `shared` Y un share con ese grupo (el mismo juicio que
+  # `filter/3`, para las superficies que comprueban una fila ya cargada).
+  def visible?(row, {:group, group_id}, resource) when is_map(row) and is_integer(group_id) do
+    Map.get(row, :visibility) == "shared" and is_binary(Map.get(row, :id)) and
+      Dran.Sharing.shared_with_group?(to_string(resource), Map.get(row, :id), group_id)
+  end
 
   def visible?(row, {:reader, reader_id}, resource) when is_map(row) do
     owner = Map.get(row, :owner_user_id)

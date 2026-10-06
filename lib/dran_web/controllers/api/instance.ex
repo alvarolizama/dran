@@ -13,9 +13,29 @@ defmodule DranWeb.API.Instance do
   @doc """
   The one context every API call operates on. Returns nil only on an
   un-migrated/empty instance (callers fail closed with 404/422).
+
+  W7 (contract auditoria-fixes): la fila se resuelve UNA vez por request —
+  `require_api_token` la guarda en el proceso — y las demás llamadas del
+  request la LEEN. Antes cada call-site re-queryaba la fila (medido: 5× en un
+  GET del API).
   """
   def instance_context do
-    Dran.Auth.instance_workspace()
+    case Process.get(:dran_instance_workspace, :miss) do
+      %Dran.Workspace{} = ws -> ws
+      nil -> nil
+      :miss -> Dran.Auth.instance_workspace()
+    end
+  end
+
+  @doc """
+  W7: el punto que RESUELVE y cachea la instancia para el request (llamado por
+  `require_api_token`). El valor vive en el proceso, no en ETS: no hay estado
+  entre requests que invalidar.
+  """
+  def cache_instance_for_request do
+    ws = Dran.Auth.instance_workspace()
+    Process.put(:dran_instance_workspace, ws)
+    :ok
   end
 
   @doc """
@@ -148,6 +168,38 @@ defmodule DranWeb.API.Instance do
       {true, scope, params}
     else
       {false, nil, params}
+    end
+  end
+
+  @doc """
+  El destino de escritura de ESTA petición, con la CREDENCIAL mandando (W2,
+  contract grupo-credencial).
+
+  Es `pop_write_scope/2` más la regla de una credencial ATADA a un destino (hoy:
+  el token de un grupo): esa credencial escribe SÓLO ahí, así que sin `scope` el
+  destino ES el suyo — y con un `scope` explícito se deja pasar tal cual para
+  que la frontera (`Dran.Sharing.apply_scope/4`) lo acepte o lo rechace con 422.
+  La comparación vive en UN punto y ningún controlador conoce el destino de la
+  credencial: acá viaja como un término opaco que se fuerza.
+
+  El token de cuenta no trae atadura y se comporta exactamente como
+  `pop_write_scope/2` (Constraints 4 y 6).
+  """
+  def write_scope(conn, params, opts \\ []) do
+    {scoped?, scope, params} = pop_write_scope(params, opts)
+
+    case bound_write_scope(conn) do
+      nil -> {scoped?, scope, params}
+      forced -> if scoped?, do: {true, scope, params}, else: {true, forced, params}
+    end
+  end
+
+  # El destino que la credencial impone, si impone alguno. Sólo la identidad de
+  # grupo lo trae (lo arma el punto de autenticación).
+  defp bound_write_scope(conn) do
+    case conn.assigns[:user] do
+      %{} = identity -> Map.get(identity, :write_scope)
+      _ -> nil
     end
   end
 end

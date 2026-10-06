@@ -67,6 +67,17 @@ defmodule Dran.Tasks do
     if valid_uuid?(id), do: Repo.get(Task, id), else: nil
   end
 
+  @doc """
+  El goal contenedor de la task (W3, contract auditoria-fixes): la task no
+  lleva dueño propio — el gate de fila corre sobre su goal. `nil` si el goal
+  ya no existe (goal huérfano: fail-closed).
+  """
+  def get_task_goal(%Task{goal_id: goal_id}) when is_binary(goal_id) do
+    Dran.Repo.get(Dran.Goals.Goal, goal_id)
+  end
+
+  def get_task_goal(_task), do: nil
+
   def get_task(id, opts) when is_list(opts) do
     scope = Keyword.get(opts, :scope, :all)
 

@@ -56,7 +56,7 @@ defmodule DranWeb.API.PlanController do
 
   @doc "POST /api/plans — crea un plan (con sus pasos, si vienen)."
   def create(conn, params) do
-    {scoped?, scope, params} = Instance.pop_write_scope(params)
+    {scoped?, scope, params} = Instance.write_scope(conn, params)
 
     attrs =
       params
@@ -66,7 +66,7 @@ defmodule DranWeb.API.PlanController do
       |> Map.new()
       |> Map.merge(Instance.owner_attrs(conn))
 
-    case create_with_scope(attrs, scoped?, scope) do
+    case create_with_scope(attrs, scoped?, scope, conn.assigns[:user]) do
       {:ok, plan} ->
         conn |> put_status(:created) |> json(%{data: plan})
 
@@ -86,7 +86,7 @@ defmodule DranWeb.API.PlanController do
   """
   def update(conn, %{"slug" => segment} = params) do
     scope = Instance.scope_for(conn, :plan)
-    {scoped?, write_scope, params} = Instance.pop_write_scope(params)
+    {scoped?, write_scope, params} = Instance.write_scope(conn, params)
     attrs = params |> Instance.permit_plan_params() |> Map.delete("visibility")
 
     case fetch_plan(segment, scope) do
@@ -94,18 +94,23 @@ defmodule DranWeb.API.PlanController do
         not_found(conn, "plan not found")
 
       plan ->
-        case update_with_scope(plan, attrs, scoped?, write_scope) do
-          {:ok, updated} ->
-            json(conn, %{data: updated, progress: Plans.progress(updated)})
+        # W3 (contract auditoria-fixes): resolver la fila no es poseerla.
+        if DranWeb.ResourceAuthorization.can_write_row?(scope, plan) do
+          case update_with_scope(plan, attrs, scoped?, write_scope, conn.assigns[:user]) do
+            {:ok, updated} ->
+              json(conn, %{data: updated, progress: Plans.progress(updated)})
 
-          {:error, {:scope, message}} ->
-            unprocessable(conn, %{detail: message})
+            {:error, {:scope, message}} ->
+              unprocessable(conn, %{detail: message})
 
-          {:error, {:update, %Ecto.Changeset{} = changeset}} ->
-            unprocessable(conn, format_errors(changeset))
+            {:error, {:update, %Ecto.Changeset{} = changeset}} ->
+              unprocessable(conn, format_errors(changeset))
 
-          {:error, {:update, reason}} ->
-            unprocessable(conn, %{detail: to_string(reason)})
+            {:error, {:update, reason}} ->
+              unprocessable(conn, %{detail: to_string(reason)})
+          end
+        else
+          forbidden(conn)
         end
     end
   end
@@ -119,8 +124,13 @@ defmodule DranWeb.API.PlanController do
         not_found(conn, "plan not found")
 
       plan ->
-        {:ok, _} = Plans.delete_plan(plan)
-        send_resp(conn, :no_content, "")
+        # W3 (contract auditoria-fixes): lo legible-ajeno no se destruye.
+        if DranWeb.ResourceAuthorization.can_write_row?(scope, plan) do
+          {:ok, _} = Plans.delete_plan(plan)
+          send_resp(conn, :no_content, "")
+        else
+          forbidden(conn)
+        end
     end
   end
 
@@ -133,17 +143,22 @@ defmodule DranWeb.API.PlanController do
         not_found(conn, "plan not found")
 
       plan ->
-        lock = parse_int(params["lock_version"])
+        # W3 (contract auditoria-fixes): el checklist es escritura de la fila.
+        if DranWeb.ResourceAuthorization.can_write_row?(scope, plan) do
+          lock = parse_int(params["lock_version"])
 
-        case Plans.set_checklist(plan, params["checklist"] || [], lock_version: lock) do
-          {:ok, updated} ->
-            json(conn, %{data: updated, progress: Plans.progress(updated)})
+          case Plans.set_checklist(plan, params["checklist"] || [], lock_version: lock) do
+            {:ok, updated} ->
+              json(conn, %{data: updated, progress: Plans.progress(updated)})
 
-          {:error, :stale} ->
-            conflict(conn, "plan changed elsewhere — reload and retry")
+            {:error, :stale} ->
+              conflict(conn, "plan changed elsewhere — reload and retry")
 
-          {:error, %Ecto.Changeset{} = changeset} ->
-            unprocessable(conn, format_errors(changeset))
+            {:error, %Ecto.Changeset{} = changeset} ->
+              unprocessable(conn, format_errors(changeset))
+          end
+        else
+          forbidden(conn)
         end
     end
   end
@@ -216,28 +231,30 @@ defmodule DranWeb.API.PlanController do
     )
   end
 
-  defp create_with_scope(attrs, scoped?, scope) do
+  # La IDENTIDAD viaja hasta la frontera: una credencial atada a un destino (el
+  # token de un grupo) sólo puede honrar el suyo (`apply_scope/4`).
+  defp create_with_scope(attrs, scoped?, scope, identity) do
     Repo.transaction(fn ->
       case Plans.create_plan(attrs) do
-        {:ok, plan} -> translate_scope(plan, scope, scoped?)
+        {:ok, plan} -> translate_scope(plan, scope, scoped?, identity)
         {:error, reason} -> Repo.rollback({:create, reason})
       end
     end)
   end
 
-  defp update_with_scope(plan, attrs, scoped?, scope) do
+  defp update_with_scope(plan, attrs, scoped?, scope, identity) do
     Repo.transaction(fn ->
       case Plans.update_plan(plan, attrs) do
-        {:ok, updated} -> translate_scope(updated, scope, scoped?)
+        {:ok, updated} -> translate_scope(updated, scope, scoped?, identity)
         {:error, reason} -> Repo.rollback({:update, reason})
       end
     end)
   end
 
-  defp translate_scope(plan, _scope, false), do: plan
+  defp translate_scope(plan, _scope, false, _identity), do: plan
 
-  defp translate_scope(plan, scope, true) do
-    case Sharing.apply_scope(plan, scope, :plan) do
+  defp translate_scope(plan, scope, true, identity) do
+    case Sharing.apply_scope(plan, scope, :plan, identity) do
       {:ok, plan} -> plan
       {:error, message} -> Repo.rollback({:scope, message})
     end

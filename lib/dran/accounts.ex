@@ -51,7 +51,10 @@ defmodule Dran.Accounts do
   end
 
   def get_user_by_api_token(token) when is_binary(token) do
-    Repo.get_by(User, api_token: token) |> Repo.preload(:workspaces)
+    # W2 (contract auditoria-fixes): sin `preload(:workspaces)` — el join a
+    # `user_workspaces` alimentaba el modelo multi-workspace muerto y corría
+    # DOS veces por request en el camino de auth.
+    Repo.get_by(User, api_token: token)
   end
 
   @doc """
@@ -370,6 +373,10 @@ defmodule Dran.Accounts do
 
   # ── API Token auth ──
 
+  # W2 (contract auditoria-fixes): el lookup de auth NO pre-carga `:workspaces`
+  # — ese join era del modelo multi-workspace muerto (el router ya no lo lee) y
+  # corría DOS veces por request. Los callers que quieran la asociación la
+  # piden con `Repo.preload` (el test de contrato la ejercita).
   def valid_token?(token) when is_binary(token) do
     case get_user_by_api_token(token) do
       %User{} = user -> {:ok, user}

@@ -517,8 +517,12 @@ defmodule Dran.Worker.GraphRag do
             title: title,
             body: body,
             page_type: "note",
+            # W4 (contract auditoria-fixes): la página del worker nace con dueño
+            # resuelto server-side (el owner de la instancia — el worker no es
+            # una credencial con dueño propio) y `private` por defecto del
+            # changeset. El atributo `owner: "graph_rager"` era una columna
+            # dropeada; la atribución vive en `created_by`.
             created_by: "graph_rager",
-            owner: "graph_rager",
             meta: %{
               "mode" => state.mode,
               "worker_session_id" => state.session.id,

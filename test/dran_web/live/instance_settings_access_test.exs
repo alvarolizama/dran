@@ -155,6 +155,71 @@ defmodule DranWeb.InstanceSettingsAccessTest do
     end
   end
 
+  describe "la credencial de la instancia vive acá (mudada de /admin/system)" do
+    # Fase 0: el token admin legacy es la credencial DE LA INSTANCIA, así que se
+    # emite y se rota bajo su nombre (tab General). El setting NO cambia
+    # (`settings['api_token']`): es una mudanza de la puerta, no del modelo.
+    test "el tab General la emite: campo editable + Generate", %{conn: conn} do
+      owner = user!("instance_token_owner@test.dev", %{is_owner: true})
+      conn = session_conn(conn, owner.email, true)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+
+      # Bajo el nombre (el tab General abre por defecto).
+      assert has_element?(view, "#general-section")
+      assert has_element?(view, "#instance-token-section")
+      assert has_element?(view, "#instance-form")
+      assert has_element?(view, "#instance_api_token")
+      assert has_element?(view, "#generate-instance-token")
+    end
+
+    test "guardar un token a mano lo persiste y vaciarlo lo deshabilita", %{conn: conn} do
+      owner = user!("instance_token_save@test.dev", %{is_owner: true})
+      conn = session_conn(conn, owner.email, true)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+
+      html =
+        render_submit(view, "save_instance", %{
+          "instance" => %{"api_token" => "instancia-test-token"}
+        })
+
+      assert html =~ t("Instance configuration saved.")
+      assert Dran.Settings.get("api_token") == "instancia-test-token"
+      # El token guardado AUTENTICA: es el mismo camino que usa un cliente real.
+      assert bearer_status("instancia-test-token") == 200
+
+      # Vacío = deshabilitado, y el bearer deja de entrar en el acto.
+      render_submit(view, "save_instance", %{"instance" => %{"api_token" => ""}})
+
+      assert is_nil(Dran.Settings.get("api_token"))
+      assert bearer_status("instancia-test-token") == 401
+    end
+
+    test "Generate emite un token aleatorio que autentica contra el API", %{conn: conn} do
+      owner = user!("instance_token_generate@test.dev", %{is_owner: true})
+      conn = session_conn(conn, owner.email, true)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/instance")
+
+      html = render_click(view, "generate_token")
+
+      assert html =~ t("Token generated and copied to the clipboard.")
+      token = Dran.Settings.get("api_token")
+      assert is_binary(token) and byte_size(token) >= 20
+      assert bearer_status(token) == 200
+    end
+  end
+
+  # El bearer contra el API, como un cliente real: el status es la prueba.
+  defp bearer_status(token) do
+    Phoenix.ConnTest.build_conn()
+    |> Plug.Conn.put_req_header("accept", "application/json")
+    |> Plug.Conn.put_req_header("authorization", "Bearer #{token}")
+    |> get("/api/agent/config")
+    |> Map.fetch!(:status)
+  end
+
   describe "el gemelo del socket (re-mount por websocket)" do
     defp hook(session) do
       socket = %Phoenix.LiveView.Socket{assigns: %{flash: %{}}}

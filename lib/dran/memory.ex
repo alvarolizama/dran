@@ -637,7 +637,10 @@ defmodule Dran.Memory do
   defp maybe_filter_memory_scope(query, nil, _pos), do: query
   defp maybe_filter_memory_scope(query, :all, _pos), do: query
 
-  defp maybe_filter_memory_scope(query, {:reader, _reader_id} = scope, _pos) do
+  # Cualquier scope ETIQUETADO (`{:reader, id}` y `{:group, id}`) se resuelve
+  # con la MISMA política: una cláusula por etiqueta se desincroniza, y acá la
+  # que faltaba dejaba reventar la lectura de vecinos de una credencial de grupo.
+  defp maybe_filter_memory_scope(query, scope, _pos) when is_tuple(scope) do
     visible_ids =
       from(m in __MODULE__, select: m.id)
       |> Dran.ContentVisibility.filter(scope, :memory)
@@ -690,6 +693,29 @@ defmodule Dran.Memory do
     case Ecto.UUID.dump(workspace_id) do
       {:ok, _} -> Repo.get_by(__MODULE__, id: id, workspace_id: workspace_id)
       :error -> nil
+    end
+  end
+
+  @doc """
+  Fetch a memory by id WITHIN the reader's scope (W1, contract
+  grupo-credencial).
+
+  Misma postura que `get_scoped_memory/2` — `nil` tanto para "no existe" como
+  para "existe y no puedes leerla", sin fuga de existencia — pero el juicio lo
+  hace la política de lectura única (`Dran.ContentVisibility.filter/3`). Es lo
+  que una MUTACIÓN del API debe usar para resolver su fila: sin esto, cualquier
+  token con rol `editor` sobrescribía o borraba un hecho privado ajeno por id.
+  """
+  def get_memory(id, workspace_id, scope) do
+    case Ecto.UUID.dump(workspace_id) do
+      {:ok, _} ->
+        __MODULE__
+        |> where(id: ^id, workspace_id: ^workspace_id)
+        |> Dran.ContentVisibility.filter(scope, :memory)
+        |> Repo.one()
+
+      :error ->
+        nil
     end
   end
 

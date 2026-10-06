@@ -33,6 +33,18 @@ defmodule DranWeb.ControllerHelpers do
     |> Phoenix.Controller.json(%{errors: %{detail: detail}})
   end
 
+  @doc """
+  403: la fila existe PARA el lector, pero no es SUYA — la autoridad de
+  escribir no se niega con 404 (la existencia ya se reveló al resolverla).
+  W3 (contract auditoria-fixes): el molde que skills usaba en privado, ahora
+  es la casa.
+  """
+  def forbidden(conn, detail \\ "forbidden") do
+    conn
+    |> Plug.Conn.put_status(:forbidden)
+    |> Phoenix.Controller.json(%{errors: %{detail: detail}})
+  end
+
   @doc "422 con errores por campo, o con un `detail` suelto."
   def unprocessable(conn, errors) when is_map(errors) do
     conn
@@ -73,7 +85,8 @@ defmodule DranWeb.ControllerHelpers do
                                                        Plug.Conn.t())) ::
           Plug.Conn.t()
   def with_context(conn, _legacy_slug, fun) do
-    case Dran.Auth.instance_workspace() do
+    # W7 (contract auditoria-fixes): la fila viene de la caché del request.
+    case DranWeb.API.Instance.instance_context() do
       nil ->
         conn
         |> Plug.Conn.put_status(:not_found)

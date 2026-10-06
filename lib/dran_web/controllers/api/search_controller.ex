@@ -12,7 +12,7 @@ defmodule DranWeb.API.SearchController do
       []
       |> maybe_put(:workspace_id, workspace_id)
       |> maybe_put(:type, params["type"])
-      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+      |> maybe_put(:limit, parse_limit(params["limit"]))
       |> maybe_put(:strategy, parse_strategy(params["strategy"]))
       |> Keyword.put(:scope, DranWeb.API.Instance.scope_for(conn, :pages))
 
@@ -43,7 +43,7 @@ defmodule DranWeb.API.SearchController do
     opts =
       []
       |> maybe_put(:workspace_id, DranWeb.API.Instance.instance_context_id())
-      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+      |> maybe_put(:limit, parse_limit(params["limit"]))
       |> Keyword.put(:scope, DranWeb.API.Instance.scope_for(conn, :pages))
 
     case Knowledge.search(query, Keyword.put(opts, :strategy, :fuzzy)) do
@@ -64,7 +64,7 @@ defmodule DranWeb.API.SearchController do
       []
       |> maybe_put(:workspace_id, DranWeb.API.Instance.instance_context_id())
       |> maybe_put(:type, params["type"])
-      |> maybe_put(:limit, params["limit"] && String.to_integer(params["limit"]))
+      |> maybe_put(:limit, parse_limit(params["limit"]))
       |> Keyword.put(:scope, DranWeb.API.Instance.scope_for(conn, :pages))
 
     strategy = if params["hybrid"] in ["true", "1"], do: :hybrid, else: :semantic
@@ -93,6 +93,17 @@ defmodule DranWeb.API.SearchController do
 
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, val), do: Keyword.put(opts, key, val)
+
+  # W6 (contract auditoria-fixes): límite tolerante — el query string no
+  # revienta 500 y se acota en SQL (mismo patrón que MemoryController).
+  defp parse_limit(nil), do: nil
+
+  defp parse_limit(value) do
+    case Integer.parse(to_string(value)) do
+      {n, _} when n > 0 -> min(n, 100)
+      _ -> nil
+    end
+  end
 
   defp parse_strategy(nil), do: nil
   defp parse_strategy("fts"), do: :fts

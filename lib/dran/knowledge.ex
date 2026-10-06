@@ -346,12 +346,21 @@ defmodule Dran.Knowledge do
   defp maybe_exclude_disabled_types(query, nil, nil), do: query
 
   defp maybe_exclude_disabled_types(query, nil, workspace_id) do
-    case Repo.get(Workspace, workspace_id) do
-      %Workspace{disabled_page_types: disabled} when is_list(disabled) and disabled != [] ->
-        where(query, [p], p.page_type not in ^disabled)
+    # W7 (contract auditoria-fixes): el fallback re-usa la caché del request
+    # (el API ya resolvió la instancia) y SÓLO golpea la base si la caché no
+    # tiene la fila.
+    case workspace_id && DranWeb.API.Instance.instance_context() do
+      %Workspace{disabled_page_types: disabled} when is_list(disabled) ->
+        if disabled != [], do: where(query, [p], p.page_type not in ^disabled), else: query
 
       _ ->
-        query
+        case Repo.get(Workspace, workspace_id) do
+          %Workspace{disabled_page_types: disabled} when is_list(disabled) and disabled != [] ->
+            where(query, [p], p.page_type not in ^disabled)
+
+          _ ->
+            query
+        end
     end
   end
 
@@ -477,6 +486,20 @@ defmodule Dran.Knowledge do
 
   @doc "Get a page by id, returns nil if not found"
   def get_page(id), do: Repo.get(Page, id)
+
+  @doc """
+  Scoped fetch by id (W1, contract grupo-credencial): una fila fuera del scope
+  del LECTOR es una fila ausente (404, sin fuga de existencia).
+
+  Es la puerta única que las mutaciones del API usan para resolver su fila por
+  id — el mismo juicio que `get_page_by_slug/3`, sin reimplementar la política.
+  """
+  def get_page(id, scope: scope) do
+    Page
+    |> where([p], p.id == ^id)
+    |> Dran.ContentVisibility.filter(scope, :page)
+    |> Repo.one()
+  end
 
   @doc """
   Build a changeset for a page without persisting.
@@ -1826,7 +1849,8 @@ defmodule Dran.Knowledge do
     requested_strategy = Keyword.get(opts, :strategy, :auto)
     strategy = resolve_strategy(requested_strategy, query_string)
     props = Keyword.get(opts, :props)
-    scope = Keyword.get(opts, :scope)
+    # W1 (contract auditoria-fixes): el `:scope` NO se lee aquí — viaja entero
+    # en `opts` hasta las queries internas, donde lo aplica la política única.
 
     case do_search(query_string, opts, strategy) do
       {:error, :not_configured} when requested_strategy != :auto ->
@@ -1837,41 +1861,20 @@ defmodule Dran.Knowledge do
       {:error, _reason} when requested_strategy == :auto ->
         do_search(query_string, opts, :fts)
         |> normalize_results(:fts)
-        |> maybe_filter_results_by_scope(scope)
         |> maybe_filter_results_by_props(props)
 
       result ->
         normalize_results(result, strategy)
-        |> maybe_filter_results_by_scope(scope)
         |> maybe_filter_results_by_props(props)
     end
   end
 
-  # Post-query visibility filter — ONE stage for all four strategies
-  # (fts/fuzzy/semantic/hybrid), driven by the single policy module. The
-  # scope is resolved by the caller (Dran.ContentVisibility.resolve/3); no
-  # :scope opt ⇒ :all = pre-feature behaviour.
-  defp maybe_filter_results_by_scope(result, nil), do: result
-  defp maybe_filter_results_by_scope(result, :all), do: result
-
-  defp maybe_filter_results_by_scope({:ok, results}, {:own, _owner_id} = scope) do
-    {:ok, Enum.filter(results, &scope_visible?(&1, scope))}
-  end
-
-  defp maybe_filter_results_by_scope(result, _scope), do: result
-
-  # Search results arrive as %Page{} structs (fts/fuzzy) or string-keyed maps
-  # (semantic/hybrid vector paths) — handle both shapes.
-  defp scope_visible?(result, scope) do
-    owner =
-      case result do
-        %{owner_user_id: owner} -> owner
-        %{"owner_user_id" => owner} -> owner
-        _ -> nil
-      end
-
-    Dran.ContentVisibility.visible?(owner, scope, :page)
-  end
+  # Post-query visibility filtering is GONE (W1, contract auditoria-fixes): the
+  # old `maybe_filter_results_by_scope/2` only knew the dead v1 `{:own, _}`
+  # vocabulary, so `{:reader, id}` and `{:group, id}` fell into its catch-all
+  # UNFILTERED and search leaked foreign private pages. The scope now goes to
+  # SQL inside fts_search/fuzzy_search/semantic_search via the single policy
+  # module (`Dran.ContentVisibility.filter/3`), like every other listing.
 
   # Post-query props filter for search results. Applied after normalize_results
   # so it works uniformly across all strategies (fts/fuzzy/semantic/hybrid).
@@ -1912,7 +1915,7 @@ defmodule Dran.Knowledge do
     # P-06: compute excerpt in the main query's select instead of one
     # Repo.one(ts_headline...) per result row (was N+1: 21 queries for 20 results)
     base =
-      from p in Page,
+      from(p in Page,
         where: fragment("search_vector @@ plainto_tsquery('spanish', ?)", ^tsquery),
         where: p.archived == false,
         order_by:
@@ -1927,11 +1930,14 @@ defmodule Dran.Knowledge do
               ^tsquery
             )
         }
+      )
 
     query =
       base
       |> maybe_filter_context(workspace_id)
       |> maybe_filter_type(type)
+      # W1 (contract auditoria-fixes): el scope BAJA A SQL con la política única.
+      |> Dran.ContentVisibility.filter(Keyword.get(opts, :scope, :all), :page)
 
     results = Repo.all(query)
 
@@ -1951,7 +1957,7 @@ defmodule Dran.Knowledge do
     offset = Keyword.get(opts, :offset, 0)
 
     query =
-      from p in Page,
+      from(p in Page,
         where: fragment("immutable_unaccent(title) % ?", ^query_string),
         where: p.archived == false,
         order_by: fragment("similarity(immutable_unaccent(title), ?) DESC", ^query_string),
@@ -1965,6 +1971,7 @@ defmodule Dran.Knowledge do
           tags: p.tags,
           similarity: fragment("similarity(immutable_unaccent(title), ?)", ^query_string)
         }
+      )
 
     query =
       if workspace_id do
@@ -1972,6 +1979,12 @@ defmodule Dran.Knowledge do
       else
         query
       end
+
+    query =
+      query
+      |> maybe_filter_type(Keyword.get(opts, :type))
+      # W1 (contract auditoria-fixes): el scope BAJA A SQL con la política única.
+      |> Dran.ContentVisibility.filter(Keyword.get(opts, :scope, :all), :page)
 
     {:ok, Repo.all(query)}
   end
@@ -1998,7 +2011,7 @@ defmodule Dran.Knowledge do
         vec = Pgvector.new(vector)
 
         query =
-          from p in Page,
+          from(p in Page,
             where: not is_nil(p.embedding),
             where: p.archived == false,
             order_by: fragment("? <=> ?", p.embedding, ^vec),
@@ -2013,11 +2026,14 @@ defmodule Dran.Knowledge do
               meta: p.meta,
               distance: fragment("? <=> ?", p.embedding, ^vec)
             }
+          )
 
         query =
           query
           |> maybe_filter_context(workspace_id)
           |> maybe_filter_type(type)
+          # W1 (contract auditoria-fixes): el scope BAJA A SQL con la política única.
+          |> Dran.ContentVisibility.filter(Keyword.get(opts, :scope, :all), :page)
 
         results = Repo.all(query)
         {:ok, results}
@@ -2336,6 +2352,28 @@ defmodule Dran.Knowledge do
       end
 
     Repo.all(query)
+  end
+
+  @doc """
+  Las entradas de log cuyas páginas el lector PUEDE leer (W5, contract
+  auditoria-fixes): la política única (`Dran.ContentVisibility.filter/3`) se
+  aplica sobre la página referida por `subject` — una entrada cuya fila ya no
+  existe (page.delete/archive) se oculta a lectores no privilegiados, porque
+  la fila ya no se puede autorizar. El feed completo es de privilegiados.
+
+  Una query con join, no N+1.
+  """
+  def list_readable_log(workspace_id, scope, limit \\ 50)
+      when is_binary(workspace_id) do
+    from(l in Log,
+      join: p in Page,
+      on: p.slug == l.subject and p.workspace_id == l.workspace_id,
+      where: l.workspace_id == ^workspace_id,
+      order_by: [desc: l.inserted_at],
+      limit: ^limit
+    )
+    |> Dran.ContentVisibility.filter(scope, :page)
+    |> Repo.all()
   end
 
   def count_log(workspace_id) when is_binary(workspace_id) do

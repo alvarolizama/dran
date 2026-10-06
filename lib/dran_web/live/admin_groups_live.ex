@@ -52,6 +52,10 @@ defmodule DranWeb.AdminGroupsLive do
       |> assign(:all_users, [])
       |> assign(:member_search, "")
       |> assign(:invite_form, blank_invite_form())
+      # El token del grupo (W4): se VE por estado de URL (`?token=<id>`), nunca
+      # volcado en la lista — es una credencial y la lista es lo que se
+      # comparte en una captura.
+      |> assign(:token_group, nil)
 
     {:ok, socket}
   end
@@ -74,8 +78,13 @@ defmodule DranWeb.AdminGroupsLive do
             group -> open_group_modal(socket, group)
           end
 
+        %{"token" => id} ->
+          open_token_panel(socket, id)
+
         _ ->
-          close_group_modal(socket)
+          socket
+          |> close_group_modal()
+          |> close_token_panel()
       end
 
     {:noreply, socket}
@@ -83,11 +92,27 @@ defmodule DranWeb.AdminGroupsLive do
 
   defp open_group_modal(socket, group) do
     socket
+    |> close_token_panel()
     |> assign(:editing_group, group)
     |> assign(:group_modal, if(group, do: :rename, else: :new))
     |> assign(:group_submit_event, if(group, do: "rename_group", else: "save_group"))
     |> assign_group_form(group)
   end
+
+  # El token es ESTADO DE URL como el alta y el renombrado (`?token=<id>`): un
+  # id desconocido cierra el panel en vez de reventar. Se muestra la credencial
+  # VIGENTE (o su ausencia: un grupo sin token no autentica nada).
+  defp open_token_panel(socket, id) do
+    socket
+    |> close_group_modal()
+
+    case find_group(id) do
+      nil -> close_token_panel(socket)
+      group -> assign(socket, :token_group, group)
+    end
+  end
+
+  defp close_token_panel(socket), do: assign(socket, :token_group, nil)
 
   defp close_group_modal(socket) do
     socket
@@ -105,7 +130,15 @@ defmodule DranWeb.AdminGroupsLive do
   defp assign_groups(socket) do
     groups =
       Enum.map(Sharing.list_groups_with_counts(), fn {group, count} ->
-        %{id: group.id, name: group.name, slug: group.slug, members: count}
+        %{
+          id: group.id,
+          name: group.name,
+          slug: group.slug,
+          members: count,
+          # La credencial vigente de la fila (`nil` mientras no se emita): el
+          # panel la muestra y el botón de rotar la reemplaza.
+          token: group.api_token
+        }
       end)
 
     socket
@@ -116,7 +149,10 @@ defmodule DranWeb.AdminGroupsLive do
 
   @impl true
   def handle_event("save_group", %{"group" => %{"name" => name}}, socket) do
-    case Sharing.create_group(%{name: name}) do
+    # `owner_user_id` es el humano que responde por el grupo — quien lo crea,
+    # que en este pipeline es el owner de la instancia. Es ATRIBUCIÓN: la
+    # credencial del grupo no hereda sus permisos (Constraint 1).
+    case Sharing.create_group(%{name: name}, owner_user_id: acting_user_id(socket)) do
       {:ok, _group} ->
         {:noreply,
          socket
@@ -190,6 +226,41 @@ defmodule DranWeb.AdminGroupsLive do
   end
 
   def handle_event("delete_group", _params, socket), do: {:noreply, socket}
+
+  # ── El token del grupo (W4) ────────────────────────────────────────────────
+
+  def handle_event("close_token_panel", _params, socket) do
+    {:noreply, socket |> close_token_panel() |> push_patch(to: @index_path)}
+  end
+
+  # Emitir el primero y ROTAR son la MISMA puerta (`Sharing.issue_group_token/1`):
+  # el token anterior deja de resolver en el acto. El panel se queda abierto con
+  # el token NUEVO —rotar para no verlo sería una puerta sorda— y la lista se
+  # recarga para que su fila quede al día.
+  def handle_event("rotate_group_token", %{"id" => id}, socket) do
+    case find_group(id) do
+      nil ->
+        {:noreply, socket}
+
+      group ->
+        case Sharing.issue_group_token(group) do
+          {:ok, updated} ->
+            {:noreply,
+             socket
+             |> assign_groups()
+             |> assign(:token_group, updated)
+             |> put_flash(
+               :info,
+               gettext("Token generated. The previous one stopped working.")
+             )}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, gettext("Could not generate the group token."))}
+        end
+    end
+  end
+
+  def handle_event("rotate_group_token", _params, socket), do: {:noreply, socket}
 
   # La membresía se administra en el modal de cada fila (§C11: el modal se
   # cierra por assign). `close_members_panel` es el `on_close` del molde: lo
@@ -310,6 +381,11 @@ defmodule DranWeb.AdminGroupsLive do
 
   defp new_group_form, do: to_form(%{"name" => ""}, as: :group)
 
+  # El humano que actúa — el dueño del grupo sale de la SESIÓN, nunca del
+  # formulario. En este pipeline es el owner de la instancia (la misma regla con
+  # la que la migración backfillea el owner de los grupos que ya existían).
+  defp acting_user_id(socket), do: Dran.Auth.resolve_owner_user_id(socket.assigns[:user])
+
   # El grupo por id, SIN `get_group!/1`: los ids llegan del cliente (un `?edit=`
   # a mano, un `phx-value-` forjado) y una fila inexistente tiene que devolver
   # `nil` — que la lectura reviente mataría el proceso del LiveView.
@@ -342,6 +418,7 @@ defmodule DranWeb.AdminGroupsLive do
       |> assign(:group_submit_event, Map.get(assigns, :group_submit_event, "save_group"))
       |> assign(:group_count, Map.get(assigns, :group_count, 0))
       |> assign(:members_group, Map.get(assigns, :members_group, nil))
+      |> assign(:token_group, Map.get(assigns, :token_group, nil))
 
     ~H"""
     <Layouts.app
@@ -353,102 +430,110 @@ defmodule DranWeb.AdminGroupsLive do
       active_nav={@active_nav}
       nav={:instance}
     >
-      <div class="p-6 space-y-6 max-w-4xl">
+      <%!-- W4: el contenedor NO agrega padding ni tope de ancho. El shell ya pone
+             `p-4 pb-16 sm:p-6` y `w-full` a las páginas de instancia
+             (`layouts.ex`), así que el `p-6` de acá era padding DUPLICADO y su
+             clase de ancho máximo un tope que las otras páginas de /admin no
+             tienen. --%>
+      <div class="w-full space-y-6" id="groups-index">
         <.resource_list_header
           title={gettext("Groups")}
+          subtitle={
+            gettext(
+              "Share content with several people at once — a group is a list of users used as a share target."
+            )
+          }
           new_path={~p"/admin/groups?new=true"}
           new_id="group-new"
           new_testid="new-group-button"
           new_label={gettext("New group")}
         />
 
-        <p class="text-caption -mt-4">
-          {gettext(
-            "Share content with several people at once — a group is a list of users used as a share target."
-          )}
-        </p>
-
         <div class="space-y-2">
-          <div
+          <%!-- La fila ES el molde (`resource_card/1`), no una copia a mano de
+                 sus clases: el grupo no tiene página de detalle, así que la
+                 ficha va sin `href` (aditivo) y el slug, las acciones y el
+                 token entran por sus slots. --%>
+          <.resource_card
             :for={group <- @groups}
             id={"group-row-#{group.id}"}
-            data-testid="group-row"
-            class="surface-2 lift hover:border-primary/40 p-4 rounded-xl"
+            testid="group-row"
+            icon="hero-user-group"
+            title={group.name}
+            badge={"#{group.members} #{gettext("members")}"}
           >
-            <div class="flex items-center gap-3">
-              <span class="size-8 rounded-md bg-primary/10 flex items-center justify-center">
-                <.icon name="hero-user-group" class="size-4 text-primary" />
-              </span>
-              <p class="font-medium leading-snug flex-1 truncate">{group.name}</p>
-              <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-base-300 text-base-content/60">
-                {group.members} {gettext("members")}
-              </span>
-            </div>
+            <:footer>
+              <%!-- El slug es la identidad que el cliente copia a su config
+                     de agente (shaping A9/F17, P19): visible y copiable. --%>
+              <code
+                id={"group-slug-#{group.id}"}
+                data-slug={group.slug}
+                class="text-caption font-mono bg-base-100 rounded-md px-2 py-0.5 border border-base-300 select-all"
+              >
+                {group.slug}
+              </code>
+              <button
+                type="button"
+                id={"copy-group-slug-#{group.id}"}
+                data-copy-target={"group-slug-#{group.id}"}
+                phx-hook=".CopyGroupSlug"
+                class="btn btn-ghost btn-xs gap-1"
+                title={gettext("Copy the group slug")}
+              >
+                <span data-copy-icon class="flex items-center gap-1">
+                  <.icon name="hero-clipboard-document" class="size-3.5" />
+                  {gettext("Copy")}
+                </span>
+                <span data-check-icon class="hidden items-center gap-1">
+                  <.icon name="hero-clipboard-document-check" class="size-3.5" />
+                  {gettext("Copied!")}
+                </span>
+              </button>
+            </:footer>
 
-            <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
-              <div class="flex items-center gap-2 min-w-0">
-                <%!-- El slug es la identidad que el cliente copia a su config
-                       de agente (shaping A9/F17, P19): visible y copiable. --%>
-                <code
-                  id={"group-slug-#{group.id}"}
-                  data-slug={group.slug}
-                  class="text-caption font-mono bg-base-100 rounded-md px-2 py-0.5 border border-base-300 select-all"
-                >
-                  {group.slug}
-                </code>
-                <button
-                  type="button"
-                  id={"copy-group-slug-#{group.id}"}
-                  data-copy-target={"group-slug-#{group.id}"}
-                  phx-hook=".CopyGroupSlug"
-                  class="btn btn-ghost btn-xs gap-1"
-                  title={gettext("Copy the group slug")}
-                >
-                  <span data-copy-icon class="flex items-center gap-1">
-                    <.icon name="hero-clipboard-document" class="size-3.5" />
-                    {gettext("Copy")}
-                  </span>
-                  <span data-check-icon class="hidden items-center gap-1">
-                    <.icon name="hero-clipboard-document-check" class="size-3.5" />
-                    {gettext("Copied!")}
-                  </span>
-                </button>
-              </div>
-
-              <div class="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  id={"group-members-#{group.id}"}
-                  phx-click="manage_members"
-                  phx-value-id={group.id}
-                  class="btn btn-ghost btn-sm"
-                >
-                  <.icon name="hero-users" class="size-4" /> {gettext("Members")}
-                </button>
-                <%!-- Renombrar entra por la MISMA puerta que el alta (`?edit=<id>`
-                       abre el modal con el nombre puesto): antes el handler
-                       existía sin ningún control que lo alcanzara. --%>
-                <.link
-                  patch={~p"/admin/groups?edit=#{group.id}"}
-                  id={"group-edit-#{group.id}"}
-                  class="btn btn-ghost btn-sm"
-                  title={gettext("Rename this group")}
-                >
-                  <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
-                </.link>
-                <button
-                  type="button"
-                  id={"group-delete-#{group.id}"}
-                  phx-click="delete_group"
-                  phx-value-id={group.id}
-                  data-confirm={gettext("Delete this group? Its shares are removed too.")}
-                  class="btn btn-ghost btn-sm text-error"
-                >
-                  <.icon name="hero-trash" class="size-4" />
-                </button>
-              </div>
-            </div>
-          </div>
+            <:footer_actions>
+              <%!-- El token del grupo: se VE por estado de URL (`?token=<id>`),
+                     con el molde del panel de la cuenta (copiar + rotar). --%>
+              <.link
+                patch={~p"/admin/groups?token=#{group.id}"}
+                id={"group-token-#{group.id}"}
+                class="btn btn-ghost btn-sm"
+                title={gettext("See the group's token")}
+              >
+                <.icon name="hero-key" class="size-4" /> {gettext("Token")}
+              </.link>
+              <button
+                type="button"
+                id={"group-members-#{group.id}"}
+                phx-click="manage_members"
+                phx-value-id={group.id}
+                class="btn btn-ghost btn-sm"
+              >
+                <.icon name="hero-users" class="size-4" /> {gettext("Members")}
+              </button>
+              <%!-- Renombrar entra por la MISMA puerta que el alta (`?edit=<id>`
+                     abre el modal con el nombre puesto): antes el handler
+                     existía sin ningún control que lo alcanzara. --%>
+              <.link
+                patch={~p"/admin/groups?edit=#{group.id}"}
+                id={"group-edit-#{group.id}"}
+                class="btn btn-ghost btn-sm"
+                title={gettext("Rename this group")}
+              >
+                <.icon name="hero-pencil" class="size-4" /> {gettext("Edit")}
+              </.link>
+              <button
+                type="button"
+                id={"group-delete-#{group.id}"}
+                phx-click="delete_group"
+                phx-value-id={group.id}
+                data-confirm={gettext("Delete this group? Its shares are removed too.")}
+                class="btn btn-ghost btn-sm text-error"
+              >
+                <.icon name="hero-trash" class="size-4" />
+              </button>
+            </:footer_actions>
+          </.resource_card>
 
           <.resource_empty_state
             :if={@group_count == 0}
@@ -646,6 +731,80 @@ defmodule DranWeb.AdminGroupsLive do
           </div>
         </.modal>
 
+        <%!-- El token del grupo (W4): la CREDENCIAL del grupo, con el molde del
+               panel de la cuenta — `<code data-token>` + copia por hook + la
+               puerta de emitir/rotar. Se abre por estado de URL
+               (`?token=<id>`), así que no hay ningún token volcado en la
+               lista. --%>
+        <.modal
+          :if={@token_group}
+          id="group-token-panel"
+          title={gettext("Token of %{name}", name: @token_group.name)}
+          on_close="close_token_panel"
+          max_w="max-w-2xl"
+        >
+          <div id="group-token-body" class="space-y-4">
+            <p class="text-sm text-base-content/60">
+              {gettext(
+                "An agent using this token writes only into this group and reads exactly what is shared with it — nothing else."
+              )}
+            </p>
+
+            <p
+              :if={!@token_group.api_token}
+              class="text-sm text-base-content/50 rounded-xl border border-base-content/10 px-3 py-2.5"
+            >
+              {gettext("This group has no credential yet: nothing can authenticate as it.")}
+            </p>
+
+            <div :if={@token_group.api_token} class="flex items-center gap-2">
+              <code
+                id={"group-api-token-#{@token_group.id}"}
+                data-token={@token_group.api_token}
+                class="flex-1 text-sm font-mono bg-base-100 rounded-md px-3 py-2 border border-base-300 select-all break-all"
+              >
+                {@token_group.api_token}
+              </code>
+              <button
+                type="button"
+                id={"copy-group-token-#{@token_group.id}"}
+                data-copy-target={"group-api-token-#{@token_group.id}"}
+                phx-hook=".CopyGroupToken"
+                class="btn btn-outline btn-sm gap-1 transition-all active:scale-95"
+                title={gettext("Copy")}
+              >
+                <span data-copy-icon class="flex items-center gap-1">
+                  <.icon name="hero-clipboard-document" class="size-4" />
+                  {gettext("Copy")}
+                </span>
+                <span data-check-icon class="hidden items-center gap-1">
+                  <.icon name="hero-clipboard-document-check" class="size-4" />
+                  {gettext("Copied!")}
+                </span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              id="rotate-group-token-btn"
+              phx-click="rotate_group_token"
+              phx-value-id={@token_group.id}
+              data-confirm={
+                gettext(
+                  "Generate a new token? Every client using the current one stops working immediately."
+                )
+              }
+              class="btn btn-primary btn-sm gap-1.5 transition-colors active:scale-95"
+              phx-disable-with={gettext("Generating…")}
+            >
+              <.icon name="hero-arrow-path" class="size-4" />
+              {if @token_group.api_token,
+                do: gettext("Regenerate"),
+                else: gettext("Generate token")}
+            </button>
+          </div>
+        </.modal>
+
         <%!-- Alta y renombrado: el MISMO modal del molde, abierto por estado de
                URL (`?new=true` / `?edit=<id>`) y con el botón Guardar en el
                footer del shell apuntando al form del cuerpo por su id. --%>
@@ -695,6 +854,49 @@ defmodule DranWeb.AdminGroupsLive do
                 const target = document.getElementById(this.el.dataset.copyTarget);
                 if (!target) return;
                 const text = target.dataset.slug;
+                if (!text) return;
+                const copied = () => {
+                  const icon = this.el.querySelector("[data-copy-icon]");
+                  const check = this.el.querySelector("[data-check-icon]");
+                  if (icon && check) {
+                    icon.classList.add("hidden");
+                    check.classList.remove("hidden");
+                    check.classList.add("flex");
+                    setTimeout(() => {
+                      icon.classList.remove("hidden");
+                      check.classList.add("hidden");
+                      check.classList.remove("flex");
+                    }, 1500);
+                  }
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(text).then(copied);
+                } else {
+                  const ta = document.createElement("textarea");
+                  ta.value = text;
+                  ta.setAttribute("readonly", "");
+                  ta.style.position = "absolute";
+                  ta.style.left = "-9999px";
+                  document.body.appendChild(ta);
+                  ta.select();
+                  try { document.execCommand("copy"); } catch (_e) { /* noop */ }
+                  document.body.removeChild(ta);
+                  copied();
+                }
+              });
+            }
+          }
+        </script>
+        <%!-- Copia del TOKEN del grupo: mismo molde que `.CopyAccountApiToken`
+               (lee el `data-token` del `<code>` apuntado), colocado acá porque
+               un hook colocado vive en el módulo que lo usa. --%>
+        <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyGroupToken">
+          export default {
+            mounted() {
+              this.el.addEventListener("click", () => {
+                const target = document.getElementById(this.el.dataset.copyTarget);
+                if (!target) return;
+                const text = target.dataset.token;
                 if (!text) return;
                 const copied = () => {
                   const icon = this.el.querySelector("[data-copy-icon]");

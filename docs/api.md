@@ -32,16 +32,33 @@ Every `/api` route except `GET /health` requires a bearer token:
 Authorization: Bearer <token>
 ```
 
-Two token shapes are accepted (`DranWeb.Router.require_api_token/2`):
+Three token shapes are accepted (`DranWeb.Router.require_api_token/2`):
 
 | Token | Resolves to | Scope |
 |---|---|---|
 | **Legacy admin token** | instance owner (`is_owner: true`) | the whole instance |
 | **Account token** (`users.api_token`) | the user row | everything its owner can read |
+| **Group token** (`user_groups.api_token`) | the group (a principal of its own) | EXACTLY what is shared with that group |
 
 There are no per-agent API keys: the credential is the account's ONE token
 (shown and regenerated in **Settings → Account**). The agent identity comes
 from the `X-Hermes-Agent` header — attribution, not authorization.
+
+### The group token
+
+A group can be a **principal**: it has its own credential, emitted and rotated
+from **Admin → Groups → Token** (`?token=<id>`, next to the slug). An agent
+holding it is bound to that group — it does not need to configure anything:
+
+- **It writes only there.** With no `scope` the destination IS the group; any
+  other destination (`"public"`, `"private"`, another group's slug) is
+  `422` and the row is rolled back — never a silent fallback.
+- **It reads exactly its group.** `visibility == "shared"` plus a share with
+  that group: not the instance's public content, not other people's private
+  content, not another group's. Not even when the group's human owner is the
+  instance owner — the credential never inherits its owner's privilege.
+- **A group without a token authenticates nothing.** Tokens are issued on
+  demand; rotating one invalidates the previous immediately.
 
 A missing or malformed header returns:
 
@@ -56,6 +73,23 @@ A missing or malformed header returns:
   instance workspace server-side; the request names no container). Two routes
   are exempt because they are scoped to the identity by construction:
   `GET /api/workspaces` and `GET /api/agent/config`.
+- **Row resolution is read-scoped, always.** A `PUT`/`DELETE`/`rename`/`reaugment`
+  resolves its row through the reader's scope: a row the caller cannot read is
+  `404` (no existence leak), not an overwrite. The same holds for memories
+  (`PATCH`/`DELETE`/`feedback`) and for relations — an edge touches TWO pages, so
+  both must be readable.
+- **Row-level WRITE authority (`ResourceAuthorization.can_write_row?/2`)** —
+  resolving a row never meant owning it ("Shares and visibility only move READ
+  access"). A row the reader CAN read but does not own answers `403`:
+  `{:reader, id}` writes only rows whose `owner_user_id` is `id`; `{:group,
+  gid}` writes what its group can read (the group is a principal); `:all`
+  (privileged) writes anything it can read. Tasks inherit their goal's owner.
+- **Workers and ingest are instance-level.** `POST /api/workers` (and polling
+  `/api/workers/:id`) answer `403` for a GROUP credential: the session reads
+  and creates instance-wide, which is exactly what a group credential must
+  not see. `/api/memory/ingest` resolves its negative-context "known facts"
+  with the READER's scope — a foreign private fact never reaches the
+  extraction prompt.
 - **Write routes** require write authorization for the instance workspace
   (`require_write_access`). Otherwise
   `403 {"errors":{"detail":"Token does not have write access to this workspace"}}`.
@@ -303,9 +337,15 @@ instance's slug).
 |---|---|---|---|
 | GET | `/api/index` | read | Wiki index — all page slugs + titles + type |
 | GET | `/api/graph` | read | Full graph (`{nodes, edges}`) |
-| GET | `/api/log` | read | Activity log |
+| GET | `/api/log` | **owner/admin only** | Activity log (instance telemetry) |
 
-Params: `workspace` (still validated by the controller — pass any value or the instance's slug); `/api/log` also accepts `action`, `limit`.
+Params: `workspace` (still validated by the controller — pass any value or the instance's slug); `/api/log` also accepts `action`, `limit` (tolerant, capped at 100).
+
+`/api/log` is instance TELEMETRY, not shareable content: it records slugs,
+types and authors of every page, including private ones. W2 of the
+auditoria-fixes contract (2026-10-05) made it owner/admin-only — a plain token
+answers `403`. The web Activity feed shows non-privileged users only the
+entries whose page they can actually read.
 
 ### Export
 
@@ -452,7 +492,7 @@ canónico; el slug, el atajo legible). Un recurso fuera del alcance del lector e
 | PUT | `/api/plans/:slug` | write | Actualizar campos (**nunca** el checklist: tiene su puerta) |
 | PUT | `/api/plans/:slug/checklist` | write | Reemplaza el array ordenado de pasos |
 | DELETE | `/api/plans/:slug` | write | Borrar el plan y sus aristas |
-| GET | `/api/groups` | read | Tus grupos: `[{slug, name}]` — las membresías del lector (elegir el destino por nombre) |
+| GET | `/api/groups` | read | Tus grupos: `[{slug, name}]` — con token de CUENTA, las membresías del lector; con token de GRUPO, exactamente su grupo |
 | POST | `/api/checklist/toggle` | write | Tacha/destacha UN ítem: `{target: "plan"\|"task", id, index\|text}` |
 
 **El destino de una escritura** se declara con `scope` — `"private"` (default),
@@ -461,6 +501,11 @@ canónico; el slug, el atajo legible). Un recurso fuera del alcance del lector e
 estado de ninguna credencial y el cliente **nunca** declara lectura. El grupo se
 elige por **nombre** con `GET /api/groups` (`[{slug, name}]` de tus membresías):
 el slug es lo que después viaja en el `scope`.
+
+**Excepción — el token de grupo**: esa credencial YA está atada a un destino, así
+que no declara `scope`. Sin `scope`, el destino ES su grupo; con un `scope`
+distinto del suyo responde `422` y no deja fila huérfana. Es la única credencial
+que impone su destino, y lo hace en un solo punto del servidor.
 
 **El destino de una task** es su goal: la task NO declara visibilidad (la hereda
 por join). Moverla a un goal que el lector no puede leer es `404` y no mueve la

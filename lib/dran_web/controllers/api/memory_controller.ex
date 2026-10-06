@@ -58,7 +58,7 @@ defmodule DranWeb.API.MemoryController do
 
   defp create_memory(conn, params) do
     user = conn.assigns[:user]
-    {scoped?, scope, params} = DranWeb.API.Instance.pop_write_scope(params)
+    {scoped?, scope, params} = DranWeb.API.Instance.write_scope(conn, params)
     params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
 
     attrs = %{
@@ -74,7 +74,7 @@ defmodule DranWeb.API.MemoryController do
 
     opts = if params["force"] in [true, "true", "1"], do: [force: true], else: []
 
-    case add_with_scope(attrs, opts, scoped?, scope) do
+    case add_with_scope(attrs, opts, scoped?, scope, user) do
       {:ok, memory, :created} ->
         conn
         |> put_status(:created)
@@ -114,12 +114,14 @@ defmodule DranWeb.API.MemoryController do
   # El alta de la memoria y la traducción del `scope` van en UNA transacción:
   # un grupo inválido revierte el hecho recién creado (nada de huérfanos) y
   # NUNCA cae a `private` en silencio (P20). El scope solo se aplica a la
-  # escritura nueva; un duplicado/grey-zone no re-escribe una fila ajena.
-  defp add_with_scope(attrs, opts, scoped?, scope) do
+  # escritura nueva; un duplicado/grey-zone no re-escribe una fila ajena. La
+  # IDENTIDAD viaja a la frontera (`apply_scope/4`): una credencial atada a un
+  # destino sólo honra el suyo.
+  defp add_with_scope(attrs, opts, scoped?, scope, identity) do
     case Repo.transaction(fn ->
            case Memory.add(attrs, opts) do
              {:ok, memory, :created} when scoped? ->
-               case Dran.Sharing.apply_scope(memory, scope, :memory) do
+               case Dran.Sharing.apply_scope(memory, scope, :memory, identity) do
                  {:ok, memory} -> {:ok, memory, :created}
                  {:error, message} -> Repo.rollback({:scope, message})
                end
@@ -140,28 +142,39 @@ defmodule DranWeb.API.MemoryController do
   """
   def update(conn, %{"id" => id} = params) do
     params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
+    scope = scope_for(conn, params["workspace_id"], :memory)
 
     with :ok <- require_content(params),
          memory when not is_nil(memory) <-
-           Memory.get_scoped_memory(id, params["workspace_id"]) do
-      case Memory.update_memory(memory, params["content"]) do
-        {:ok, updated} ->
-          json(conn, %{data: render_memory(%{memory: updated, score: nil})})
+           Memory.get_memory(
+             id,
+             params["workspace_id"],
+             scope
+           ) do
+      # W3 (contract auditoria-fixes): resolver la fila no es poseerla —
+      # «Shares and visibility only move READ access».
+      if DranWeb.ResourceAuthorization.can_write_row?(scope, memory) do
+        case Memory.update_memory(memory, params["content"]) do
+          {:ok, updated} ->
+            json(conn, %{data: render_memory(%{memory: updated, score: nil})})
 
-        {:error, :superseded} ->
-          conn
-          |> put_status(:conflict)
-          |> json(%{errors: %{detail: "memory is superseded"}})
+          {:error, :superseded} ->
+            conn
+            |> put_status(:conflict)
+            |> json(%{errors: %{detail: "memory is superseded"}})
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{errors: format_errors(changeset)})
+          {:error, %Ecto.Changeset{} = changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{errors: format_errors(changeset)})
 
-        {:error, reason} ->
-          conn
-          |> put_status(:internal_server_error)
-          |> json(%{errors: %{detail: to_string(reason)}})
+          {:error, reason} ->
+            conn
+            |> put_status(:internal_server_error)
+            |> json(%{errors: %{detail: to_string(reason)}})
+        end
+      else
+        forbidden(conn)
       end
     else
       {:error, :content_required} ->
@@ -245,7 +258,11 @@ defmodule DranWeb.API.MemoryController do
         |> put_status(:bad_request)
         |> json(%{errors: %{detail: "helpful must be a boolean"}})
 
-      not scoped_memory_exists?(id, params["workspace_id"]) ->
+      not scoped_memory_exists?(
+        id,
+        params["workspace_id"],
+        scope_for(conn, params["workspace_id"], :memory)
+      ) ->
         conn
         |> put_status(:not_found)
         |> json(%{errors: %{detail: "memory not found"}})
@@ -311,10 +328,16 @@ defmodule DranWeb.API.MemoryController do
         # wasted re-extracting what the workspace already knows. The top-10
         # is inflated with their semantic memory↔memory neighbours — the
         # extractor must also skip related variants, not just exact dupes.
+        # W4 (contract auditoria-fixes): los known-facts se buscan CON el scope
+        # del lector — sin él, hasta 10 hechos privados ajenos viajaban al
+        # prompt del extractor.
+        scope = scope_for(conn, params["workspace_id"], :memory)
+
         known =
           case Memory.search(params["workspace_id"], transcript,
                  limit: 10,
-                 bump_retrieval: false
+                 bump_retrieval: false,
+                 scope: scope
                ) do
             [] ->
               []
@@ -325,7 +348,7 @@ defmodule DranWeb.API.MemoryController do
 
               neighbor_contents =
                 params["workspace_id"]
-                |> Memory.related_snapshots(base_ids)
+                |> Memory.related_snapshots(base_ids, scope: scope)
                 |> Enum.flat_map(fn {_id, neighbors} -> neighbors end)
                 |> Enum.map(& &1.content)
                 |> Enum.uniq()
@@ -385,27 +408,33 @@ defmodule DranWeb.API.MemoryController do
   """
   def delete(conn, %{"id" => id} = params) do
     params = Map.put(params, "workspace_id", DranWeb.API.Instance.instance_context_id())
+    scope = scope_for(conn, params["workspace_id"], :memory)
 
-    case Memory.get_scoped_memory(id, params["workspace_id"]) do
+    case Memory.get_memory(id, params["workspace_id"], scope) do
       nil ->
         conn
         |> put_status(:not_found)
         |> json(%{errors: %{detail: "memory not found"}})
 
       memory ->
-        purge? = params["purge"] in [true, "true", "1"]
+        # W3 (contract auditoria-fixes): lo legible-ajeno no se destruye.
+        if DranWeb.ResourceAuthorization.can_write_row?(scope, memory) do
+          purge? = params["purge"] in [true, "true", "1"]
 
-        result =
-          if purge?, do: Memory.purge_memory(memory), else: Memory.delete_memory(memory)
+          result =
+            if purge?, do: Memory.purge_memory(memory), else: Memory.delete_memory(memory)
 
-        case result do
-          {:ok, _} ->
-            send_resp(conn, :no_content, "")
+          case result do
+            {:ok, _} ->
+              send_resp(conn, :no_content, "")
 
-          {:error, _} ->
-            conn
-            |> put_status(:internal_server_error)
-            |> json(%{errors: %{detail: "delete failed"}})
+            {:error, _} ->
+              conn
+              |> put_status(:internal_server_error)
+              |> json(%{errors: %{detail: "delete failed"}})
+          end
+        else
+          forbidden(conn)
         end
     end
   end
@@ -587,13 +616,14 @@ defmodule DranWeb.API.MemoryController do
   defp blank?(str) when is_binary(str), do: String.trim(str) == ""
   defp blank?(_), do: false
 
-  # Row-level authorization: exists AND belongs to the resolved workspace.
-  # nil workspace_id (legacy admin/user auth without scope) → not found,
-  # consistent with get_scoped_memory/2.
-  defp scoped_memory_exists?(_id, nil), do: false
+  # Row-level authorization: exists AND is READABLE by the caller (W1,
+  # contract grupo-credencial: la mutación resuelve su fila con el scope del
+  # lector). nil workspace_id (legacy admin/user auth without scope) → not
+  # found, consistent with get_memory/3.
+  defp scoped_memory_exists?(_id, nil, _scope), do: false
 
-  defp scoped_memory_exists?(id, workspace_id) do
-    Memory.get_scoped_memory(id, workspace_id) != nil
+  defp scoped_memory_exists?(id, workspace_id, scope) do
+    Memory.get_memory(id, workspace_id, scope) != nil
   end
 
   defp parse_limit(nil), do: 10
@@ -619,4 +649,7 @@ defmodule DranWeb.API.MemoryController do
   defp scope_for(conn, workspace_id, kind) do
     Dran.ContentVisibility.resolve(workspace_id, conn.assigns[:user], kind)
   end
+
+  # W3 (contract auditoria-fixes): el 403 de autoridad vive en
+  # `DranWeb.ControllerHelpers.forbidden/1` (importado por `use DranWeb, :controller`).
 end
