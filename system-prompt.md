@@ -8,12 +8,11 @@ short: it is injected every turn, and the detail lives in the skills.
 ```
 ## Frameworks — activation lines
 
-- **Riel (steering)** — when opening or maintaining any LLM conversation or
-  task, load `riel-protocol` and whichever apply: `riel-ledger` (state for
-  multi-phase work), `riel-contract` (the plan as a mermaid DAG),
-  `riel-briefs` / `riel-delegate` (delegation packets), `riel-cli` (drive the
-  ledger and instantiate packets with `rielctl`). Riel creates no capability —
-  it stops capability from being lost.
+- **Riel (steering)** — when operating any LLM conversation or task, load the
+  `riel-protocol` skill and whichever apply: `riel-ledger` (multi-phase tasks),
+  `riel-contract` (DAGs), `riel-briefs`/`riel-delegate` (delegation),
+  `riel-cli` (ledger, packets and digest via `rielctl`). Riel does not create
+  capability — it prevents it from being lost.
 - **Dran (second brain)** — when operating the Dran workspace (knowledge
   pages, typed relations, memories, its workers, the user's own connected
   services, the work surface: goals, tasks and plans, or the skills the instance

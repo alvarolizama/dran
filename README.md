@@ -84,8 +84,32 @@ Two things live inside, and they are different on purpose:
   captures, moves and checks them off through the same tools you click in the UI.
 - **Quick capture** — `dran_capture` drops a task into the owner's inbox goal
   with no ceremony; the board is where it lands.
-- **Same destinations** — work items take the same per-item visibility
-  (`private` | `public` | shared with a group), declared per write.
+
+**Services (the user's own apps)**
+
+- **Your apps, run by your agent** — each person connects THEIR Gmail,
+  calendar, GitHub, Slack… at `/services` and their agent uses them through 5
+  fixed tools (`dran_services*`: list, connect, discover, run, wait).
+- **The catalog travels as data** — a toolkit's tools are discovered by query,
+  so the tool count never grows with the number of connected apps.
+- **Fail-closed** — running without an `ACTIVE` connection answers `409` with
+  its own `connect_url`, never a false success, and the instance's allowlist
+  bounds what can be listed or executed. See
+  [Services](#services-the-users-own-apps).
+
+**Sharing — groups and destinations**
+
+- **One destination per write** — pages take `visibility`, goals and plans take
+  `scope` (`private` — the default — | `public` | `%{group: slug}`), and a task
+  inherits its goal's. An empty or unknown group slug is `422`, never a silent
+  `private`.
+- **A group is a principal** — memberships, a share destination, and its own
+  credential (`Admin → Groups → Token`): an agent holding it writes only into
+  that group and reads exactly what is shared with it. See
+  [Credentials](#credentials).
+- **Reads are one policy** — `Dran.ContentVisibility` filters pages, memories,
+  collections, reports, goals, tasks and plans (a task through its goal's
+  visibility). See [Visibility](#visibility).
 
 **Automation**
 
@@ -277,12 +301,11 @@ Then point the agent at them from its system prompt:
 ```
 ## Frameworks — activation lines
 
-- **Riel (steering)** — when opening or maintaining any LLM conversation or
-  task, load `riel-protocol` and whichever apply: `riel-ledger` (state for
-  multi-phase work), `riel-contract` (the plan as a mermaid DAG),
-  `riel-briefs` / `riel-delegate` (delegation packets), `riel-cli` (drive the
-  ledger and instantiate packets with `rielctl`). Riel creates no capability —
-  it stops capability from being lost.
+- **Riel (steering)** — when operating any LLM conversation or task, load the
+  `riel-protocol` skill and whichever apply: `riel-ledger` (multi-phase tasks),
+  `riel-contract` (DAGs), `riel-briefs`/`riel-delegate` (delegation),
+  `riel-cli` (ledger, packets and digest via `rielctl`). Riel does not create
+  capability — it prevents it from being lost.
 - **Dran (second brain)** — when operating the Dran workspace (knowledge
   pages, typed relations, memories, its workers, the user's own connected
   services, the work surface: goals, tasks and plans, or the skills the instance
@@ -320,6 +343,8 @@ Dran's own variables, alongside those:
 | `UPLOADS_MAX_SIZE` | max upload size in bytes (default 100 MiB) |
 | `DRAN_INFERENCE_API_URL` / `_API_KEY` | any OpenAI-compatible endpoint; powers embeddings, summaries, semantic search and the workers — without it Dran still works, minus those features |
 | `DRAN_COMPOSIO_API_KEY` / `_BASE_URL` | scoped Composio project key for the **services** surface (`/services`, `/api/services`, the agent's services tools). Instance state, server-side only — it is never shown in the UI (only its state) and never reaches a client. Unset = the whole surface is off and answers fail-closed |
+| `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` / `_REDIRECT_URI` | optional **Sign in with Google** on the login page — unset, the login is email + password only |
+| `DRAN_INFERENCE_TIMEOUT` / `DRAN_EMBEDDING_BODY_LIMIT` / `DRAN_COMPOSIO_TIMEOUT` | per-call timeouts (ms) and the embedding body cap — all defaulted in `.env.example` |
 | `WORKER_MAX_STEPS` / `WORKER_PER_STEP_TIMEOUT` | worker step budget |
 | `SKIP_MIGRATIONS` / `DRAN_RESET` | entrypoint switches (see [Production](#production)) |
 
