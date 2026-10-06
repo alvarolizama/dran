@@ -7,6 +7,22 @@ reads — so the panel is a view over the runtime's config, never a second
 source of truth (contract W9 / A10). Field semantics match the memory
 provider and the knowledge tools:
 
+* Two levers shape the DESKTOP surface, and only the surface — the runtime
+  reads the same keys whatever the flags say:
+
+  - ``inline=True`` — one row of the COMPACT panel rendered under
+    ``memory.provider``. That panel paints the inline subset **flat, in
+    declared order**: it draws no group headers.
+  - ``group`` — the section the modal **"Full config…"** files the field
+    under (first-seen order). The button only exists while at least ONE field
+    is non-``inline``; with every field inline there is no modal and the group
+    names are labels nobody sees.
+
+  Hence the split: the panel carries what a user comes here to change
+  (credential, write destination, the seven tool switches — 11 rows) and the
+  recall tuning knobs live in the grouped modal. ``group`` stays on the inline
+  fields too, so the modal shows the WHOLE surface, grouped, in one screen.
+
 * ``scope`` / ``scope_group`` — the DEFAULT destination of this profile's
   writes, in the vocabulary of the INTENTION (contract W6 / Rules#5):
   ``private`` (default) | ``public`` | ``group`` + the target group's slug.
@@ -199,13 +215,18 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             inline=True,
             group="Tools",
         ),
+        # ── Memory: los knobs de recall, en el modal ───────────────────────
+        # NO son `inline`: no son fila del panel compacto, y por eso obligan a
+        # que exista el botón "Full config…", donde el renderer agrupa por
+        # `group` (Connection / Write destination / Tools / Memory, en orden de
+        # primera aparición). El runtime los lee igual: la partición es de la
+        # UI, no del archivo.
         ProviderField(
             key="auto_recall",
             label="Auto recall",
             kind=KIND_BOOL,
             description="Inject relevant memories at turn start.",
             default="true",
-            inline=True,
             group="Memory",
         ),
         ProviderField(
@@ -215,7 +236,6 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             description="Ingest the session transcript at session end (facts "
             "extracted server-side; transcript never persisted).",
             default="true",
-            inline=True,
             group="Memory",
         ),
         ProviderField(
@@ -224,7 +244,6 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             kind=KIND_NUMBER,
             description="Memories injected per turn (1–20).",
             default="5",
-            inline=True,
             group="Memory",
         ),
         ProviderField(
@@ -234,7 +253,6 @@ CONFIG_SCHEMA = ProviderConfigSchema(
             description="Max characters of memory context injected per turn. "
                         "Whole facts are dropped when the budget is hit.",
             default="800",
-            inline=True,
             group="Memory",
         ),
         ProviderField(
@@ -245,7 +263,6 @@ CONFIG_SCHEMA = ProviderConfigSchema(
                         "2+ skips the search (and its tokens) on off-turns. "
                         "An unchanged fact set is never re-injected regardless.",
             default="1",
-            inline=True,
             group="Memory",
         ),
     ),

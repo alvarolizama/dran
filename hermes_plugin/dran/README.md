@@ -34,9 +34,13 @@ No hay un segundo archivo de config ni una segunda credencial: **un solo token**
 
 El plugin trae `config_schema.py`, así que Hermes renderiza el panel solo. En el
 **app desktop**: **Settings → Memory & Context** → elegí **Memory provider:
-`dran`** y el panel de Dran aparece **justo debajo** (fields: API key, Base
-URL, Write scope, Group slug, Auto recall, Auto capture, Max recall results,
-Recall char budget, Recall cadence). Guarda campo por campo (autosave).
+`dran`** y el panel de Dran aparece **justo debajo**. El panel compacto lista los
+campos `inline` **en orden y sin cabeceras** (11 filas: API key, Base URL, Write
+scope, Group slug + los siete toggles de tools); los knobs de recall (Auto
+recall, Auto capture, Max recall results, Recall char budget, Recall cadence)
+viven en el botón **"Full config…"**, que abre el modal con las cuatro secciones
+(`Connection` / `Write destination` / `Tools` / `Memory`) — el modal existe
+justamente porque hay campos no-`inline`. Guarda campo por campo (autosave).
 
 Por **perfil**, remotos incluidos: el panel se pide con el perfil activo
 (`GET/PUT /api/memory/providers/dran/config?surface=declared&profile=<perfil>`),
@@ -115,7 +119,8 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
 3. Configura el resto desde el **app desktop**: **Settings → Memory & Context**
    → elegí Memory provider **`dran`** y completá el panel que aparece justo
    debajo (o `hermes memory setup` → "dran"). El token pégalo en el campo del
-   panel — va al `.env`, no al JSON.
+   panel — va al `.env`, no al JSON. Los knobs de recall quedan en el botón
+   **"Full config…"** del mismo panel (agrupados en secciones).
    **Perfil remoto**: lo mismo con el app apuntando a ese perfil; el panel
    escribe la config de ESE host (el perfil viaja en el pedido).
 
@@ -285,8 +290,9 @@ Las 46 tools son **siete superficies**, y cada una tiene **dos interruptores
 sobre la misma cosa** — la tabla `_TOOL_GROUPS` de `__init__.py` es la única
 fuente de verdad de a qué grupo pertenece cada tool:
 
-1. **El panel del plugin** (Desktop → Settings → Memory & Context → Tools;
-   también `hermes memory setup`). Cada campo escribe `tools.<group>` en
+1. **El panel del plugin** (Desktop → Settings → Memory & Context; los siete
+   toggles son filas del panel compacto, la sección `Tools` del modal "Full
+   config…"; también `hermes memory setup`). Cada campo escribe `tools.<group>` en
    `$HERMES_HOME/dran/config.json`, y el plugin lo aplica con un `check_fn`
    por tool: Hermes saca las tools del grupo del prompt **y del catálogo de
    `tool_search`**. Precedencia: el panel del perfil gana sobre

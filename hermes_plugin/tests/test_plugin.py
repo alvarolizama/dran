@@ -1274,6 +1274,52 @@ def test_every_group_has_a_toggle_in_the_panel_schema(plugin):
         assert group in declared, f"el panel no declara el toggle del grupo {group}"
 
 
+def _declared_panel_fields():
+    """(key, inline, group) de cada ProviderField, en orden declarado.
+
+    Se lee el FUENTE, no se importa: `config_schema.py` importa
+    `plugins.memory.config_schema`, que sólo existe dentro de un Hermes
+    instalado (misma razón que el test de los toggles).
+    """
+    source = (_PLUGIN_DIR / "config_schema.py").read_text(encoding="utf-8")
+    parts = re.split(r'\n\s*key="([a-z_]+)"', source)[1:]
+    fields = []
+    for key, body in zip(parts[::2], parts[1::2]):
+        group = re.search(r'group="([^"]+)"', body)
+        fields.append((key, "inline=True" in body, group.group(1) if group else None))
+    return fields
+
+
+def test_panel_split_puts_the_recall_knobs_in_the_grouped_modal(plugin):
+    """11 filas en el panel compacto; los 5 knobs de recall sólo en 'Full config…'.
+
+    El panel compacto pinta los campos inline **planos** — no dibuja cabeceras
+    de grupo — y el modal es el ÚNICO lugar donde `group` se usa como sección.
+    Ese botón existe sólo mientras haya al menos UN campo no-inline: si los 16
+    vuelven a ser inline, desaparece y los grupos quedan de adorno.
+    """
+    fields = _declared_panel_fields()
+    inline = [key for key, is_inline, _group in fields if is_inline]
+    modal = [key for key, is_inline, _group in fields if not is_inline]
+
+    assert inline == [
+        "api_key", "base_url", "scope", "scope_group",
+        "pages", "goals", "tasks", "plans", "services", "skills", "brain",
+    ]
+    assert modal == [
+        "auto_recall", "auto_capture", "max_recall_results",
+        "max_recall_chars", "recall_cadence",
+    ]
+    # Sin campos no-inline no hay "Full config…" — y sin modal, no hay secciones.
+    assert modal, "el panel se vería como un bloque plano, sin secciones"
+
+    # Todo campo lleva `group`: el que no lo lleva cae en 'Other' dentro del modal.
+    assert all(group for _key, _inline, group in fields)
+    assert list(dict.fromkeys(group for _key, _inline, group in fields)) == [
+        "Connection", "Write destination", "Tools", "Memory",
+    ]
+
+
 def test_group_gate_reads_the_panel_config(plugin, hermetic_dran_home):
     _write_dran_config(plugin, hermetic_dran_home, {"tools": {"pages": False}})
 
