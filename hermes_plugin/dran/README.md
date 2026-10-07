@@ -326,7 +326,7 @@ que el servidor no puede cambiar sin reiniciar el perfil.
 
 | Tool | Ruta que golpea |
 |---|---|
-| `dran_skills` | `GET /api/skills` — el catálogo VIVO del lector (slug, descripción, versión, hash, destino), **sin cuerpos** |
+| `dran_skills` | `GET /api/skills` — el catálogo VIVO del lector (slug, descripción, versión, hash, destino), **sin cuerpos**; `q` filtra por texto en el servidor (slug, name, description) |
 | `dran_skill` | `GET /api/skills/:slug` — el cuerpo enmarcado con slug, versión y `content_hash`; `unchanged` cuando el hash no cambió desde la última carga de la SESIÓN |
 | `dran_skill_save` | `POST`/`PUT /api/skills[/:slug]` — slug nuevo crea, existente edita versionado (misma puerta y misma validación server-side que la web) |
 | `dran_skill_delete` | `DELETE /api/skills/:slug` |
@@ -338,6 +338,16 @@ el tope de 4000— renderiza una línea por skill desde ESE caché y manda a
 `dran_skills` para el listado vivo, porque el bloque se congela por sesión. La
 sección se registra SIEMPRE y con Dran caído devuelve `""`: Hermes la descarta y
 el prompt no se rompe (fail-open).
+
+**El discovery es un DISPARO, no una nota al pie.** La descripción de la tool y
+el pie del bloque dicen *«antes de arrancar una tarea que pueda matchear un
+skill, listá con `dran_skills` y elegí el que aplique»*: el bloque del prompt es
+una foto del arranque de la sesión, así que su existencia no alcanza — si el
+texto sólo dijera «llamá si está viejo», el listado quedaría librado a que el
+bloque le parezca sospechoso al modelo. Con `q` la búsqueda es del servidor
+(substring, sin mayúsculas, comodines de LIKE literales) y el cliente la
+repite como red de seguridad contra un Dran que todavía no conozca el param:
+nunca ensancha el resultado.
 
 **Los 9 flows del repo son built-ins**: Dran los sirve por default a toda
 credencial (`system: true` en el payload), así que un perfil nuevo ya los ve en

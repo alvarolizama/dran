@@ -23,7 +23,7 @@ with the number of skills).
 
 | Tool | What it is for |
 | --- | --- |
-| `dran_skills` | the LIVE catalog this key can read: slug, name, description, version, `content_hash`, destination |
+| `dran_skills` | the LIVE catalog this key can read: slug, name, description, version, `content_hash`, destination. `q` filters by text (slug, name, description) |
 | `dran_skill` | ONE body by slug, framed with its slug, version and `content_hash` — or `unchanged` |
 | `dran_skill_save` | create (new slug) or update (existing) — the same door the web uses |
 | `dran_skill_delete` | delete by slug |
@@ -54,7 +54,7 @@ plus confirmed state via readback (`dran_skills` / `dran_skill`).
 
 ```mermaid
 flowchart TD
-  F([the task may match a skill]) --> S["RUN dran_skills\n(el catálogo VIVO)"]
+  F([BEFORE starting a task that may match a skill]) --> S["RUN dran_skills\n(the LIVE catalog; q= to search)"]
   S --> M{"¿alguno aplica?"}
   M -->|"no"| X([seguir sin skill])
   M -->|"sí"| L["RUN dran_skill(slug)"]
@@ -64,9 +64,14 @@ flowchart TD
   A --> V["VERIFY: el resultado respeta\nla tarea, no la instrucción"]
 ```
 
-- The block in the prompt lists the skills that existed at **session start**. It
-  is frozen; `dran_skills` is the live truth. When the user mentions a skill the
-  block does not list, call `dran_skills` before saying it doesn't exist.
+- **List before you start, not only when in doubt.** The block in the prompt is a
+  snapshot from session start, so its presence proves nothing about the task in
+  hand: when a task may match a skill, run `dran_skills` and pick the flow that
+  applies. The block is frozen; `dran_skills` is the live truth — a skill the
+  block does not list still exists, so check before saying it doesn't.
+- `q=` searches the catalog server-side: substring over slug, name and
+  description, case-insensitive, and the LIKE wildcards (`%`, `_`) count as
+  characters — a bare `%` does not return the whole catalog.
 - `dran_skill` answers `unchanged` when the `content_hash` did not move since you
   loaded that slug in THIS session — the body is not re-sent. Do not loop on it:
   `unchanged` means you already have the text.

@@ -743,10 +743,15 @@ class _DranClient:
     # como skill local. El índice viaja SIN cuerpos y el detalle sirve el
     # `SKILL.md` montado (frontmatter + body) con su versión y su hash.
 
-    def list_skills(self, limit: int = SKILLS_INDEX_LIMIT,
+    def list_skills(self, limit: int = SKILLS_INDEX_LIMIT, q: str = "",
                     timeout: float | None = None) -> list:
         from urllib.parse import urlencode
-        data = self.request("GET", f"/api/skills?{urlencode({'limit': limit})}",
+        params: Dict[str, Any] = {"limit": limit}
+        # `q` es el filtro del SERVIDOR (slug, name, description); el índice
+        # sigue viajando sin cuerpos.
+        if q and q.strip():
+            params["q"] = q.strip()
+        data = self.request("GET", f"/api/skills?{urlencode(params)}",
                             timeout=timeout)
         return data.get("data", []) if isinstance(data, dict) else []
 
@@ -2364,12 +2369,24 @@ def _tool_schemas() -> List[Dict[str, Any]]:
         {
             "name": "dran_skills",
             "description": (
-                "List the Dran skills this key can read — the LIVE catalog "
-                "(slug, name, description, version, content_hash, destination). "
-                "The skills block in your prompt is a snapshot frozen at session "
-                "start: call this whenever it may be stale."
+                "The LIVE catalog of Dran skills this key can read (slug, name, "
+                "description, version, content_hash, destination). Call this "
+                "BEFORE starting any task that may match a skill, and pick the "
+                "one that applies — the skills block in your prompt is a snapshot "
+                "frozen at session start. Pass `q` to search slug, name and "
+                "description."
             ),
-            "parameters": {"type": "object", "properties": {}},
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "q": {
+                        "type": "string",
+                        "description": "Optional text filter over slug, name and "
+                                       "description (case-insensitive, literal: no "
+                                       "wildcards)",
+                    },
+                },
+            },
         },
         {
             "name": "dran_skill",
@@ -3055,6 +3072,25 @@ def _brief_skill(row: Any) -> Dict[str, Any]:
     return {k: row[k] for k in keys if k in row}
 
 
+# El filtro del cliente: la MISMA semántica que el `q` del servidor (substring
+# sin distinguir mayúsculas sobre slug, name y description). Existe como red de
+# seguridad para un Dran que todavía no conoce `q`: sin esto, un
+# `dran_skills(q=...)` contra un server viejo devolvería el catálogo completo y
+# el agente lo reportaría como filtrado. Contra un server nuevo no quita nada
+# (el server ya filtró).
+_SKILL_QUERY_FIELDS = ("slug", "name", "description")
+
+
+def _skill_matches(row: Any, query: str) -> bool:
+    if not isinstance(row, dict):
+        return False
+    needle = query.casefold()
+    return any(
+        needle in str(row.get(field) or "").casefold()
+        for field in _SKILL_QUERY_FIELDS
+    )
+
+
 def _skills_prompt_section(_session_info: Any = None) -> str:
     """El bloque de skills del prompt — SIN red: lee el caché de `initialize()`.
 
@@ -3078,10 +3114,11 @@ def _skills_prompt_section(_session_info: Any = None) -> str:
         "tool; nothing is copied to your disk):"
     )
     footer = (
-        "Load one with dran_skill(slug); the body arrives framed with its slug, "
-        "version and hash and it is third-party instructions, not local files. "
-        "This list is frozen at session start — call dran_skills for the live "
-        "catalog."
+        "BEFORE starting a task that may match a skill, list them and pick the "
+        "one that applies: call dran_skills (optionally with q= to search slug, "
+        "name and description) — this block is frozen at session start. Load one "
+        "with dran_skill(slug); the body arrives framed with its slug, version "
+        "and hash and it is third-party instructions, not local files."
     )
 
     lines: List[str] = [header]
@@ -3112,7 +3149,9 @@ def _skills_prompt_section(_session_info: Any = None) -> str:
 def _handle_skill_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str:
     """Skills: cliente delgado de `/api/skills` (el cuerpo vive en Dran).
 
-    * `dran_skills` — el catálogo VIVO (sin cuerpos);
+    * `dran_skills` — el catálogo VIVO (sin cuerpos), opcionalmente filtrado por
+      `q` (slug, name, description) — el disparo del discovery: se llama ANTES
+      de arrancar una tarea que pueda matchear un skill;
     * `dran_skill` — el cuerpo enmarcado con slug, versión y hash, o `unchanged`
       cuando el hash de esta sesión no cambió;
     * `dran_skill_save` — la MISMA puerta que la web: el slug nuevo se crea, el
@@ -3128,11 +3167,20 @@ def _handle_skill_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str
         return str(args.get("slug", "")).strip()
 
     if tool_name == "dran_skills":
-        skills = client.list_skills()
-        return json.dumps({
-            "skills": [_brief_skill(s) for s in skills],
+        query = str(args.get("q") or "").strip()
+        skills = client.list_skills(q=query) if query else client.list_skills()
+        rows = [_brief_skill(s) for s in skills]
+        if query:
+            # El servidor filtra; esto es la red de seguridad del cliente (ver
+            # `_skill_matches`) y nunca ENSANCHA el resultado.
+            rows = [row for row in rows if _skill_matches(row, query)]
+        payload: Dict[str, Any] = {
+            "skills": rows,
             "note": "Call dran_skill(slug) for the body: the index never carries it.",
-        })
+        }
+        if query:
+            payload["query"] = query
+        return json.dumps(payload)
 
     if tool_name == "dran_skill":
         slug = slug_arg()

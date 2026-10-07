@@ -123,13 +123,15 @@ file on disk and there is no anonymous index of them.
 
 | Tool | What it is for |
 | --- | --- |
-| `dran_skills` | the LIVE catalog this token can read (never carries bodies) |
+| `dran_skills` | the LIVE catalog this token can read (never carries bodies); `q` searches slug/name/description |
 | `dran_skill` | ONE body by slug, framed with slug, version and `content_hash` |
 | `dran_skill_save` | create (new slug) or update — **ASK the user first** |
 | `dran_skill_delete` | delete by slug — **ASK the user first** |
 
-The block the prompt carries is a snapshot from session start: `dran_skills` is
-the live truth. `dran_skill` answers `unchanged` when the hash did not move since
+The block the prompt carries is a snapshot from session start, so its presence is
+not enough: **before starting a task that may match a skill, list them with
+`dran_skills` and pick the one that applies** — that tool is the live truth.
+`dran_skill` answers `unchanged` when the hash did not move since
 you loaded that slug in this session. **The sequences, the failure modes and the
 ASK live in `dran-skills-flow`** — load it and run the flow.
 

@@ -1209,6 +1209,88 @@ def test_skill_body_survives_a_new_load_after_saving(plugin):
     assert reloaded.get("status") != "unchanged"
 
 
+def test_dran_skills_searches_with_q_and_marks_the_query(plugin):
+    """`dran_skills(q=...)` filtra en el SERVIDOR y devuelve sólo lo que matchea."""
+    handlers, _routes, _detail, client, ctx = _skills_plugin(plugin)
+    paths = []
+
+    def fake_request(m, path, payload=None, timeout=None):
+        paths.append(path)
+        # El server nuevo YA filtró: devuelve sólo la fila que matchea.
+        return {"data": [
+            {"slug": "revision-semanal", "version": 1, "description": "cerrar la semana"},
+        ]}
+
+    client.request = fake_request
+
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        out = json.loads(handlers["dran_skills"]({"q": "SEMANAL"}, ctx=ctx))
+
+    assert "q=SEMANAL" in paths[0]
+    assert [s["slug"] for s in out["skills"]] == ["revision-semanal"]
+    assert out["query"] == "SEMANAL"
+    # Filtrado o no, el índice sigue viajando SIN cuerpos.
+    assert "body" not in out["skills"][0]
+
+
+def test_dran_skills_never_widens_when_the_server_ignores_q(plugin):
+    """Contra un Dran sin `q`, el filtro del cliente evita reportar de más.
+
+    Este fake IGNORA `q` y devuelve su catálogo completo: sin el filtro del
+    cliente, el agente reportaría la fila que no matchea como resultado de la
+    búsqueda.
+    """
+    handlers, _routes, _detail, client, ctx = _skills_plugin(plugin)
+
+    def old_server(m, path, payload=None, timeout=None):
+        return {"data": [
+            {"slug": "revision-semanal", "version": 1, "description": "cerrar la semana"},
+            {"slug": "informe-mensual", "version": 1, "description": "los numeros"},
+        ]}
+
+    client.request = old_server
+
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        out = json.loads(handlers["dran_skills"]({"q": "semanal"}, ctx=ctx))
+
+    assert [s["slug"] for s in out["skills"]] == ["revision-semanal"]
+
+
+def test_dran_skills_without_q_is_the_live_catalog(plugin):
+    """Sin `q` el listado es el catálogo vivo completo, sin el campo `query`."""
+    handlers, routes, _detail, client, ctx = _skills_plugin(plugin)
+
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        out = json.loads(handlers["dran_skills"]({}, ctx=ctx))
+
+    assert [s["slug"] for s in out["skills"]] == ["weekly"]
+    assert "query" not in out
+    assert ("GET", "/api/skills?limit=200") in {(m, p) for m, p, _ in routes}
+
+
+def test_skills_discovery_is_a_trigger_not_a_side_note(plugin):
+    """El disparo: listar y elegir ANTES de arrancar — en el bloque y en la tool.
+
+    La sección del prompt y la descripción de `dran_skills` son los dos lugares
+    donde el modelo decide. Si dicen «llamá si está viejo» en vez de «listá antes
+    de arrancar», el discovery queda librado a que el bloque le parezca
+    sospechoso.
+    """
+    plugin._SKILLS_INDEX = {
+        "skills": [{"slug": "weekly", "version": 1, "description": "d"}],
+        "loaded_at": 0.0,
+    }
+    text = plugin._skills_prompt_section({})
+
+    assert "BEFORE starting" in text
+    assert "dran_skills" in text
+    assert "q=" in text  # el filtro se anuncia donde el modelo lo va a leer
+
+    [schema] = [s for s in plugin._tool_schemas() if s["name"] == "dran_skills"]
+    assert "BEFORE starting" in schema["description"]
+    assert "q" in schema["parameters"]["properties"]
+
+
 def test_skill_tools_reject_missing_arguments_without_calling_the_api(plugin):
     class ExplodingClient:
         def request(self, *args, **kwargs):

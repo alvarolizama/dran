@@ -22,9 +22,10 @@ short: it is injected every turn, and the detail lives in the skills.
   (curator / link_gardener / graph_rag), `dran-services-flow` (the user's apps:
   connect and run), `dran-goal-flow` (goals · tasks · destination),
   `dran-plan-flow` (plans · checklist), `dran-skills-flow` — **the Dran skills
-  are REMOTE**: list them with `dran_skills` and follow the one that applies with
-  `dran_skill`; nothing is copied to disk. Dran stores and returns what is
-  known — it does not decide it.
+  are REMOTE**: before starting a task that may match one, list them with
+  `dran_skills` (optionally `q=` to search slug/name/description) and follow the
+  one that applies with `dran_skill`; nothing is copied to disk. Dran stores and
+  returns what is known — it does not decide it.
 ```
 
 ## Why this shape
