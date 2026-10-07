@@ -34,6 +34,11 @@ defmodule Dran.DataCase do
     # cache survives — drop it so no test reads another test's settings.
     Dran.Settings.clear_cache()
 
+    # Same for the instance-level caches: a toolkit's name/description (or an
+    # embed's title) cached by one test must not be read by the next.
+    Dran.Services.ToolkitMetaCache.clear()
+    Dran.Embeds.Cache.clear()
+
     # Many tests assume the default "personal" workspace exists (created by
     # seeds in dev, absent in test). Create it by default unless a test opts
     # out with `@tag :no_default_workspace`.

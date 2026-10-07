@@ -39,6 +39,7 @@ defmodule Dran.Services do
   alias Dran.Repo
   alias Dran.Services.Call
   alias Dran.Services.Session
+  alias Dran.Services.ToolkitMetaCache
   alias Dran.Settings
 
   # Política de instancia: los toolkits que la instancia expone. Lista VACÍA es
@@ -50,6 +51,14 @@ defmodule Dran.Services do
   @lifecycle_priority ~w(ACTIVE INITIATED INITIALIZING INACTIVE EXPIRED)
   @executable_status "ACTIVE"
   @link_ttl_seconds 600
+  # Presupuesto de la metadata que sólo ADORNA el inventario (nombre y
+  # descripción del toolkit). Es decoración: si el catálogo tarda más que esto,
+  # la lista sale con el slug humanizado y el caché se llena en la próxima.
+  @toolkit_meta_timeout 2_000
+  # Margen del hop paralelo del inventario sobre el presupuesto de una llamada
+  # al vendor: la tarea interna tiene que alcanzar a devolver su error tipado
+  # antes de que el fanout la mate.
+  @fanout_slack 1_000
 
   @type service :: %{
           toolkit: String.t(),
@@ -586,12 +595,40 @@ defmodule Dran.Services do
         {:ok, []}
 
       true ->
-        with {:ok, identity} <- identity_for(user),
-             {:ok, accounts} <- connected_accounts_for(identity, allowed) do
-          {:ok, decorate(allowed, accounts)}
+        with {:ok, identity} <- identity_for(user) do
+          # El inventario son DOS hops al vendor: el estado real de las
+          # conexiones (la autoridad de la lectura) y la metadata para adornarla
+          # (decoración). Van en paralelo: la lectura cuesta el máximo, no la
+          # suma, y la decoración además vive cacheada.
+          %{accounts: accounts_result, meta: meta} = inventory(identity, allowed)
+
+          with {:ok, accounts} <- accounts_result do
+            {:ok, decorate(allowed, accounts, meta)}
+          end
         end
     end
   end
+
+  # `async_stream` en vez de `async` a propósito: un hop que se pasa de su
+  # presupuesto mata ESA tarea y nada más — el proceso que atiende la petición
+  # no muere por una decoración lenta.
+  defp inventory(identity, allowed) do
+    [
+      accounts: fn -> connected_accounts_for(identity, allowed) end,
+      meta: fn -> toolkit_meta(allowed) end
+    ]
+    |> Task.async_stream(fn {key, fun} -> {key, fun.()} end,
+      timeout: fanout_timeout(),
+      on_timeout: :kill_task,
+      ordered: false
+    )
+    |> Enum.reduce(%{accounts: {:error, :timeout}, meta: %{}}, fn
+      {:ok, {key, value}}, acc -> Map.put(acc, key, value)
+      {:exit, _reason}, acc -> acc
+    end)
+  end
+
+  defp fanout_timeout, do: Composio.Config.timeout() + @fanout_slack
 
   @doc """
   Las conexiones de UN lector, ya filtradas.
@@ -621,8 +658,7 @@ defmodule Dran.Services do
     (is_nil(user) or to_string(user) == to_string(identity)) and slug in toolkits
   end
 
-  defp decorate(allowed, accounts) do
-    meta = toolkit_meta(allowed)
+  defp decorate(allowed, accounts, meta) do
     by_toolkit = group_accounts(accounts)
 
     Enum.map(allowed, fn slug ->
@@ -642,21 +678,54 @@ defmodule Dran.Services do
 
   # El nombre es decoración: si el catálogo del vendor no contesta, la lista sale
   # igual con el slug humanizado. Un fallo de metadata no puede tumbar la lectura
-  # del estado.
+  # del estado — y un catálogo LENTO tampoco: lo que falta se busca una sola vez
+  # por slug, con presupuesto propio y corto, y a partir de ahí vive en el caché
+  # (el catálogo es de la INSTANCIA, el mismo para todos los lectores).
   defp toolkit_meta(slugs) do
-    case Composio.toolkits(slugs) do
-      {:ok, rows} ->
-        Map.new(rows, fn row ->
-          slug = row["slug"] || row["toolkit"] || row["name"]
+    cached = ToolkitMetaCache.get_many(slugs)
 
-          {slug,
-           %{
-             name: row["name"] || humanize(slug),
-             description: get_in(row, ["meta", "description"]) || row["description"]
-           }}
-        end)
+    case Enum.reject(slugs, &is_map_key(cached, &1)) do
+      [] -> cached
+      missing -> Map.merge(cached, fetch_toolkit_meta(missing))
+    end
+  end
 
-      {:error, _reason} ->
+  # El presupuesto de la decoración lo impone DRAN, no el cliente HTTP: si el
+  # hop se pasa de su cap, se mata esa tarea y la lectura sigue con el nombre
+  # humanizado. Un `receive_timeout` solo no alcanza — el reloj tiene que
+  # cubrir también el camino en el que no hay socket (plug de test, transporte
+  # que no respeta el cap).
+  defp fetch_toolkit_meta(slugs) do
+    result =
+      [slugs]
+      |> Task.async_stream(&Composio.toolkits(&1, timeout: @toolkit_meta_timeout),
+        timeout: @toolkit_meta_timeout,
+        on_timeout: :kill_task,
+        max_concurrency: 1
+      )
+      |> Enum.at(0)
+
+    case result do
+      {:ok, {:ok, rows}} ->
+        meta =
+          Map.new(rows, fn row ->
+            slug = row["slug"] || row["toolkit"] || row["name"]
+
+            {slug,
+             %{
+               name: row["name"] || humanize(slug),
+               description: get_in(row, ["meta", "description"]) || row["description"]
+             }}
+          end)
+
+        # Write-through: sólo lo que el vendor reconoció. La próxima lectura del
+        # inventario ya no paga este hop.
+        ToolkitMetaCache.put_many(meta)
+        meta
+
+      # Un catálogo caído (o lento) no deja basura en el caché: la próxima
+      # lectura vuelve a intentar en vez de arrastrar la ausencia seis horas.
+      _error_or_timeout ->
         %{}
     end
   end

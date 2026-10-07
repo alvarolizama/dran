@@ -217,12 +217,23 @@ defmodule Dran.Composio do
   @doc """
   Toolkit metadata (name/description) for the slugs named. Used to decorate the
   allowlist; a failure here must never take a read down.
+
+  `opts[:timeout]` (ms) overrides the request budget: la decoración del
+  inventario lo usa para no esperar más que un puñado de milisegundos por el
+  nombre de un servicio que ya sabe nombrar con el slug.
   """
-  @spec toolkits([String.t()]) :: result(list(map()))
-  def toolkits(slugs \\ []) do
+  @spec toolkits([String.t()], keyword()) :: result(list(map()))
+  def toolkits(slugs \\ [], opts \\ []) do
     params = list_params(toolkit_slugs: slugs)
 
-    with {:ok, body} <- request(:get, "#{@api_prefix}/toolkits", params: params) do
+    request_opts =
+      case opts[:timeout] do
+        nil -> []
+        ms -> [receive_timeout: ms]
+      end
+
+    with {:ok, body} <-
+           request(:get, "#{@api_prefix}/toolkits", [params: params] ++ request_opts) do
       {:ok, items(body)}
     end
   end

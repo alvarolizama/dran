@@ -364,6 +364,15 @@ a lo sumo un `GET /api/services` por ventana) y la línea estática del provider
 nombra los disparadores, así que el agente sabe que la capacidad existe sin
 pedir la lista.
 
+Del lado del servidor esa lectura son DOS hops al vendor que no se suman: las
+conexiones del lector (la autoridad del estado, que se lee siempre) y la
+metadata del toolkit que sólo ADORNA la lista. Van en paralelo (`Task.async_stream`,
+la lectura cuesta el máximo) y la metadata vive cacheada por instancia
+(`Dran.Services.ToolkitMetaCache`, 6 h: el catálogo es el mismo para todos los
+lectores), con un presupuesto propio y corto — si el catálogo tarda, la lista
+sale igual con el slug humanizado. Medido contra el vendor real: 897 ms en serie
+→ 637 ms en frío (paralelo) → 227 ms tibio (metadata cacheada).
+
 ### Skills (las instrucciones que el agente carga por tool)
 
 Un **skill** es instrucciones para un agente — no conocimiento que se lee. Vive

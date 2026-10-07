@@ -31,6 +31,10 @@ defmodule Dran.Application do
       Dran.Relations.Supervisor,
       Dran.Scheduler,
       Dran.GraphCache,
+      # Toolkit metadata (name/description) for the services inventory: the
+      # catalog belongs to the INSTANCE and barely changes, so the read that
+      # decorates the allowlist pays that hop once per slug, not once per read.
+      Dran.Services.ToolkitMetaCache,
       # External-embed metadata (oEmbed titles/thumbnails): written when an
       # embed is inserted, read — never fetched — while rendering.
       Dran.Embeds.Cache,
