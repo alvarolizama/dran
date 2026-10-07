@@ -113,39 +113,29 @@ Full detail: [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md).
 
 ## The skills
 
-One suite, versioned with this repo, and it **ships with the plugin**: the router
-and the eight flows live in `hermes_plugin/dran/skills/<slug>/SKILL.md` and the
-plugin registers them as local rows (`dran:loader`, `dran:<flow>`) — loadable with
-`skill_view`, no network, no install. Dran's own catalog (`GET /api/skills`) is the
-workspace's skills and nothing else: the nine suite slugs are simply RESERVED
-there (`422` on a colliding create), so the suite cannot be shadowed.
+Nine skills are versioned with this repo: the `loader` router and the eight flows.
+They **ship with the plugin** — the files live in
+`hermes_plugin/dran/skills/<slug>/SKILL.md` and the plugin registers them locally
+(`dran:loader`, `dran:knowledge-flow`, …). An agent reads them with `skill_view`,
+with no network.
 
-The prompt block tells the agent both halves: the workspace catalog (a line per
-skill, `q=` search and the body through `dran_skills` / `dran_skill`) and the
-suite's local rows (`skill_view("dran:loader")`). The old symlinks under
-`skills.external_dirs` were a second copy of the same bytes, so they are retired
-(see
-[skills/README.md § Retiring the local install](skills/README.md#retiring-the-local-install)).
+Dran serves **only the workspace's skills**. The nine suite slugs are reserved
+there (creating one is a `422`), so nothing can shadow or duplicate them.
 
-The nine rows the plugin registers are the whole local face of the suite:
-`dran:loader` (the router, which answers "what can I do with Dran") plus
-`dran:<flow>` for the eight flows — what makes "list the skills" land on it,
-since the five skill tools are deferred behind `tool_search`. No body of the
-suite is copied anywhere: the files in this repo are the only copy.
-[skills/README.md § The nine local rows](skills/README.md#the-nine-local-rows-the-suite).
+The prompt block points at both halves: the workspace catalog (a line per skill,
+`q=` search, bodies through `dran_skills` / `dran_skill`) and the suite, which the
+agent reads locally with `skill_view("dran:loader")`.
 
 Details: [skills/README.md](skills/README.md).
 
-Point the agent at them with one line in its `soul.md` (identity section —
-injected every turn, so it stays a single line):
+Point the agent at them with one line in its `soul.md`:
 
 ```text
-- **Dran skills (remote)** — to initialize and search them, list the catalog with
-  `dran_skills` before a task that may match a skill (pass `q=` to query slug,
-  name and description) and load the one that applies with `dran_skill`; the
-  suite itself (`dran:loader` + the eight flows) ships with the plugin and is
-  read locally with `skill_view`. Nothing is copied to disk. The tools are
-  DEFERRED: reach them through `tool_search` with an English query.
+- **Dran skills** — before a task that may match a skill, list the workspace
+  catalog with `dran_skills` (pass `q=` to search slug, name and description) and
+  load the one that applies with `dran_skill`. The suite (`dran:loader` + the
+  eight flows) ships with the plugin: read it locally with `skill_view`. The five
+  tools are DEFERRED — reach them through `tool_search` with an English query.
 ```
 
 One credential, no per-agent keys: the account's API token (Settings → Account),
@@ -196,7 +186,8 @@ docker run --rm -p 4000:4000 --env-file .env dran
 
 - [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md) — the plugin:
   tools, config, and the surfaces it switches
-- [skills/README.md](skills/README.md) — the suite Dran serves to agents
+- [skills/README.md](skills/README.md) — the nine skills and how the plugin
+  delivers them
 - [DESIGN.md](DESIGN.md) — the UI standard
 
 ## License

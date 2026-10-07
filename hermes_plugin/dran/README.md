@@ -455,13 +455,13 @@ bloque le parezca sospechoso al modelo. Con `q` la búsqueda es del servidor
 repite como red de seguridad contra un Dran que todavía no conozca el param:
 nunca ensancha el resultado.
 
-**La suite NO es del catálogo**: el router y los ocho flows viven en el PLUGIN
-(`hermes_plugin/dran/skills/<slug>/SKILL.md`), que los registra como filas locales y
-los apunta desde el bloque del prompt; `dran_skills`/`dran_skill` nunca los
-devuelven (un agente los lee con `skill_view("dran:<slug>")`, sin red). Dran
-reserva los nueve slugs (crear uno ajeno da `422`) para que no puedan ser
-suplantados, y el espejo del perfil sólo reconcilia los skills del WORKSPACE. Se
-cambian editando el archivo y redeployando el plugin (`hermes plugins update dran`).
+**La suite no está en el catálogo.** El router y los ocho flows viven en el PLUGIN
+(`hermes_plugin/dran/skills/<slug>/SKILL.md`). El plugin los registra como filas
+locales y su bloque del prompt apunta a ellas; el agente las lee con
+`skill_view("dran:<slug>")`, sin red. `dran_skills`/`dran_skill` no las devuelven
+nunca. Dran reserva los nueve slugs —crear uno ajeno da `422`— y su espejo sólo
+reconcilia los skills del WORKSPACE. Para cambiarlas: editar el archivo y
+redeployar el plugin (`hermes plugins update dran`).
 
 **Las cinco tools están DIFERIDAS.** Hermes reemplaza toda tool de plugin por el
 puente (`tool_search` / `tool_describe` / `tool_call`): un toolset de plugin no
@@ -558,17 +558,14 @@ Memory). Apaga la mitad de memoria completa — recall, captura y las cuatro too
 
 **Nota de migración (v1.5 → v1.6):** tres cosas en un cambio.
 
-1. La suite del sistema pasa a vivir **dentro del plugin**
-   (`hermes_plugin/dran/skills/`; la carpeta `skills/` de la raíz desaparece) y el
-   plugin la **registra entera** — nueve filas locales `dran:<slug>` en
-   `skills_list`, cargables con `skill_view` sin red. El router se llama
-   **`loader`** (entrada de la suite + índice del catálogo) y los flows pierden el
-   prefijo `dran-` (`knowledge-flow`, `relations-flow`, …): el namespace lo pone el
-   host. El servidor deja de hornear la suite — su catálogo es sólo el del
-   workspace y los nueve slugs quedan RESERVADOS (`422` al crear uno) —, así que la
-   nomenclatura vieja desaparece con las filas: quien tuviera un slug
-   `dran-knowledge-flow` anotado (en un `related_skills`, en una nota) tiene que
-   actualizarlo al slug nuevo.
+1. La suite pasa a vivir **dentro del plugin** (`hermes_plugin/dran/skills/`) y el
+   plugin la registra entera: nueve filas locales `dran:<slug>` en `skills_list`,
+   que se cargan con `skill_view` sin red. El router se llama **`loader`** y los
+   flows pierden el prefijo `dran-` (`knowledge-flow`, …): el namespace lo pone el
+   host. Dran **deja de servirla** — su catálogo es sólo el del workspace y los
+   nueve slugs quedan reservados (`422` al crear uno) —, así que quien tuviera un
+   slug viejo anotado (`dran-knowledge-flow` en un `related_skills`, en una nota)
+   tiene que actualizarlo.
 2. Se suman `dran_skill_sync` (el toolset `dran_skills` pasa de 4 a 5 tools) y la
    clave de tarjeta **Skills mirror on disk** (`skills_cache`, default ON). Nada que
    hacer: un perfil existente arranca con el espejo encendido y sin bodies en disco

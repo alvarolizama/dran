@@ -1,45 +1,42 @@
-# Los skills de Dran (Hermes)
+# Dran's skills (Hermes)
 
-Dran ships **one suite of nine skills**, versioned with this repo, and they all
-live **inside the plugin**:
+This repo ships **one suite of nine skills**: the router and eight flows. They live
+**inside the plugin** (`hermes_plugin/dran/skills/<slug>/SKILL.md`) and the plugin
+registers them as local rows:
 
-| Suite | Path | Who loads it | What it is for |
-|---|---|---|---|
-| **The router** (`loader`) | `hermes_plugin/dran/skills/loader/` | an agent operating a Dran instance, from either door | the entry of the suite + the index of the catalog. Registered as the local row `dran:loader` |
-| **Agent flows** (8) | `hermes_plugin/dran/skills/<slug>/` | the same agent | one flow per operation: `knowledge-flow`, `relations-flow`, `workers-flow`, `memory-flow`, `goal-flow`, `plan-flow`, `services-flow`, `skills-flow` |
+| Skill | What it is |
+|---|---|
+| `loader` | the router: the entry of the suite and the index of the catalog |
+| `knowledge-flow`, `relations-flow`, `workers-flow`, `memory-flow`, `goal-flow`, `plan-flow`, `services-flow`, `skills-flow` | one flow per operation: the call sequence of one surface |
 
-They live with the PLUGIN because they document its tool surface — the router
-cannot end up describing an older version of the client — and the slugs carry no
-`dran-` prefix: the namespace is the host's (`dran:<slug>` when the plugin
-registers them, which is why `dran:dran-knowledge-flow` would read twice).
+The router is `loader`; the flows carry no `dran-` prefix — the host adds the
+namespace (`dran:loader`, `dran:knowledge-flow`).
 
-The flows are thin clients over the plugin tools (`dran_*`, `dran_memory_*`) —
-they teach the call sequences, not the internals. Nothing about changing Dran's
-code ships here.
+The flows are thin clients over the plugin's tools (`dran_*`, `dran_memory_*`):
+they teach the order of the calls, not the internals. Nothing here is about
+changing Dran's code.
 
-## Who serves the suite: the PLUGIN, not the API
+## Who serves the suite: the plugin, not the API
 
-These files are the suite, and the suite lives with the plugin: the plugin
-registers them as local rows (`dran:<slug>`, loadable with `skill_view`, no
-network) and its prompt block points at them.
+The plugin registers these nine files as local rows (`dran:<slug>`), read with
+`skill_view`, no network, and its prompt block points at them.
 
-**Dran does NOT serve them.** The instance's catalog (`GET /api/skills`) carries
-the workspace's skills — what a reader created — and nothing else. The nine suite
-slugs are simply RESERVED on the server (`422` on a colliding create), so a user
-skill can never take the same address and the suite can never be shadowed or
-drifted: there is one copy of these bytes, in this directory.
+**Dran does not serve them.** The instance's catalog (`GET /api/skills`) carries the
+workspace's skills and nothing else. The nine suite slugs are reserved there —
+creating one is a `422` — so nobody can take the same address: there is ONE copy of
+these bytes, in this directory.
 
-Therefore:
+What follows from that:
 
-- editing one of these files and redeploying the PLUGIN is the only way to change
-  the suite (`hermes plugins update dran` on the profile);
-- `dran_skills` / `dran_skill` never return the suite — an agent reads it locally
-  with `skill_view("dran:<slug>")` (that is what the prompt block says);
+- to change the suite, edit the file and redeploy the plugin
+  (`hermes plugins update dran` on the profile);
+- `dran_skills` / `dran_skill` never return it: the agent reads it locally with
+  `skill_view("dran:loader")`, which is what the prompt block says;
 - the mirror under `$HERMES_HOME/dran/skills/` only reconciles the workspace's
-  skills, so it no longer carries nine copies of the suite.
+  skills, so it no longer keeps nine copies of the suite.
 
-Contract and examples: `Dran.Skills` (`lib/dran/skills.ex`) and the
-`/api/skills` routes in `lib/dran_web/router.ex`.
+Contract: `Dran.Skills` (`lib/dran/skills.ex`) and the `/api/skills` routes in
+`lib/dran_web/router.ex`.
 
 ## What the suite covers (the app's real surface)
 
@@ -84,38 +81,33 @@ first (no hole) and nothing the first lacks (no phantom).
 
 ## How Hermes discovers a skill
 
-| | `skills.external_dirs` (**retired**) | `ctx.register_skill()` (**the router only**) | the plugin prompt block + tools (**the flows**) |
+| | local install via disk (**retired**) | `ctx.register_skill()` (**the suite**) | the prompt block + tools (**the workspace's skills**) |
 |---|---|---|---|
-| Shows up in `skills_list` | yes — one row per skill | **yes** — nine rows: `dran:loader` + `dran:<flow>` | no — the local list never carries the workspace's skills |
-| Shows up in the agent's catalog | yes — it loads the skill on its own | no — explicit `skill_view()` only | **yes** — one line per skill in the prompt section, loaded by tool |
-| Install | symlink + one config line | automatic at plugin load | none (the suite ships with the plugin) |
-| Body on disk | yes (a second copy) | yes — the same files the plugin registers | **only in the plugin's mirror** — the body arrives by tool; `$HERMES_HOME/dran/skills/` keeps a copy for offline + checksum reconciliation, never as a local skill |
-| Retracted on unload | no | yes | yes — the section is rebuilt per session (the mirror survives: it is the plugin's cache, not a registration) |
+| Shows up in `skills_list` | yes — one row per skill | **yes** — nine rows: `dran:loader` + the eight flows | no — the local list never carries them |
+| Shows up in the agent's catalog | yes — it loads the skill on its own | no — explicit `skill_view()` only | **yes** — one line per skill in the block; the body by tool |
+| Install | symlink + one config line | automatic at plugin load | none (they live in Dran) |
+| Body on disk | yes (a second copy) | yes — the repo files the plugin registers | only in the plugin's mirror, for offline + checksum reconciliation |
+| Retracted on unload | no | yes | yes — the block is rebuilt per session (the mirror survives: it is a cache, not a registration) |
 
-The suite **used** to be installed locally as well. It is not any more: the plugin
-already puts the catalog in front of the agent — one line per skill in the prompt
-block, the live list and `q=` search through `dran_skills`, and the body through
-`dran_skill` — so a local copy of the flows was a second source of the same bytes,
-able to drift, and their bodies never needed to live on disk. The activation line
-in `soul.md` keeps working because the agent *sees* the skills in the block.
+The suite used to be installed locally too. It is not any more: the plugin already
+puts it in front of the agent — nine rows in the local listing, and the router named
+in the prompt block — so a second copy on disk was one more thing able to drift.
 
-**The mirror is not that local install coming back.** Since the plugin caches the
-bodies it loads in `$HERMES_HOME/dran/skills/` (SKILL.md + `manifest.json` with the
-hashes), a body IS on disk again — but nothing is *registered*: it does not enter
-`skills_list`, it is not symlinked into `~/.hermes/skills/`, and **the remote always
-wins** (the body is fetched on every load; the file only answers while Dran does
-not). `dran_skill_sync` reconciles it by checksum — the index the prompt already
-fetches carries every `content_hash` — and can push a local edit fast-forward only.
-Contract: `hermes_plugin/dran/README.md` § «El espejo en disco».
+**The mirror is not that local install coming back.** The plugin caches the bodies
+it loads (`SKILL.md` + `manifest.json` with the hashes) under
+`$HERMES_HOME/dran/skills/`, but nothing is *registered*: it does not enter
+`skills_list` and it is not symlinked into `~/.hermes/skills/`. And **the remote
+always wins**: the body is fetched on every load; the file only answers while Dran
+does not. `dran_skill_sync` reconciles it by checksum and can push a local edit
+fast-forward only. Contract: `hermes_plugin/dran/README.md` § «El espejo en disco».
 
 ## The nine local rows (the suite)
 
-`hermes skills list | grep dran` used to be empty, and that was the design. It now
-shows NINE rows — `dran:loader` plus `dran:<flow>` for the eight flows — and they are
-there because **"list the skills" runs the LOCAL listing** (`skills_list`): that is
-where the answer has to exist. The plugin registers them with `ctx.register_skill`
-(`hermes_plugin/dran/skills/<slug>/SKILL.md`), reading the description from each
-file's frontmatter, so the listing cannot say something the body does not.
+`hermes skills list | grep dran` used to be empty, by design. It now shows NINE rows
+— `dran:loader` plus the eight flows — because "list the skills" runs the LOCAL
+listing (`skills_list`): that is where the answer has to exist. The plugin registers
+them with `ctx.register_skill`, taking each description from its file's frontmatter,
+so the listing cannot say something the body does not.
 
 - `dran:loader` IS the router — entry map, connection, general rules, the route to
   the live catalog (`tool_search` with an English query → `dran_skills` →
@@ -139,7 +131,7 @@ If a profile still carries the old setup, remove both halves and confirm:
 
 ```bash
 rm -f ~/Workspace/Skills/dran ~/Workspace/Skills/dran-*
-hermes skills list | grep dran   # nine rows afterwards: dran:loader + dran:<flow>
+hermes skills list | grep dran   # nine rows afterwards: dran:loader + the eight flows
 ```
 
 Also drop the `skills.external_dirs` entry that pointed at
