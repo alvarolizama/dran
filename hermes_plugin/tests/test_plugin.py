@@ -13,6 +13,7 @@ Run: python3 -m pytest hermes_plugin/tests/ -q
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import io
 import json
@@ -1424,6 +1425,102 @@ def test_initialize_leaves_the_index_empty_when_dran_is_down(plugin):
 
     assert plugin._SKILLS_INDEX["skills"] == []
     assert plugin._skills_prompt_section({}) == ""
+
+
+# ── El PUNTERO del prompt y las dos instancias del plugin ────────────────────
+# El plugin vive DOS veces en el mismo proceso: `hermes_plugins.dran` (la que
+# registra las tools y la sección del prompt) y
+# `_hermes_user_memory.dran__source_*` (el memory provider, la única que corre
+# `initialize()`). Cada copia tiene sus propios globales, así que el índice
+# calentado en una es invisible para la otra: por eso se persiste en disco.
+
+def _pointer_path(plugin, home):
+    return Path(home) / plugin.CANONICAL_CONFIG_DIR / plugin.SKILLS_CACHE_DIRNAME \
+        / plugin.SKILLS_INDEX_SNAPSHOT
+
+
+def _warm_index(plugin, rows, *, fake_config=True):
+    """Corre el arranque del provider con un cliente falso que sirve `rows`.
+
+    `fake_config=False` deja que `_load_dran_config` lea el home hermético —
+    necesario para probar el switch del espejo, que sale del config.
+    """
+
+    class WarmClient:
+        def list_skills(self, limit=None, timeout=None):
+            return rows
+
+    def _config(_home, _ctx=None):
+        return {"base_url": "http://dran.test", "api_key": "k", "workspace": "personal",
+                "scope": "private", "scope_group": ""}
+
+    provider = plugin.DranMemoryProvider()
+    patched = [mock.patch.object(plugin, "_DranClient", return_value=WarmClient()),
+               mock.patch.object(plugin.DranMemoryProvider, "_probe_connection", lambda self: None)]
+    if fake_config:
+        patched.append(mock.patch.object(plugin, "_load_dran_config", _config))
+    with contextlib.ExitStack() as stack:
+        for patcher in patched:
+            stack.enter_context(patcher)
+        provider.initialize("sess-pointer")
+    return provider
+
+
+def test_prompt_section_renders_the_index_of_the_other_instance(plugin, hermetic_dran_home,
+                                                                monkeypatch):
+    """La sección se registra en una instancia y el índice se calienta en la OTRA.
+
+    Regresión del bloque que NUNCA llegaba al prompt: la instancia que registra
+    la sección no corre `initialize()`, así que su `_SKILLS_INDEX` está vacío y
+    el bloque salía `""` en todas las sesiones. El puntero en disco es el puente.
+    """
+    renderer = _load_plugin_module()  # segunda instancia, como en producción
+    monkeypatch.setattr(renderer, "_active_hermes_home", lambda: str(hermetic_dran_home))
+
+    assert renderer._SKILLS_INDEX["skills"] == [], "la otra copia nunca corre initialize()"
+    # Sin puntero no hay bloque: el estado exacto del bug.
+    assert renderer._skills_prompt_section({}) == ""
+
+    _warm_index(plugin, [{"slug": "sembrado", "version": 3, "description": "Cómo sembrar",
+                          "body": "CUERPO QUE NO DEBE APARECER"}])
+
+    text = renderer._skills_prompt_section({})
+    assert "sembrado" in text
+    assert "v3" in text and "Cómo sembrar" in text
+    assert "dran_skills" in text          # el listado VIVO sigue siendo la tool
+    assert "CUERPO QUE NO DEBE APARECER" not in text
+    assert len(text) <= plugin.SKILLS_SECTION_MAX_CHARS
+
+
+def test_empty_catalog_never_erases_the_pointer(plugin, hermetic_dran_home):
+    """Dran caído a mitad de sesión no puede dejar el prompt sin catálogo."""
+    _warm_index(plugin, [{"slug": "sembrado", "version": 1, "description": "d"}])
+    pointer = _pointer_path(plugin, hermetic_dran_home)
+    assert pointer.is_file()
+    before = pointer.read_text(encoding="utf-8")
+
+    _warm_index(plugin, [])  # el arranque vuelve con el catálogo vacío
+
+    assert pointer.read_text(encoding="utf-8") == before
+    assert "sembrado" in plugin._skills_prompt_section({})
+
+
+def test_pointer_respects_the_mirror_switch(plugin, hermetic_dran_home):
+    """Espejo apagado: el plugin no escribe NADA a disco — tampoco el puntero."""
+    config_dir = Path(hermetic_dran_home) / plugin.CANONICAL_CONFIG_DIR
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.json").write_text(json.dumps({"skills_cache": False}),
+                                            encoding="utf-8")
+    plugin._SKILLS_CACHE_TOGGLE.clear()
+    # El switch leído del config ES la razón del "no escribe": sin esto el test
+    # pasaría por cualquier otro motivo.
+    assert plugin._skills_cache_enabled(None, str(hermetic_dran_home)) is False
+
+    _warm_index(plugin, [{"slug": "sembrado", "version": 1, "description": "d"}],
+                fake_config=False)
+
+    assert not _pointer_path(plugin, hermetic_dran_home).exists()
+    assert plugin._SKILLS_INDEX["skills"][0]["slug"] == "sembrado"
 
 
 def _skills_plugin(plugin):

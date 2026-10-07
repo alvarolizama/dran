@@ -98,6 +98,11 @@ SKILLS_CACHE_KEY = "skills_cache"
 SKILLS_CACHE_DIRNAME = "skills"
 SKILLS_CACHE_FILENAME = "SKILL.md"
 SKILLS_CACHE_MANIFEST = "manifest.json"
+# El PUNTERO del prompt: el índice del catálogo (sin cuerpos) que el bloque
+# `dran-skills` enumera. No es el espejo — es el mismo índice que el prompt
+# necesita, escrito a disco porque quien RENDERIZA el bloque y quien CALIENTA el
+# índice son dos instancias distintas del plugin (ver `_write_skills_index`).
+SKILLS_INDEX_SNAPSHOT = "index.json"
 SKILLS_CACHE_SCHEMA = 1
 # Techo del sync de ARRANQUE: la sesión no se lleva el catálogo entero. Lo que
 # sobra queda `deferred` y lo baja `dran_skill_sync` cuando alguien lo pide.
@@ -1167,6 +1172,11 @@ class DranMemoryProvider(MemoryProvider):
         El caché lo lee la sección del prompt (nunca la red) y `dran_skill` lo
         usa para el `unchanged`: un cuerpo ya cargado en esta sesión no se
         re-inyecta. El índice viaja sin cuerpos.
+
+        Y se PERSISTE (`_write_skills_index`): la sección del prompt la registra
+        una instancia del plugin y este `initialize()` corre en OTRA, así que el
+        índice en memoria de la primera queda vacío para siempre. El puntero en
+        disco es lo único que cruza esa frontera sin tocar la red.
         """
         global _SKILLS_INDEX, _SKILL_HASHES
         _SKILL_HASHES = {}
@@ -1176,13 +1186,14 @@ class DranMemoryProvider(MemoryProvider):
                 payload = self._client.list_skills(timeout=SKILLS_INDEX_TIMEOUT)
             except Exception as exc:
                 logger.warning(
-                    "Dran skills: index not warmed (%s) — the prompt block stays empty "
-                    "and dran_skills still answers live", exc,
+                    "Dran skills: index not warmed (%s) — the prompt block falls back to "
+                    "the on-disk pointer and dran_skills still answers live", exc,
                 )
                 payload = None
             if isinstance(payload, list):
                 skills = [s for s in payload if isinstance(s, dict)]
         _SKILLS_INDEX = {"skills": skills, "loaded_at": time.time()}
+        _write_skills_index(skills, self._hermes_home())
 
     def _start_skills_cache_warm(self) -> None:
         """Lanza la reconciliación del espejo en un hilo — nunca bloquea.
@@ -3392,6 +3403,7 @@ def _brief(row: Any) -> Dict[str, Any]:
 #
 #   $HERMES_HOME/dran/skills/
 #     manifest.json                 el estado (por slug: hash remoto + hash en disco)
+#     index.json                    el puntero del prompt (slug/versión/descripción)
 #     <slug>/SKILL.md               el archivo montado (frontmatter + cuerpo)
 #
 # La invariante que sostiene todo: recién bajado, `body_hash == content_hash`.
@@ -3525,6 +3537,10 @@ class _SkillCache:
     def manifest_path(self) -> Path:
         return self.root / SKILLS_CACHE_MANIFEST
 
+    @property
+    def index_path(self) -> Path:
+        return self.root / SKILLS_INDEX_SNAPSHOT
+
     def path_for(self, slug: Any) -> Optional[Path]:
         """La ruta del archivo de un slug — `None` si el slug no es escribible."""
         if not _valid_skill_slug(slug):
@@ -3566,6 +3582,39 @@ class _SkillCache:
             return None
         entry = (self.read_manifest().get("skills") or {}).get(slug)
         return entry if isinstance(entry, dict) else None
+
+    # -- el puntero del prompt --------------------------------------------
+
+    def write_index(self, rows: Any) -> None:
+        """El índice del catálogo (sin cuerpos), atómico.
+
+        Un catálogo VACÍO no se escribe: `initialize()` con Dran caído dejaría el
+        puntero en blanco y borraría el de una sesión que sí vio skills — el
+        bloque del prompt caería por un fallo de red, que es exactamente lo que
+        la instancia que renderiza NO puede distinguir.
+        """
+        briefed = [_brief_skill(row) for row in rows or [] if isinstance(row, dict)]
+        briefed = [row for row in briefed if row.get("slug")]
+        if not briefed:
+            return
+        payload = {"schema": SKILLS_CACHE_SCHEMA, "synced_at": time.time(), "skills": briefed}
+        with _SKILL_CACHE_LOCK:
+            self.root.mkdir(parents=True, exist_ok=True)
+            tmp = self.index_path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, self.index_path)
+
+    def read_index(self) -> List[Dict[str, Any]]:
+        """Las filas del puntero; ausente o corrupto se lee como vacío."""
+        with _SKILL_CACHE_LOCK:
+            try:
+                raw = json.loads(self.index_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return []
+        rows = raw.get("skills") if isinstance(raw, dict) else None
+        if not isinstance(rows, list):
+            return []
+        return [row for row in rows if isinstance(row, dict)]
 
     # -- el estado REAL del archivo ---------------------------------------
 
@@ -3816,6 +3865,36 @@ def _skill_cache(ctx: Any = None, hermes_home: str = "") -> Optional[_SkillCache
         return None
     home = hermes_home or _active_hermes_home()
     return _SkillCache(home)
+
+
+def _write_skills_index(rows: Any, hermes_home: str) -> None:
+    """Persiste el PUNTERO del prompt — fail-open entero.
+
+    Quien renderiza el bloque `dran-skills` es la instancia del plugin que
+    registró la sección; quien calienta el índice es la del memory provider
+    (`_hermes_user_memory.dran__source_*`). Son dos `module` distintos, con
+    globales distintos, así que el índice tiene que salir a disco para que la
+    primera lo vea. Sin cuerpos: el bloque enumera, no sirve contenido.
+
+    El switch del espejo manda también acá: apagado, el plugin no escribe nada a
+    disco y el bloque se queda con el índice en memoria (vacío en esa instancia:
+    el perfil pierde el aviso del prompt, que es el estado declarado de `off`).
+    """
+    try:
+        cache = _skill_cache(None, hermes_home)
+        if cache is not None:
+            cache.write_index(rows)
+    except Exception as exc:  # el puntero no puede costar la sesión
+        logger.warning("Dran skills: could not persist the prompt index: %s", exc)
+
+
+def _read_skills_index(hermes_home: str) -> List[Dict[str, Any]]:
+    """Las filas del puntero en disco; vacío cuando no hay o está ilegible."""
+    try:
+        cache = _skill_cache(None, hermes_home)
+        return [] if cache is None else cache.read_index()
+    except Exception:
+        return []
 
 
 # ── La RECONCILIACIÓN: el espejo contra el remoto ────────────────────────────
@@ -4082,7 +4161,14 @@ def _warm_skills_cache(client: Any, index_rows: list, hermes_home: str = "") -> 
 #
 #   * `_SKILLS_INDEX` — el índice calentado en `initialize()` (que corre ANTES
 #     del build del prompt). La sección del prompt LEE este caché: el camino del
-#     build nunca toca la red.
+#     build nunca toca la red. OJO: el plugin se carga DOS veces en el mismo
+#     proceso (`hermes_plugins.dran` para las tools y la sección, y
+#     `_hermes_user_memory.dran__source_*` como memory provider), cada una con
+#     sus propios globales — `initialize()` corre en la segunda y la sección la
+#     registra la primera, así que este diccionario está VACÍO en la instancia
+#     que renderiza. Por eso el índice se persiste en disco
+#     (`$HERMES_HOME/dran/skills/index.json`, ver `_write_skills_index`) y la
+#     sección cae a ese puntero cuando el caché en memoria está vacío.
 #   * `_SKILL_HASHES` — slug → `content_hash` de lo que esta SESIÓN ya cargó.
 #     Se vacía al abrir sesión (initialize): pedir dos veces el mismo cuerpo no
 #     re-inyecta nada.
@@ -4179,12 +4265,17 @@ def _skills_prompt_section(_session_info: Any = None) -> str:
     tool. El bloque se construye UNA vez por sesión y se reutiliza byte a byte,
     así que dice explícitamente que `dran_skills` es la verdad viva.
 
+    Con el índice en memoria VACÍO cae al puntero en disco (`_read_skills_index`):
+    esta función la corre la instancia del plugin que registró la sección, y el
+    índice lo calienta la del memory provider — sin el archivo, el bloque salía
+    vacío en todas las sesiones.
+
     Corte por PRESUPUESTO: una sección que se pasa de su `max_chars` la OMITE
     Hermes ENTERA (no la recorta), así que acá se corta por líneas y se declara
     cuántas quedaron fuera. Sin skills legibles —o con Dran caído— devuelve
     cadena vacía: la sección se descarta y el prompt no se toca (fail-open).
     """
-    skills = _SKILLS_INDEX.get("skills") or []
+    skills = _SKILLS_INDEX.get("skills") or _read_skills_index(_active_hermes_home())
     rows = [_brief_skill(s) for s in skills if isinstance(s, dict)]
     rows = [r for r in rows if r.get("slug")]
     if not rows:
