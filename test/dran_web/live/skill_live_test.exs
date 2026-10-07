@@ -333,6 +333,78 @@ defmodule DranWeb.SkillLiveTest do
     end
   end
 
+  describe "los built-ins (el catálogo que sirve el código)" do
+    setup do
+      Dran.Skills.Builtin.sync!()
+      :ok
+    end
+
+    test "la lista los muestra marcados y sin lápiz", %{author: author, conn: conn} do
+      {:ok, view, _html} = live(login(conn, author), ~p"/skills")
+
+      row = Skills.get_system_skill("dran")
+
+      assert has_element?(view, "#skill-row-#{row.id}")
+      # El slug ES la dirección del wire y el built-in no se edita: no hay lápiz
+      # para el lector, ni para el privilegiado de la instancia.
+      refute has_element?(view, "#skill-#{row.id}-edit")
+    end
+
+    test "el detalle declara que es del código y no ofrece editarlo", %{
+      author: author,
+      conn: conn
+    } do
+      {:ok, view, _html} = live(login(conn, author), ~p"/skills/dran-plan-flow")
+
+      assert has_element?(view, "#skill-system-badge", t("Built-in"))
+      assert has_element?(view, "#skill-detail")
+      refute has_element?(view, "#skill-edit")
+      refute has_element?(view, "#skill-delete")
+      refute has_element?(view, "#skill-share")
+    end
+
+    test "?edit=true a mano NO abre el panel de edición", %{author: author, conn: conn} do
+      {:ok, view, _html} = live(login(conn, author), ~p"/skills/dran?edit=true")
+
+      # El estado de URL no es autorización: el panel no se pinta y el form
+      # tampoco existe, así que no hay submit que forjar.
+      refute has_element?(view, "#skill-edit-panel")
+      refute has_element?(view, "#skill-form")
+      assert has_element?(view, "#skill-body")
+    end
+
+    test "el alta sigue funcionando para un slug libre, con los built-ins en la lista", %{
+      author: author,
+      conn: conn
+    } do
+      {:ok, view, _html} = live(login(conn, author), ~p"/skills?new=true")
+
+      render_submit(view, "save_skill", %{
+        "skill" => %{"name" => "propio", "description" => "mío", "body" => "# p"}
+      })
+
+      assert_redirect(view, ~p"/skills/propio")
+      assert Skills.get_skill("propio", scope: {:reader, author.id}).name == "propio"
+    end
+
+    test "el alta con el nombre de un built-in muestra el error en el campo", %{
+      author: author,
+      conn: conn
+    } do
+      {:ok, view, _html} = live(login(conn, author), ~p"/skills?new=true")
+
+      html =
+        render_submit(view, "save_skill", %{
+          "skill" => %{"name" => "dran", "description" => "d", "body" => "# d"}
+        })
+
+      assert html =~ "is reserved by a built-in skill"
+      # El catálogo no creció: la fila del código sigue siendo su única dueña.
+      assert Skills.get_system_skill("dran").owner_user_id == nil
+      assert length(Skills.list_system_skills()) == 9
+    end
+  end
+
   # ── Helpers ───────────────────────────────────────────────────────────────
 
   defp login(conn, user) do

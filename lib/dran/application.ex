@@ -19,6 +19,10 @@ defmodule Dran.Application do
         start: {Task, :start_link, [&Dran.Actors.ensure_system_actors!/0]},
         restart: :temporary
       },
+      # Built-in skills: the code-managed catalog that Dran serves to EVERY API
+      # credential, reconciled with the `skills/**/SKILL.md` baked into the
+      # release on every boot. `nil` in test (the sync is opt-in there).
+      Dran.Skills.BuiltinBoot.child_spec(),
       {DNSCluster, query: Application.get_env(:dran, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Dran.PubSub},
       {Registry, keys: :unique, name: Dran.Worker.SessionRegistry},
@@ -35,7 +39,10 @@ defmodule Dran.Application do
     ]
 
     opts = [strategy: :one_for_one, name: Dran.Supervisor]
-    Supervisor.start_link(children, opts)
+
+    children
+    |> Enum.reject(&is_nil/1)
+    |> then(&Supervisor.start_link(&1, opts))
   end
 
   # Tell Phoenix to update the endpoint configuration

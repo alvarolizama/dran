@@ -52,10 +52,16 @@ RUN mix deps.get --only prod
 RUN ERL_AFLAGS="+S 1:1" mix deps.compile
 
 # --- Application + assets --------------------------------------------------
+# `skills/` MUST be in the build context BEFORE `mix compile`: the built-in
+# catalog (the skills Dran serves to every API credential by default) is read
+# from `skills/<slug>/SKILL.md` at COMPILE time and baked into the beam
+# (`Dran.Skills.Builtin`). The directory is not needed at runtime; without this
+# COPY the build fails loudly instead of shipping an empty catalog.
 COPY lib lib
 COPY priv priv
 COPY assets assets
 COPY rel rel
+COPY skills skills
 
 # JS deps for the TipTap/three.js editor (assets/package.json). The tailwind
 # and esbuild hex wrappers fetch their own platform binaries on first run,
