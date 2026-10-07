@@ -585,12 +585,46 @@ curl -s -X POST localhost:4000/api/skills \
   -d '{"name":"revision-semanal","description":"Cómo revisar la semana","body":"# Pasos","visibility":"public"}'
 ```
 
+**Los built-ins vienen por DEFAULT.** Toda credencial —cuenta, grupo o admin
+legacy— lee los 9 skills del repo (`skills/<slug>/SKILL.md`) sin share, sin alta
+y sin configurar nada: es el catálogo que Dran sirve para que un agente nuevo sea
+útil desde el primer turno. En el wire se distinguen por `"system": true` (y
+`"mine": false`), en el índice y en el detalle.
+
+**Son CÓDIGO, no datos de nadie.** El contenido se lee de los archivos al
+compilar y se reconcilia en cada boot (un cambio de cuerpo bumpea la `version`
+como cualquier escritura). Ninguna credencial los escribe: su `slug` está
+reservado —un alta con él responde `422` con el error en `slug` y en `name`— y
+`PUT`/`DELETE` responden `403` (para el dueño de la instancia y para un token de
+grupo, con el detalle que dice qué hacer: cambiar el archivo y redeployar).
+
+**El grupo sigue leyendo EXACTAMENTE lo suyo.** Los built-ins se SUMAN a la
+lectura del token de grupo (junto a lo compartido a su grupo); no ensanchan su
+scope: un skill público de otro dueño sigue siendo invisible para él.
+
+```bash
+# El catálogo del lector: los 9 built-ins + lo suyo
+curl -s localhost:4000/api/skills -H "Authorization: Bearer ***" | jq '.data[] | {slug, system, mine}'
+
+# Un intento de pisar un built-in: 403 con el motivo accionable
+curl -s -X PUT localhost:4000/api/skills/dran -H "Authorization: Bearer ***" \
+  -H "Content-Type: application/json" -d '{"body":"# no"}'
+# {"errors":{"detail":"built-in skills are served by the code: change skills/<slug>/SKILL.md and redeploy"}}
+
+# El alta con el slug reservado: 422, sin fila
+curl -s -X POST localhost:4000/api/skills -H "Authorization: Bearer ***" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"dran","description":"quiero pisarlo","body":"# mío"}'
+# {"errors":{"slug":["is reserved by a built-in skill"],"name":["is reserved by a built-in skill"]}}
+```
+
 **Las cuatro tools del plugin** (`dran_skills`, `dran_skill`,
 `dran_skill_save`, `dran_skill_delete`) son clientes delgados de estas rutas; el
 cuerpo viaja por tool y **nunca se copia a disco** (nada de `external_dirs` ni
 `register_skill`). La sección de prompt del plugin describe la EXISTENCIA (una
 línea por skill, congelada al inicio de la sesión) y manda a `dran_skills` para
-el listado vivo.
+el listado vivo — y como los built-ins los lee toda credencial, aparecen ahí sin
+que nadie los dé de alta.
 
 ## Health
 

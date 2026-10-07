@@ -339,6 +339,12 @@ el tope de 4000— renderiza una línea por skill desde ESE caché y manda a
 sección se registra SIEMPRE y con Dran caído devuelve `""`: Hermes la descarta y
 el prompt no se rompe (fail-open).
 
+**Los 9 flows del repo son built-ins**: Dran los sirve por default a toda
+credencial (`system: true` en el payload), así que un perfil nuevo ya los ve en
+`dran_skills` y en el bloque del prompt sin instalarlos; su slug está reservado y
+`dran_skill_save`/`dran_skill_delete` sobre uno responde `403` (se cambian en
+`skills/<slug>/SKILL.md` y un redeploy).
+
 Cada tool escribe por `_DranClient`, así que **todo write lleva
 `X-Hermes-Agent`** con el nombre del perfil. El handler recibe `(args, **kw)`
 — Hermes no pasa el nombre de la tool — así que `register()` ata el nombre

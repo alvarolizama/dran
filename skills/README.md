@@ -10,6 +10,25 @@ The agent flows are thin clients over the plugin tools (`dran_*`,
 `dran_memory_*`) — they teach the call sequences, not the internals. Nothing
 about changing Dran's code ships here.
 
+## Dran serves this suite itself (the built-ins)
+
+These files are ALSO the catalog Dran serves to every API credential by default:
+`GET /api/skills` returns all 9 with `"system": true` — for an account token, a
+group token and the admin token alike, with no install and no share. The content
+is read from these files **at compile time** and reconciled into the `skills`
+table on every boot (`Dran.Skills.Builtin`), so:
+
+- editing one of these files and redeploying is the ONLY way to change a
+  built-in; the API never writes them (their slugs are reserved, `403` on
+  `PUT`/`DELETE`, `422` on a colliding create);
+- what a local Hermes profile sees through `external_dirs` and what the API
+  serves are the same bytes, by construction;
+- the directory must be in the build context before `mix compile` (the Dockerfile
+  copies it) — the content is baked into the beam, never read from disk at
+  runtime.
+
+Contract and examples: `docs/api.md § Skills`.
+
 ## What the suite covers (the app's real surface)
 
 The suite is audited against the code that ships with it — nothing else:

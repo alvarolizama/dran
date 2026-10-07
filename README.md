@@ -110,7 +110,13 @@ Full detail: [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md).
 
 ## The skills
 
-One suite, versioned with this repo:
+One suite, versioned with this repo — and **served by Dran itself**: every API
+credential (account, group or admin token) gets the 9 built-in skills by
+default through `GET /api/skills`, with no install. See
+[docs/api.md § Skills](docs/api.md#skills).
+
+Installing them into a Hermes profile is still how a local agent *sees* them in
+its own catalog:
 
 ```bash
 mkdir -p ~/Workspace/Skills
@@ -126,6 +132,9 @@ skills:
   external_dirs:
     - ~/Workspace/Skills
 ```
+
+The files are the SINGLE source of truth: what Dran serves is what those
+`SKILL.md` files say, embedded at compile time and reconciled on every boot.
 
 Details: [skills/README.md](skills/README.md).
 
