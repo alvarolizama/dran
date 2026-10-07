@@ -115,23 +115,12 @@ credential (account, group or admin token) gets the 9 built-in skills by
 default through `GET /api/skills`, with no install. See
 [docs/api.md § Skills](docs/api.md#skills).
 
-Installing them into a Hermes profile is still how a local agent *sees* them in
-its own catalog:
-
-```bash
-mkdir -p ~/Workspace/Skills
-for s in dran dran-knowledge-flow dran-memory-flow \
-         dran-relations-flow dran-workers-flow dran-goal-flow \
-         dran-plan-flow dran-services-flow dran-skills-flow; do
-  ln -sfn /path/to/dran/skills/$s ~/Workspace/Skills/$s
-done
-```
-
-```yaml
-skills:
-  external_dirs:
-    - ~/Workspace/Skills
-```
+No local install is needed to see them: the plugin already puts the catalog in
+front of the agent — a line per skill in the prompt block, the live list and
+`q=` search through `dran_skills`, and the body through `dran_skill`. The old
+symlinks under `skills.external_dirs` were a second copy of the same bytes,
+so they are retired (see
+[skills/README.md § Retiring the local install](skills/README.md#retiring-the-local-install)).
 
 The files are the SINGLE source of truth: what Dran serves is what those
 `SKILL.md` files say, embedded at compile time and reconciled on every boot.

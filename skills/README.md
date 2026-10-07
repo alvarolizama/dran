@@ -1,4 +1,4 @@
-# Instalar los skills de Dran (Hermes)
+# Los skills de Dran (Hermes)
 
 Dran ships **one suite of skills**, versioned with this repo:
 
@@ -21,8 +21,8 @@ table on every boot (`Dran.Skills.Builtin`), so:
 - editing one of these files and redeploying is the ONLY way to change a
   built-in; the API never writes them (their slugs are reserved, `403` on
   `PUT`/`DELETE`, `422` on a colliding create);
-- what a local Hermes profile sees through `external_dirs` and what the API
-  serves are the same bytes, by construction;
+- what the plugin hands the agent by tool and what the API serves are the same
+  bytes, by construction;
 - the directory must be in the build context before `mix compile` (the Dockerfile
   copies it) — the content is baked into the beam, never read from disk at
   runtime.
@@ -43,7 +43,7 @@ The suite is audited against the code that ships with it — nothing else:
 | `dran-goal-flow` | goals · tasks · capture · board · destination (`scope`/grupo) | `lib/dran/goals.ex`, `lib/dran/tasks.ex` |
 | `dran-plan-flow` | plans (entidad propia) · su checklist y el `progress` derivado | `lib/dran/plans.ex` |
 | `dran-services-flow` | the user's own apps: connect (`/api/services/:toolkit/connect`), state, discovery (`…/tools`, `…/search`), execute | `lib/dran/services.ex`, `lib/dran/composio.ex`, `lib/dran_web/controllers/api/service_controller.ex` |
-| `dran-skills-flow` | the skills Dran SERVES to agents: the live catalog (`dran_skills`), one body by tool (`dran_skill`, `unchanged` by hash), create/update and delete after the ASK | `lib/dran/skills.ex`, `lib/dran_web/controllers/api/skill_controller.ex` |
+| `dran-skills-flow` | the skills Dran SERVES to agents: the live catalog (`dran_skills`, `q` to search), one body by tool (`dran_skill`, `unchanged` by hash), create/update and delete after the ASK | `lib/dran/skills.ex`, `lib/dran_web/controllers/api/skill_controller.ex` |
 
 **Invariant:** every registered tool has a home in a flow, and no flow
 describes a tool the plugin does not register. Measure both sides before
@@ -68,47 +68,32 @@ first (no hole) and nothing the first lacks (no phantom).
 
 ## How Hermes discovers a skill
 
-Two mechanisms exist. They are **not** equivalent:
+| | `skills.external_dirs` (**retired**) | `ctx.register_skill()` | the plugin prompt block + tools (**what Dran uses**) |
+|---|---|---|---|
+| Shows up in the agent's catalog | yes — it loads the skill on its own | no — explicit `skill_view()` only | **yes** — one line per skill in the prompt section, loaded by tool |
+| Install | symlink + one config line | automatic at plugin load | none (the built-ins ship with Dran) |
+| Body on disk | yes (a second copy) | yes | **no** — it arrives by tool and dies with the session |
+| Retracted on unload | no | yes | yes — the section is rebuilt per session |
 
-| | `skills.external_dirs` (what Dran uses) | `ctx.register_skill()` (plugin API) |
-|---|---|---|
-| Shows up in `<available_skills>` | **yes** — the agent sees it and loads it on its own | **no** — explicit `skill_view()` only |
-| Install | symlink + one config line | automatic at plugin load |
-| Names | `dran`, `dran-knowledge-flow` | namespaced `dran:dran` |
-| Retracted on unload | no | yes |
+The suite **used** to be installed locally as well. It is not any more: the plugin
+already puts the catalog in front of the agent — one line per skill in the prompt
+block, the live list and `q=` search through `dran_skills`, and the body through
+`dran_skill` — so a local copy was a second source of the same bytes, able to
+drift, and the body never needed to live on disk. The activation line in
+`soul.md` keeps working because the agent *sees* the skills in the block.
 
-Dran uses `external_dirs` **on purpose**: the activation line in `soul.md`
-("when operating the Dran workspace… load the `dran` skill") only works
-because the agent can *see* the skills. Registering them through the plugin
-would remove them from the catalog and the activation line would point at
-nothing.
+## Retiring the local install
 
-## Install
-
-```bash
-# The whole suite (9)
-mkdir -p ~/Workspace/Skills
-for s in dran dran-knowledge-flow dran-memory-flow \
-         dran-relations-flow dran-workers-flow dran-goal-flow \
-         dran-plan-flow dran-services-flow dran-skills-flow; do
-  ln -sfn /path/to/dran/skills/$s ~/Workspace/Skills/$s
-done
-```
-
-Point the profile at that directory (once):
-
-```yaml
-# ~/.hermes/profiles/<profile>/config.yaml
-skills:
-  external_dirs:
-    - ~/Workspace/Skills
-```
-
-Restart the Hermes session. Verify:
+If a profile still carries the old setup, remove both halves and confirm:
 
 ```bash
-hermes skills list | grep dran          # should list 9
+rm -f ~/Workspace/Skills/dran ~/Workspace/Skills/dran-*
+hermes skills list | grep dran   # empty afterwards: they are served, not installed
 ```
+
+Also drop the `skills.external_dirs` entry that pointed at
+`~/Workspace/Skills`, and the `.hermes/skills` symlink inside a checkout if it
+exists (it made the checkout's `skills/` folder a project skill dir).
 
 ## Descriptions must stay ≤ 60 characters
 
