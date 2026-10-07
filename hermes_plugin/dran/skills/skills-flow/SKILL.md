@@ -73,11 +73,12 @@ flowchart TD
   hand: when a task may match a skill, run `dran_skills` and pick the flow that
   applies. The block is frozen; `dran_skills` is the live truth — a skill the
   block does not list still exists, so check before saying it doesn't.
-- **"List the skills" IS this catalog.** When the user asks to list them, the
-  answer is `dran_skills` — the LOCAL skills list does not carry the flows (they
-  are served, not installed): it carries the system skill `dran:loader`, the router
-  of the suite + the index of this catalog. Report the local list as the catalog
-  and you report an empty workspace that is not empty.
+- **"List the skills" is BOTH halves.** When the user asks to list them, the answer
+  is the workspace catalog (`dran_skills`) PLUS the suite's NINE local rows —
+  `dran:loader` (this router) and the eight `dran:<flow>` —, which the plugin
+  registers with `ctx.register_skill`: are served, never installed, so they live in
+  `skills_list` and are read with `skill_view`. Report only one half and you report
+  a workspace (or a suite) that is not empty.
 - **The five tools are DEFERRED**, so they are not in your tool list: reach them
   through the bridge — `tool_search` with an **English** query (`"dran skills"`;
   the catalog is indexed in English and a Spanish query matches nothing, which is
