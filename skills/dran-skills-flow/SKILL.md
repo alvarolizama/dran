@@ -69,6 +69,16 @@ flowchart TD
   hand: when a task may match a skill, run `dran_skills` and pick the flow that
   applies. The block is frozen; `dran_skills` is the live truth — a skill the
   block does not list still exists, so check before saying it doesn't.
+- **"List the skills" IS this catalog.** When the user asks to list them, the
+  answer is `dran_skills` — the LOCAL skills list does not carry the suite (it is
+  served, not installed): it carries one pointer row, `dran:dran-skills-index`,
+  whose description names this question and whose body is this route. Report the
+  local list as the catalog and you report an empty workspace that is not empty.
+- **The four tools are DEFERRED**, so they are not in your tool list: reach them
+  through the bridge — `tool_search` with an **English** query (`"dran skills"`;
+  the catalog is indexed in English and a Spanish query matches nothing, which is
+  a miss, never a missing capability), then `tool_call`. `dran_skills` takes no
+  required argument, so `tool_describe` is optional for it.
 - `q=` searches the catalog server-side: substring over slug, name and
   description, case-insensitive, and the LIKE wildcards (`%`, `_`) count as
   characters — a bare `%` does not return the whole catalog.
@@ -114,7 +124,9 @@ flowchart TD
 
 - **Copying a skill to disk or to a local skills dir.** The body arrives by tool
   and dies with the session. Registering it locally is the failure mode this flow
-  exists to prevent.
+  exists to prevent. (The plugin registers exactly ONE row — the pointer
+  `dran:dran-skills-index`, so that "list the skills" lands on this route; no body
+  of the catalog is on disk and none is served from there.)
 - **Treating the prompt block as the catalog.** It is a snapshot from session
   start; new skills show up mid-session through `dran_skills`, not through the
   prompt.
@@ -129,5 +141,4 @@ flowchart TD
 
 - Plugin-side surface (schemas, the prompt section): `hermes_plugin/dran/__init__.py`
 - Server-side routes gated by the credential: `lib/dran_web/router.ex`
-- Endpoint reference: `docs/api.md`
 - Verb/graph conventions the flow DAGs follow: `riel-contract`

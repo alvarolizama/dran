@@ -75,7 +75,7 @@ flowchart TD
   an unknown type) is refused, and the error lists the valid
   ones. There is **no `meta.kind`**; the type is the only classifier, and
   `meta.props` is a free key-value bag available on every type. When unsure
-  which type fits, follow the decision tree in `docs/page-types.md`:
+  which type fits, follow the decision tree:
   - `note` — quick capture, journal, no structure yet (meta: date)
   - `entity` — a named thing: person, company, tool, place
     (meta: location, external_url)

@@ -131,6 +131,10 @@ file on disk and there is no anonymous index of them.
 The block the prompt carries is a snapshot from session start, so its presence is
 not enough: **before starting a task that may match a skill, list them with
 `dran_skills` and pick the one that applies** — that tool is the live truth.
+When the user asks **to list the skills**, that catalog IS the list: the local
+skills list carries only the plugin's pointer row (`dran:dran-skills-index`),
+because the suite is served and never installed. The four tools are DEFERRED —
+reach them through `tool_search` with an English query (`"dran skills"`).
 `dran_skill` answers `unchanged` when the hash did not move since
 you loaded that slug in this session. **The sequences, the failure modes and the
 ASK live in `dran-skills-flow`** — load it and run the flow.
@@ -199,5 +203,4 @@ subject:
 
 - Plugin-side surface (tool definitions, schemas): `hermes_plugin/dran/__init__.py`
 - Server-side routes and the write gate: `lib/dran_web/router.ex`
-- Endpoint reference: `docs/api.md`
 - Verb/graph conventions the flow DAGs follow: `riel-contract`

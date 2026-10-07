@@ -112,8 +112,8 @@ Full detail: [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md).
 
 One suite, versioned with this repo — and **served by Dran itself**: every API
 credential (account, group or admin token) gets the 9 built-in skills by
-default through `GET /api/skills`, with no install. See
-[docs/api.md § Skills](docs/api.md#skills).
+default through `GET /api/skills`, with no install — the catalog is
+`lib/dran/skills.ex`, the routes are in `lib/dran_web/router.ex`.
 
 No local install is needed to see them: the plugin already puts the catalog in
 front of the agent — a line per skill in the prompt block, the live list and
@@ -122,13 +122,32 @@ symlinks under `skills.external_dirs` were a second copy of the same bytes,
 so they are retired (see
 [skills/README.md § Retiring the local install](skills/README.md#retiring-the-local-install)).
 
+One row IS registered locally, and it is a pointer rather than a copy:
+`dran:dran-skills-index` (`ctx.register_skill`) is what makes "list the skills"
+— which runs the LOCAL listing — land on the live catalog, since the plugin's
+tools are deferred behind `tool_search`. No body of the suite is on disk:
+[skills/README.md § The one local row](skills/README.md#the-one-local-row-the-pointer).
+
 The files are the SINGLE source of truth: what Dran serves is what those
 `SKILL.md` files say, embedded at compile time and reconciled on every boot.
 
 Details: [skills/README.md](skills/README.md).
 
-Point the agent at them with the activation lines in
-[`system-prompt.md`](system-prompt.md).
+Point the agent at them with one line in its `soul.md` (identity section —
+injected every turn, so it stays a single line):
+
+```text
+- **Dran skills (remote)** — to initialize and search them, list the catalog with
+  `dran_skills` before a task that may match a skill (pass `q=` to query slug,
+  name and description) and load the one that applies with `dran_skill`; nothing
+  is copied to disk, and when the user asks to LIST the skills, that catalog IS
+  the list. The tools are DEFERRED: reach them through `tool_search` with an
+  English query.
+```
+
+One credential, no per-agent keys: the account's API token (Settings → Account),
+stored in the profile's `.env` as `DRAN_API_KEY` — the tools and the memory
+provider share it, and writes carry `X-Hermes-Agent` (the profile name).
 
 ## Configuration
 
@@ -148,8 +167,7 @@ The ones that are Dran's:
 | `SKIP_MIGRATIONS` / `DRAN_RESET` | entrypoint switches (see Production) |
 
 Credentials are not env vars: account tokens in `/settings/account`, group
-tokens in `/admin/groups`, the legacy admin token in instance settings — see
-[docs/api.md](docs/api.md).
+tokens in `/admin/groups`, the legacy admin token in instance settings.
 
 ## Production
 
@@ -171,14 +189,9 @@ docker run --rm -p 4000:4000 --env-file .env dran
 
 ## Documentation
 
-- [docs/usage.md](docs/usage.md) — every surface, and what an agent can do
-- [docs/api.md](docs/api.md) — the REST API
-- [docs/page-types.md](docs/page-types.md)
-- [docs/security-review.md](docs/security-review.md)
-- [docs/performance-review.md](docs/performance-review.md)
-- [docs/dependency-debt.md](docs/dependency-debt.md)
-- [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md) and
-  [skills/README.md](skills/README.md)
+- [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md) — the plugin:
+  tools, config, and the surfaces it switches
+- [skills/README.md](skills/README.md) — the suite Dran serves to agents
 - [DESIGN.md](DESIGN.md) — the UI standard
 
 ## License

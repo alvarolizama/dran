@@ -93,6 +93,5 @@ flowchart TD
 
 - Plugin-side surface (schemas + dispatch): `hermes_plugin/dran/__init__.py`
 - Routes y la puerta de escritura: `lib/dran_web/router.ex`
-- Endpoint reference: `docs/api.md` (§ Goals, tasks and plans)
 - Quién lee qué: `Dran.ContentVisibility` (own ∪ public ∪ shared con tus grupos)
 - El plan y su checklist: `dran-plan-flow`

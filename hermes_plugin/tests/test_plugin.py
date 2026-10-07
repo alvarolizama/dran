@@ -96,6 +96,7 @@ class FakeCtx:
         self.providers = []
         self.tools = []
         self.prompt_sections = []
+        self.skills = []
 
     def register_memory_provider(self, provider):
         self.providers.append(provider)
@@ -108,6 +109,12 @@ class FakeCtx:
 
     def register_system_prompt_section(self, section_id, content, **kwargs):
         self.prompt_sections.append({"id": section_id, "content": content, **kwargs})
+
+    def register_skill(self, name, path, description="", frontmatter=None):
+        self.skills.append(
+            {"name": name, "path": Path(path), "description": description,
+             "frontmatter": frontmatter}
+        )
 
 
 # ── register(ctx) ────────────────────────────────────────────────────────────
@@ -1007,6 +1014,66 @@ def test_no_per_skill_tool_exists(plugin):
     assert "dran_skill_weekly_review" not in names
 
 
+def test_skills_pointer_registered_for_the_local_listing(plugin):
+    """El plugin registra UNA fila en `skills_list`: la que contesta «listar skills».
+
+    La suite se SIRVE, no se instala, así que el listado local no tiene ni un
+    `dran-*`: el pedido «listar skills» caía en un registro donde Dran no existía.
+    `ctx.register_skill` pone la fila (aparece en `skills_list`, se carga con
+    `skill_view`, NO se copia a `~/.hermes/skills/` y no entra en el índice del
+    prompt). Es un puntero al catálogo vivo, no un cuerpo de la suite.
+    """
+    ctx = FakeCtx()
+    plugin.register(ctx)
+
+    [pointer] = ctx.skills
+    assert pointer["name"] == plugin.POINTER_SKILL_NAME
+    assert pointer["path"] == plugin.POINTER_SKILL_PATH
+    assert pointer["description"] == plugin.POINTER_SKILL_DESCRIPTION
+    assert pointer["path"].exists(), "el SKILL.md registrado tiene que existir"
+    assert _PLUGIN_DIR in pointer["path"].parents, "el puntero vive dentro del plugin"
+    # Hermes corta la descripción a 60 chars en el índice: el disparo entra entero.
+    assert len(pointer["description"]) <= 60, len(pointer["description"])
+    assert pointer["description"].startswith("Use when asked to list skills")
+
+
+def test_pointer_skill_file_matches_what_the_plugin_registers(plugin):
+    """El SKILL.md y lo que `register()` registra son la MISMA verdad.
+
+    Un archivo que diga otra cosa (o un nombre de disparo distinto) es la deriva
+    clásica: el listado mostraría una descripción y el cuerpo hablaría de otra.
+    """
+    text = plugin.POINTER_SKILL_PATH.read_text(encoding="utf-8")
+    frontmatter = text.split("---")[1]
+    name_match = re.search(r"^name:\s*(.+)$", frontmatter, re.M)
+    description_match = re.search(r'^description:\s*"?(.+?)"?\s*$', frontmatter, re.M)
+    assert name_match is not None and description_match is not None, \
+        "el frontmatter del puntero necesita name y description"
+
+    assert name_match.group(1).strip() == plugin.POINTER_SKILL_NAME
+    assert description_match.group(1) == plugin.POINTER_SKILL_DESCRIPTION
+    # El cuerpo tiene que traer LA ruta, no una promesa: la tool diferida se
+    # alcanza por el puente y la query es en inglés (una en español no matchea).
+    assert "tool_search" in text
+    assert "dran_skills" in text
+    assert "dran_skill" in text
+
+
+def test_pointer_failure_does_not_cost_the_rest_of_the_plugin(plugin):
+    """Fail-open: sin el archivo (install que no copió `skills/`) el plugin carga."""
+
+    class NoPointerCtx(FakeCtx):
+        def register_skill(self, *args, **kwargs):
+            raise FileNotFoundError("skills/dran-skills-index/SKILL.md")
+
+    ctx = NoPointerCtx()
+    plugin.register(ctx)
+
+    assert len(ctx.providers) == 1
+    assert len(ctx.tools) == 46
+    assert len(ctx.prompt_sections) == 1
+
+
 def test_skills_prompt_section_registered_always_and_fail_open(plugin):
     """La sección se registra SIEMPRE, en `after_memory` y bajo el tope de 4000."""
     ctx = FakeCtx()
@@ -1289,6 +1356,15 @@ def test_skills_discovery_is_a_trigger_not_a_side_note(plugin):
     [schema] = [s for s in plugin._tool_schemas() if s["name"] == "dran_skills"]
     assert "BEFORE starting" in schema["description"]
     assert "q" in schema["parameters"]["properties"]
+
+    # El pedido de LISTADO es el otro disparo: la lista local no trae la suite
+    # (se sirve, no se instala), así que el bloque y la tool tienen que decir que
+    # el catálogo ES la lista — y nombrar la fila puntero que sí se ve.
+    assert "LIST the skills" in text
+    assert "dran-skills-index" in text
+    assert "tool_search" in text  # las 4 tools están diferidas: hay que decirlo
+    assert "LIST the skills" in schema["description"]
+    assert "served, not installed" in schema["description"]
 
 
 def test_skill_tools_reject_missing_arguments_without_calling_the_api(plugin):

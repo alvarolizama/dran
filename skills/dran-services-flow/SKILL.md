@@ -141,6 +141,5 @@ flowchart TD
 
 - Plugin-side surface (schemas + dispatch): `hermes_plugin/dran/__init__.py`
 - Routes and the write gate: `lib/dran_web/router.ex`
-- Endpoint reference: `docs/api.md` (§ Services)
 - User surface and instance policy: `/services`, `/admin/instance` (owner),
   `/admin/system` (integration state)

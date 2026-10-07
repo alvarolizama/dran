@@ -1,6 +1,6 @@
 defmodule DranWeb.API.AuditFixesTest do
   @moduledoc """
-  Los repros de `docs/audit-2026-10-05.md` convertidos en tests permanentes
+  Los repros de la auditoría del 2026-10-05 convertidos en tests permanentes
   (contract `auditoria-fixes`). Un test por hallazgo, el mismo vocabulario que
   `visibility_api_test.exs`: credenciales de cuenta, contenido por visibilidad
   y la superficie REST de punta a punta.

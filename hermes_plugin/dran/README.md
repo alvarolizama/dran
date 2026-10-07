@@ -319,8 +319,10 @@ pedir la lista.
 
 Un **skill** es instrucciones para un agente — no conocimiento que se lee. Vive
 sólo en Dran (tabla `skills`, con dueño y visibilidad por ítem) y viaja por tool:
-**nada se copia a disco** (nada de `external_dirs` ni `register_skill`), el
-cuerpo muere con la sesión y no hay índice anónimo (sin lector no hay scope).
+**ningún cuerpo se copia a disco** (nada de `external_dirs` ni de registrar la
+suite como skills locales), el cuerpo muere con la sesión y no hay índice
+anónimo (sin lector no hay scope). La única fila local es el PUNTERO — ver abajo
+—, y no es un cuerpo del catálogo: es el texto que enseña la ruta.
 Cuatro tools FIJAS y el catálogo como DATO — una tool por skill sería una lista
 que el servidor no puede cambiar sin reiniciar el perfil.
 
@@ -354,6 +356,38 @@ credencial (`system: true` en el payload), así que un perfil nuevo ya los ve en
 `dran_skills` y en el bloque del prompt sin instalarlos; su slug está reservado y
 `dran_skill_save`/`dran_skill_delete` sobre uno responde `403` (se cambian en
 `skills/<slug>/SKILL.md` y un redeploy).
+
+**Las cuatro tools están DIFERIDAS.** Hermes reemplaza toda tool de plugin por el
+puente (`tool_search` / `tool_describe` / `tool_call`): un toolset de plugin no
+está entre los core ni entre las superficies GUI, así que `is_deferrable_tool_name`
+lo difiere SIEMPRE y el manifest del catálogo corta cada descripción (~60 chars) —
+el disparo «listá antes de arrancar» no entra ahí. El bloque del prompt y el
+cuerpo del puntero nombran el puente y la query en INGLÉS (`"dran skills"`): una
+query en español no matchea ningún tool y devuelve vacío, que no es lo mismo que
+una capacidad ausente.
+
+### El puntero: `skills_list` tiene que poder contestar «listar skills»
+
+El pedido «listar los skills» corre `skills_list` — el registro LOCAL — y ahí no
+había ni una fila de Dran (el catálogo se sirve, no se instala), así que la
+respuesta honesta del listado era «no hay skills». El plugin registra entonces
+UN skill con `ctx.register_skill`
+(`hermes_plugin/dran/skills/dran-skills-index/SKILL.md`), que Hermes lista como
+`dran:dran-skills-index` y sirve con `skill_view`:
+
+- **no es un cuerpo del catálogo**: es la fila cuyo cuerpo ENSEÑA la ruta
+  (`tool_search` → `dran_skills` → `dran_skill`). El catálogo y sus cuerpos
+  siguen viviendo sólo en Dran;
+- **no se copia a `~/.hermes/skills/`** y Hermes lo retracta al descargar el
+  plugin;
+- **no entra en `<available_skills>`** (el índice del prompt): no cuesta tokens
+  por sesión — se ve cuando alguien pide la lista, que es exactamente el caso;
+- **fail-open**: si el archivo no está (un install que no copió `skills/`) se
+  pierde la fila y queda un warning; el plugin carga igual;
+- su `description` es el disparo y mide ≤60 chars, porque Hermes corta ahí:
+  `Use when asked to list skills: Dran serves them remotely.` (el SKILL.md y las
+  constantes `POINTER_SKILL_*` de `__init__.py` se verifican iguales en los tests:
+  archivo y registro no pueden derivar).
 
 Cada tool escribe por `_DranClient`, así que **todo write lleva
 `X-Hermes-Agent`** con el nombre del perfil. El handler recibe `(args, **kw)`

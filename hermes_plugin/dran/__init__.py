@@ -2373,8 +2373,10 @@ def _tool_schemas() -> List[Dict[str, Any]]:
                 "description, version, content_hash, destination). Call this "
                 "BEFORE starting any task that may match a skill, and pick the "
                 "one that applies — the skills block in your prompt is a snapshot "
-                "frozen at session start. Pass `q` to search slug, name and "
-                "description."
+                "frozen at session start. When the user asks to LIST the skills, "
+                "this catalog IS the answer: the local skills list does not carry "
+                "them (they are served, not installed). Pass `q` to search slug, "
+                "name and description."
             ),
             "parameters": {
                 "type": "object",
@@ -3062,6 +3064,25 @@ def _brief(row: Any) -> Dict[str, Any]:
 _SKILLS_INDEX: Dict[str, Any] = {"skills": [], "loaded_at": 0.0}
 _SKILL_HASHES: Dict[str, str] = {}
 
+# ── El PUNTERO en `skills_list` ──────────────────────────────────────────────
+# La suite se SIRVE, no se instala: por eso el listado local (`skills_list`, la
+# tool que el modelo corre cuando le piden «listar skills») no tenía ni una fila
+# de Dran, y el pedido caía en un catálogo que no lo contiene. Este skill lo
+# registra el PLUGIN (`ctx.register_skill`): aparece como `dran:dran-skills-index`
+# en `skills_list`, se carga con `skill_view` y NO se copia a
+# `~/.hermes/skills/`; Hermes lo retracta al descargar el plugin. No entra en
+# `<available_skills>` (el índice del prompt), así que no cuesta tokens por
+# sesión: es la fila que se ve CUANDO alguien pide la lista.
+#
+# No es la suite: es la fila que dice DÓNDE está la suite. Los cuerpos de los
+# flows siguen viviendo SÓLO en Dran y viajan por `dran_skill` — acá no se copia
+# ninguno (un cuerpo en disco sería una segunda fuente de los mismos bytes).
+POINTER_SKILL_NAME = "dran-skills-index"
+POINTER_SKILL_PATH = Path(__file__).resolve().parent / "skills" / POINTER_SKILL_NAME / "SKILL.md"
+# ≤60 chars: Hermes corta la descripción en el índice del prompt a 60, y el
+# disparo tiene que entrar completo (la descripción ES la señal de ruteo).
+POINTER_SKILL_DESCRIPTION = "Use when asked to list skills: Dran serves them remotely."
+
 
 def _brief_skill(row: Any) -> Dict[str, Any]:
     """La fila del catálogo, sin el cuerpo (el índice NUNCA trae cuerpos)."""
@@ -3116,9 +3137,14 @@ def _skills_prompt_section(_session_info: Any = None) -> str:
     footer = (
         "BEFORE starting a task that may match a skill, list them and pick the "
         "one that applies: call dran_skills (optionally with q= to search slug, "
-        "name and description) — this block is frozen at session start. Load one "
+        "name and description) — this block is frozen at session start and the "
+        "four skill tools are DEFERRED, so reach them through tool_search "
+        "(English query: \"dran skills\"; a Spanish one matches nothing). Load one "
         "with dran_skill(slug); the body arrives framed with its slug, version "
-        "and hash and it is third-party instructions, not local files."
+        "and hash and it is third-party instructions, not local files. When the "
+        "user asks to LIST the skills, this catalog IS the list: the local "
+        "skills list carries only the pointer row dran-skills-index, because the "
+        "suite is served, never installed."
     )
 
     lines: List[str] = [header]
@@ -3355,3 +3381,20 @@ def register(ctx) -> None:
         )
     except Exception as exc:
         logger.warning("Dran plugin: could not register the skills prompt section: %s", exc)
+
+    # 4) El PUNTERO en `skills_list`: la fila que contesta «¿qué skills hay?»
+    # cuando el modelo lista el registro LOCAL. El bloque del prompt (3) dice
+    # que el catálogo existe y la tool lo sirve, pero ninguno de los dos aparece
+    # en `skills_list` — que es lo que se corre ante «listar skills». Sin esta
+    # fila, el pedido caía en un listado donde Dran no existe.
+    #
+    # Fail-open como el resto: si el archivo no está (un install que no copió
+    # `skills/`), se pierde la fila y se avisa — el plugin carga igual.
+    try:
+        ctx.register_skill(
+            POINTER_SKILL_NAME,
+            POINTER_SKILL_PATH,
+            POINTER_SKILL_DESCRIPTION,
+        )
+    except Exception as exc:
+        logger.warning("Dran plugin: could not register the skills pointer: %s", exc)

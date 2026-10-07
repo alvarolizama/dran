@@ -93,5 +93,4 @@ flowchart TD
 
 - Plugin-side surface (schemas + dispatch): `hermes_plugin/dran/__init__.py`
 - Routes y la puerta de escritura: `lib/dran_web/router.ex`
-- Endpoint reference: `docs/api.md` (§ Goals, tasks and plans)
 - El otro contenedor (goals · tasks · destino): `dran-goal-flow`

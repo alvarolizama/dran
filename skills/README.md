@@ -27,7 +27,8 @@ table on every boot (`Dran.Skills.Builtin`), so:
   copies it) — the content is baked into the beam, never read from disk at
   runtime.
 
-Contract and examples: `docs/api.md § Skills`.
+Contract and examples: `Dran.Skills` (`lib/dran/skills.ex`) and the
+`/api/skills` routes in `lib/dran_web/router.ex`.
 
 ## What the suite covers (the app's real surface)
 
@@ -68,19 +69,40 @@ first (no hole) and nothing the first lacks (no phantom).
 
 ## How Hermes discovers a skill
 
-| | `skills.external_dirs` (**retired**) | `ctx.register_skill()` | the plugin prompt block + tools (**what Dran uses**) |
+| | `skills.external_dirs` (**retired**) | `ctx.register_skill()` (**the pointer only**) | the plugin prompt block + tools (**the suite**) |
 |---|---|---|---|
+| Shows up in `skills_list` | yes — one row per skill | **yes** — one row: `dran:dran-skills-index` | no — the local list never carries the suite |
 | Shows up in the agent's catalog | yes — it loads the skill on its own | no — explicit `skill_view()` only | **yes** — one line per skill in the prompt section, loaded by tool |
 | Install | symlink + one config line | automatic at plugin load | none (the built-ins ship with Dran) |
-| Body on disk | yes (a second copy) | yes | **no** — it arrives by tool and dies with the session |
+| Body on disk | yes (a second copy) | yes — and it is a POINTER, not a body of the suite | **no** — it arrives by tool and dies with the session |
 | Retracted on unload | no | yes | yes — the section is rebuilt per session |
 
 The suite **used** to be installed locally as well. It is not any more: the plugin
 already puts the catalog in front of the agent — one line per skill in the prompt
 block, the live list and `q=` search through `dran_skills`, and the body through
-`dran_skill` — so a local copy was a second source of the same bytes, able to
-drift, and the body never needed to live on disk. The activation line in
-`soul.md` keeps working because the agent *sees* the skills in the block.
+`dran_skill` — so a local copy of the flows was a second source of the same bytes,
+able to drift, and their bodies never needed to live on disk. The activation line
+in `soul.md` keeps working because the agent *sees* the skills in the block.
+
+## The one local row (the pointer)
+
+`hermes skills list | grep dran` used to be empty, and that was the design. It now
+shows exactly ONE row — `dran:dran-skills-index` — and it is there because **"list
+the skills" runs the LOCAL listing** (`skills_list`): that is where the answer has
+to exist, and the suite is not in it. The plugin registers that row with
+`ctx.register_skill` (`hermes_plugin/dran/skills/dran-skills-index/SKILL.md`).
+
+- Its body is **not** a flow of the suite: it is the route to the live catalog
+  (`tool_search` with an English query → `dran_skills` → `dran_skill`).
+- No body of the suite is on disk and none is served from that file; the row is
+  retracted when the plugin unloads and is never copied to `~/.hermes/skills/`.
+- Its description is the trigger and stays ≤60 chars (Hermes truncates there):
+  `Use when asked to list skills: Dran serves them remotely.`
+- Note the trap the row exists to close: the four skill tools are **deferred** by
+  Hermes (every plugin tool is), and the bridge's catalog cuts descriptions to
+  ~60 chars — so a query has to be English (`"dran skills"`) and an empty search
+  result is a miss, not a missing capability.
+
 
 ## Retiring the local install
 
@@ -88,7 +110,7 @@ If a profile still carries the old setup, remove both halves and confirm:
 
 ```bash
 rm -f ~/Workspace/Skills/dran ~/Workspace/Skills/dran-*
-hermes skills list | grep dran   # empty afterwards: they are served, not installed
+hermes skills list | grep dran   # exactly one row afterwards: dran:dran-skills-index
 ```
 
 Also drop the `skills.external_dirs` entry that pointed at
