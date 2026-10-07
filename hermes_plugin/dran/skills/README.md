@@ -17,30 +17,26 @@ The flows are thin clients over the plugin tools (`dran_*`, `dran_memory_*`) —
 they teach the call sequences, not the internals. Nothing about changing Dran's
 code ships here.
 
-## Dran serves this suite itself (the built-ins)
+## Who serves the suite: the PLUGIN, not the API
 
-These files are ALSO the catalog Dran serves to every API credential by default:
-`GET /api/skills` returns all 9 with `"system": true` — for an account token, a
-group token and the admin token alike, with no install and no share. The content
-is read from `hermes_plugin/dran/skills/<slug>/SKILL.md` **at compile time**
-(`@external_resource` per file and per directory, so editing — or adding — a flow
-recompiles the catalog module) and reconciled into the `skills` table on every
-boot (`Dran.Skills.Builtin`).
+These files are the suite, and the suite lives with the plugin: the plugin
+registers them as local rows (`dran:<slug>`, loadable with `skill_view`, no
+network) and its prompt block points at them.
 
-The SAME files are what the plugin registers as its local rows (`dran:<slug>`):
-one source of bytes for both doors, so the local listing and the line in the
-prompt block cannot drift apart.
+**Dran does NOT serve them.** The instance's catalog (`GET /api/skills`) carries
+the workspace's skills — what a reader created — and nothing else. The nine suite
+slugs are simply RESERVED on the server (`422` on a colliding create), so a user
+skill can never take the same address and the suite can never be shadowed or
+drifted: there is one copy of these bytes, in this directory.
 
 Therefore:
 
-- editing one of these files and redeploying is the ONLY way to change a
-  built-in; the API never writes them (their slugs are reserved, `403` on
-  `PUT`/`DELETE`, `422` on a colliding create);
-- what the plugin hands the agent by tool and what the API serves are the same
-  bytes, by construction;
-- that directory must be in the build context before `mix compile` (the
-  Dockerfile copies them) — the content is baked into the beam, never read from
-  disk at runtime.
+- editing one of these files and redeploying the PLUGIN is the only way to change
+  the suite (`hermes plugins update dran` on the profile);
+- `dran_skills` / `dran_skill` never return the suite — an agent reads it locally
+  with `skill_view("dran:<slug>")` (that is what the prompt block says);
+- the mirror under `$HERMES_HOME/dran/skills/` only reconciles the workspace's
+  skills, so it no longer carries nine copies of the suite.
 
 Contract and examples: `Dran.Skills` (`lib/dran/skills.ex`) and the
 `/api/skills` routes in `lib/dran_web/router.ex`.
@@ -92,8 +88,8 @@ first (no hole) and nothing the first lacks (no phantom).
 |---|---|---|---|
 | Shows up in `skills_list` | yes — one row per skill | **yes** — nine rows: `dran:loader` + `dran:<flow>` | no — the local list never carries the workspace's skills |
 | Shows up in the agent's catalog | yes — it loads the skill on its own | no — explicit `skill_view()` only | **yes** — one line per skill in the prompt section, loaded by tool |
-| Install | symlink + one config line | automatic at plugin load | none (the built-ins ship with Dran) |
-| Body on disk | yes (a second copy) | yes — the same files the server bakes as the built-ins | **only in the plugin's mirror** — the body arrives by tool; `$HERMES_HOME/dran/skills/` keeps a copy for offline + checksum reconciliation, never as a local skill |
+| Install | symlink + one config line | automatic at plugin load | none (the suite ships with the plugin) |
+| Body on disk | yes (a second copy) | yes — the same files the plugin registers | **only in the plugin's mirror** — the body arrives by tool; `$HERMES_HOME/dran/skills/` keeps a copy for offline + checksum reconciliation, never as a local skill |
 | Retracted on unload | no | yes | yes — the section is rebuilt per session (the mirror survives: it is the plugin's cache, not a registration) |
 
 The suite **used** to be installed locally as well. It is not any more: the plugin
@@ -125,11 +121,10 @@ file's frontmatter, so the listing cannot say something the body does not.
   the live catalog (`tool_search` with an English query → `dran_skills` →
   `dran_skill`) — so the same row answers "what can I do with Dran" and "list the
   skills".
-- Each file is the **same one** the server bakes as a built-in
-  (`Dran.Skills.Builtin` reads `hermes_plugin/dran/skills/`): one source of bytes
-  for the local rows and for the lines in the prompt block, so neither can be older
-  than the other. The rows are retracted when the plugin unloads and are never
-  copied to `~/.hermes/skills/`.
+- Each file is the **only** copy of its body: the plugin registers these local rows
+  and the prompt block points at them, so there is one source of bytes for the
+  listing, the block and the agent's `skill_view` — nothing to drift. The rows are
+  retracted when the plugin unloads and are never copied to `~/.hermes/skills/`.
 - The router's description is the trigger and stays ≤60 chars (Hermes truncates
   there): `Use when asked to list skills or operate Dran.`
 - Note the trap the rows exist to close: the five skill tools are **deferred** by
@@ -176,9 +171,9 @@ done
 | `<operation>-flow` | an agent operation flow (knowledge, relations, workers, memory, goals, plans, services, skills) |
 
 No name carries a system prefix: the namespace is the host's (`dran:loader`,
-`dran:knowledge-flow` in `skills_list`) and the built-in slugs are those same bare
-names in the catalog — a `dran-` prefix would read twice under the namespace and
-would only add noise to the wire address.
+`dran:knowledge-flow` in `skills_list`) and the slugs on the wire are those same
+bare names — RESERVED on the server, where a `dran-` prefix would only add noise
+to the address.
 
 There is no `dran-dev-*` prefix any more: the suite is for operating a Dran
 instance, so no skill about its code ships with it.

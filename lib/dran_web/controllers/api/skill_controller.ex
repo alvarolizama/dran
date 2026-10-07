@@ -12,11 +12,12 @@ defmodule DranWeb.API.SkillController do
     montado (frontmatter + body) más el body crudo, para que un cliente que no
     sea Hermes lo escriba o lo pase tal cual;
   * `:slug` es la dirección del wire (inmutable): no hay rename;
-  * los BUILT-INS (`system: true`, el contenido de `skills/**/SKILL.md` del
-    repo) los lee TODA credencial por default — cuenta, grupo o admin legacy —
-    y no los escribe ninguna: son código, y su ciclo es el archivo y un
-    redeploy. Un slug de built-in está reservado (422 en el alta) y editarlo o
-    borrarlo es 403 para todos, incluido el dueño de la instancia.
+  * la SUITE no vive acá: el router y los ocho flows viajan con el plugin de
+    Hermes (`hermes_plugin/dran/skills/<slug>/SKILL.md`, filas locales
+    `dran:<slug>`), no son filas del catálogo de una instancia. Sus slugs están
+    reservados (422 en el alta) para que un skill de usuario no ocupe la misma
+    dirección — pero son filas normales del catálogo si alguien las crea con otro
+    slug: Dran no sirve ningún built-in.
   """
 
   use DranWeb, :controller
@@ -99,9 +100,6 @@ defmodule DranWeb.API.SkillController do
           {:error, {:rename}} ->
             unprocessable(conn, %{detail: "the slug is the wire address and cannot be renamed"})
 
-          {:error, {:update, :system_readonly}} ->
-            forbidden(conn, system_readonly_detail())
-
           {:error, {:scope, message}} ->
             unprocessable(conn, %{detail: message})
 
@@ -125,10 +123,11 @@ defmodule DranWeb.API.SkillController do
 
       skill ->
         case Skills.delete_skill(skill) do
-          {:ok, _} -> send_resp(conn, :no_content, "")
-          # La guarda del contexto, no una carrera con `writable_skill/2`: un
-          # built-in no se borra ni con la credencial de la instancia.
-          {:error, :system_readonly} -> forbidden(conn, system_readonly_detail())
+          {:ok, _} ->
+            send_resp(conn, :no_content, "")
+
+          {:error, _reason} ->
+            unprocessable(conn, %{detail: "the skill could not be deleted"})
         end
     end
   end
@@ -172,11 +171,6 @@ defmodule DranWeb.API.SkillController do
   # La fila que el lector puede ESCRIBIR: `nil` cuando no la puede leer (404, sin
   # fuga de existencia), `:forbidden` cuando la lee pero no es suya (403) y el
   # struct cuando el lector es su dueño o un lector privilegiado.
-  #
-  # La guarda de AUTHORITY es ésta; la de un built-in es del CONTEXTO
-  # (`Dran.Skills.update_skill/2` y `delete_skill/1` devuelven
-  # `{:error, :system_readonly}`): así la regla de «el código manda» vive en un
-  # solo lugar, con el mismo error para la web y para el API.
   defp writable_skill(slug, conn) do
     case Skills.get_skill(slug, scope: Instance.scope_for(conn, :skill)) do
       nil -> nil
@@ -198,13 +192,6 @@ defmodule DranWeb.API.SkillController do
       {:reader, reader_id} ->
         is_integer(reader_id) and skill.owner_user_id == reader_id
     end
-  end
-
-  # El detalle del rechazo de escritura: la misma frase que explica el ciclo del
-  # contenido de código, para que un cliente sepa qué hacer.
-  defp system_readonly_detail do
-    "built-in skills are served by the code: change the file in the repo and redeploy " <>
-      "(`hermes_plugin/dran/skills/<slug>/SKILL.md`)"
   end
 
   # `forbidden/1` vive en `DranWeb.ControllerHelpers` (W3, contract

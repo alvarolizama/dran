@@ -40,11 +40,7 @@ defmodule Dran.ContentVisibility do
   and instance admins (contract ?03, default applied read-only).
   """
 
-  # `field/2` (acceso dinámico a una columna) viene de `Ecto.Query.API` y el
-  # builder de queries lo resuelve dentro de la expresión: no hay import que
-  # hacer — se nombra la columna del contenido de sistema desde las opts del
-  # call site.
-  import Ecto.Query, only: [dynamic: 2, from: 2]
+  import Ecto.Query, only: [from: 2]
 
   alias Dran.Accounts.User
 
@@ -147,31 +143,16 @@ defmodule Dran.ContentVisibility do
 
   The second argument is the resource type used to look up shares
   (default `:page`).
-
-  ## Contenido de SISTEMA (`system_field`)
-
-  `opts[:system_field]` nombra la columna que marca las filas de sistema: esas
-  filas las lee **todo** scope — lector, grupo y `:all` — porque Dran las sirve
-  por default a cualquier credencial (los built-ins de `skills`). Es un OPT-IN
-  explícito del call site cuyo schema tiene esa columna: el vocabulario de
-  páginas, memoria, goals y planes no cambia (un token de grupo sigue leyendo
-  EXACTAMENTE lo compartido a su grupo).
-
-  Sin el opt, `nil` o `false` no cambian nada.
   """
-  @spec filter(Ecto.Queryable.t(), scope(), atom(), keyword()) :: Ecto.Queryable.t()
-  def filter(queryable, scope, resource, opts \\ [])
-
-  def filter(queryable, :all, _resource, _opts), do: queryable
+  @spec filter(Ecto.Queryable.t(), scope(), atom()) :: Ecto.Queryable.t()
+  def filter(queryable, :all, _resource), do: queryable
 
   # La lectura de un grupo es EXACTAMENTE su grupo (Constraint 3): `shared` Y un
   # share con ESE `user_group_id`. Sin `public` y sin `owner_user_id`, que es lo
-  # que la vuelve un modo de lectura y no una variante del lector personal. El
-  # contenido de SISTEMA se suma aparte, con el opt explícito del call site.
-  def filter(queryable, {:group, group_id}, resource, opts) when is_integer(group_id) do
-    condition =
-      dynamic(
-        [q],
+  # que la vuelve un modo de lectura y no una variante del lector personal.
+  def filter(queryable, {:group, group_id}, resource) when is_integer(group_id) do
+    from(q in queryable,
+      where:
         q.visibility == "shared" and
           fragment(
             "EXISTS (SELECT 1 FROM content_shares s WHERE s.resource_type = ? AND s.resource_id = ? AND s.user_group_id = ?)",
@@ -179,17 +160,14 @@ defmodule Dran.ContentVisibility do
             q.id,
             ^group_id
           )
-      )
-
-    from(q in queryable, where: ^with_system(condition, opts))
+    )
   end
 
-  def filter(queryable, {:reader, reader_id}, resource, opts) do
+  def filter(queryable, {:reader, reader_id}, resource) do
     group_ids = Dran.Sharing.group_ids_for(reader_id)
 
-    condition =
-      dynamic(
-        [q],
+    from(q in queryable,
+      where:
         q.visibility == "public" or
           q.owner_user_id == ^reader_id or
           (q.visibility == "shared" and
@@ -200,38 +178,29 @@ defmodule Dran.ContentVisibility do
                ^reader_id,
                ^group_ids
              ))
-      )
-
-    from(q in queryable, where: ^with_system(condition, opts))
+    )
   end
 
   @doc """
   Post-fetch check for a single row (graph nodes, cached entries): true when
   a row owned by `owner_user_id` with `visibility` is readable under `scope`.
-
-  `opts` espeja el `system_field` de `filter/4`: las dos funciones son el MISMO
-  juicio —una en query, otra sobre una fila ya cargada— y divergirlas sería el
-  bug que este módulo existe para evitar.
   """
-  @spec visible?(map() | struct() | nil, scope(), atom(), keyword()) :: boolean()
-  def visible?(row, scope, resource, opts \\ [])
-
-  def visible?(_row, :all, _resource, _opts), do: true
+  @spec visible?(map() | struct() | nil, scope(), atom()) :: boolean()
+  def visible?(_row, :all, _resource), do: true
 
   # La fila de un grupo: `shared` Y un share con ese grupo (el mismo juicio que
   # `filter/3`, para las superficies que comprueban una fila ya cargada).
-  def visible?(row, {:group, group_id}, resource, opts)
+  def visible?(row, {:group, group_id}, resource)
       when is_map(row) and is_integer(group_id) do
-    system_row?(row, opts) or
-      (Map.get(row, :visibility) == "shared" and is_binary(Map.get(row, :id)) and
-         Dran.Sharing.shared_with_group?(to_string(resource), Map.get(row, :id), group_id))
+    Map.get(row, :visibility) == "shared" and is_binary(Map.get(row, :id)) and
+      Dran.Sharing.shared_with_group?(to_string(resource), Map.get(row, :id), group_id)
   end
 
-  def visible?(row, {:reader, reader_id}, resource, opts) when is_map(row) do
-    system_row?(row, opts) or visible_to_reader?(row, reader_id, resource)
+  def visible?(row, {:reader, reader_id}, resource) when is_map(row) do
+    visible_to_reader?(row, reader_id, resource)
   end
 
-  def visible?(_row, _scope, _resource, _opts), do: false
+  def visible?(_row, _scope, _resource), do: false
 
   defp visible_to_reader?(row, reader_id, resource) do
     owner = Map.get(row, :owner_user_id)
@@ -265,25 +234,6 @@ defmodule Dran.ContentVisibility do
   def privileged?(_identity, _workspace), do: false
 
   # ── Internals ─────────────────────────────────────────────────────────────
-
-  # El contenido de SISTEMA: el call site nombra la columna (`system_field`) y la
-  # fila marcada se lee con CUALQUIER scope. Se suma DENTRO de la condición del
-  # scope — no como un `or_where` sobre el query armado: eso último OR-earía
-  # contra TODO el WHERE del caller (el slug, el destino, el dueño), y el detalle
-  # por slug terminaría devolviendo cualquier built-in.
-  defp with_system(condition, opts) do
-    case Keyword.get(opts, :system_field) do
-      nil -> condition
-      field -> dynamic([q], ^condition or field(q, ^field) == true)
-    end
-  end
-
-  defp system_row?(row, opts) when is_map(row) do
-    case Keyword.get(opts, :system_field) do
-      nil -> false
-      field -> Map.get(row, field) == true
-    end
-  end
 
   defp privileged_identity?(identity), do: Map.get(identity, :is_owner) == true
 end

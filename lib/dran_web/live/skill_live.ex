@@ -141,14 +141,7 @@ defmodule DranWeb.SkillLive do
                   >
                     {skill.name}
                   </.link>
-                  <%!-- El built-in se sirve a todos y no se edita: decirlo en la
-                  fila explica por qué no está el lápiz. --%>
-                  <span
-                    :if={skill.system}
-                    class="ml-2 text-[10px] uppercase tracking-wide text-base-content/40"
-                  >
-                    {gettext("built-in")}
-                  </span>
+                  <%!-- El dueño edita su skill; la suite no vive en el catálogo. --%>
                 </td>
                 <td class="text-base-content/60 max-w-md">{skill.description}</td>
                 <td>
@@ -162,7 +155,7 @@ defmodule DranWeb.SkillLive do
                 <td class="text-caption">{updated_meta(skill.updated_at)}</td>
                 <td class="text-right">
                   <.link
-                    :if={not skill.system and skill.owner_user_id == @reader_id}
+                    :if={skill.owner_user_id == @reader_id}
                     patch={~p"/skills/#{skill.slug}?edit=true"}
                     id={"skill-#{skill.id}-edit"}
                     class="btn btn-xs btn-ghost"
@@ -231,18 +224,6 @@ defmodule DranWeb.SkillLive do
             {"v#{@skill.version}"}
           </span>
           <.resource_visibility_pill visibility={@skill.visibility} id="skill-visibility-badge" />
-          <span
-            :if={@skill.system}
-            id="skill-system-badge"
-            class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-info/10 text-info"
-            title={
-              gettext(
-                "Served by the code to every credential — change the file in skills/ and redeploy"
-              )
-            }
-          >
-            <.icon name="hero-cpu-chip" class="size-3" /> {gettext("Built-in")}
-          </span>
         </div>
 
         <div class="flex flex-col lg:flex-row gap-6">
@@ -574,8 +555,9 @@ defmodule DranWeb.SkillLive do
         |> skill_form_result(socket)
 
       %Skill{} = skill ->
-        # Editar no es leer: el dueño (o nadie, si es un built-in). El formulario
-        # ya no se abre sin esto, pero un submit forjado no puede saltárselo.
+        # Editar no es leer: sólo el dueño (o quien administra el destino). El
+        # formulario ya no se abre sin esto, pero un submit forjado no puede
+        # saltárselo.
         if can_manage?(skill, socket.assigns[:user]) do
           skill
           |> Skills.update_skill(params)
@@ -595,11 +577,8 @@ defmodule DranWeb.SkillLive do
            |> put_flash(:info, gettext("Skill deleted."))
            |> push_navigate(to: ~p"/skills")}
 
-        # El contexto es la última puerta: un built-in no se borra. La rama no
-        # debería alcanzarse (el botón y `can_manage?` ya lo niegan), pero un
-        # evento forjado no puede terminar en un crash de la página.
-        {:error, :system_readonly} ->
-          {:noreply, put_flash(socket, :error, builtin_readonly_message())}
+        {:error, _reason} ->
+          {:noreply, put_flash(socket, :error, gettext("Could not delete the skill."))}
       end
     else
       {:noreply, put_flash(socket, :error, gettext("Only the owner can delete a skill."))}
@@ -703,11 +682,7 @@ defmodule DranWeb.SkillLive do
      |> assign(form: to_form(Skills.change_skill(socket.assigns.skill, %{})))}
   end
 
-  # Un built-in no se edita desde acá: el aviso dice qué hacer en su lugar (el
-  # archivo del repo y un redeploy) en vez de un «no se pudo» sin salida.
-  defp skill_form_result({:error, :system_readonly}, socket),
-    do: {:noreply, put_flash(socket, :error, builtin_readonly_message())}
-
+  # `{:error, :rename}` no llega hasta acá: el form no ofrece slug ni nombre.
   defp skill_form_result({:error, %Ecto.Changeset{} = changeset}, socket),
     do: {:noreply, assign(socket, form: to_form(changeset))}
 
@@ -716,23 +691,11 @@ defmodule DranWeb.SkillLive do
 
   # El destino lo administra quien puede escribir: el DUEÑO (la misma regla que
   # goals y planes — `can_manage_scope?/2` de `DranWeb.ResourceComponents`, acá
-  # vivía copiada). Un skill de SISTEMA no lo administra NADIE por la web: es
-  # contenido del código y su ciclo es el archivo y un redeploy.
-  defp can_manage?(%{system: true}, _user), do: false
+  # vivía copiada).
   defp can_manage?(resource, user), do: can_manage_scope?(resource, user)
 
-  # El texto de los dos rechazos que hablan de built-ins: una sola frase, la
-  # misma que dice el API, para que el operador sepa qué hacer. Una sola carpeta
-  # ahora: la suite entera vive con el plugin.
-  defp builtin_readonly_message do
-    gettext(
-      "Built-in skills are served by the code: change the file in the repo and redeploy (hermes_plugin/dran/skills/<slug>/)."
-    )
-  end
-
-  # El dueño de un built-in es el CÓDIGO, no una cuenta ni la instancia: la
-  # misma fila sin dueño («Instance») significaría otra cosa para el operador.
-  defp owner_label(%{system: true}), do: gettext("Built-in (code)")
+  # El dueño de una fila sin dueño es la instancia, no el código: la suite no
+  # vive en la tabla.
   defp owner_label(%{owner_user_id: owner_id}), do: owner_label(owner_id)
 
   defp owner_label(nil), do: gettext("Instance")

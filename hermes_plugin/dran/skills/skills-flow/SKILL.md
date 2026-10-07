@@ -156,8 +156,10 @@ flowchart TD
 - **Un conflicto lo gana el remoto**: si el cuerpo cambió en los dos lados, tu edición
   local se descarta y el reporte lo dice (`resolution: remote`). `force=true` es la
   única puerta para imponer la local — tratala como el ASK de un write.
-- **Un built-in no se pushea**: sale como `skipped` (es contenido de código, la API
-  responde 403). Se cambia en `hermes_plugin/dran/skills/<slug>/SKILL.md` del repo y con un redeploy.
+- **La suite no se pushea ni se baja**: los nueve slugs de la suite (`loader` + los ocho
+  flows) NO están en el catálogo de Dran — viajan con el plugin y se leen localmente con
+  `skill_view("dran:<slug>")`. El espejo sólo reconcilia los skills DEL WORKSPACE, y un
+  slug de la suite está RESERVADO en el server (`422` al crear).
 - El espejo **no entra a `skills_list`** y no se copia a `~/.hermes/skills/`: es del
   plugin.
 
@@ -167,9 +169,10 @@ flowchart TD
   caches what it loads in its OWN mirror (`$HERMES_HOME/dran/skills/`, by product of
   `dran_skill`) and that is the only disk copy there is supposed to be: symlinking
   `~/.hermes/skills/*` to it (or registering the suite as local skills) is the
-  failure mode this flow exists to prevent. (The plugin registers exactly ONE row —
-  the system skill `dran:loader`, the router and this index, so that "list the
-  skills" lands on this route; no flow body is ever registered.)
+  failure mode this flow exists to prevent. (The plugin registers the NINE suite rows
+  locally — `dran:loader` plus the eight flows, all with the same files) so that
+  "list the skills" finds the suite without network; they are served, never
+  installed.)
 - **Treating the prompt block as the catalog.** It is a snapshot from session
   start; new skills show up mid-session through `dran_skills`, not through the
   prompt.

@@ -32,13 +32,6 @@ config :swoosh, :api_client, false
 # shape is verified), but `jobs: []` means it has nothing to execute.
 config :dran, Dran.Scheduler, jobs: []
 
-# The built-in skills (the system catalog served to every API credential) are
-# reconciled with `skills/**/SKILL.md` on every boot. Off in test: the suite
-# stays deterministic (no global rows leaking into every test) and the tests
-# that exercise the built-ins run the sync themselves, inside their own sandbox
-# transaction. Same posture as `jobs: []` above.
-config :dran, builtin_skills_autosync: false
-
 # Print only warnings and errors during test
 config :logger, level: :warning
 

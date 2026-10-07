@@ -422,6 +422,102 @@ defmodule DranWeb.API.SkillsTest do
     end
   end
 
+  describe "la suite no es catálogo (los built-ins se retiraron)" do
+    test "el índice sirve sólo el workspace y el payload ya no declara `system`", %{
+      owner: owner
+    } do
+      # La suite viaja con el plugin: Dran reserva sus slugs y no sirve ninguna
+      # fila de sistema. Con la tabla vacía el catálogo es VACÍO — no nueve filas.
+      empty =
+        conn_for(owner)
+        |> get_json("/api/skills")
+        |> json_response(200)
+        |> Map.fetch!("data")
+
+      slugs = Enum.map(empty, & &1["slug"])
+
+      for reserved <- Skills.reserved_slugs() do
+        refute reserved in slugs, reserved
+      end
+
+      insert_skill!(owner, %{"slug" => "propio"})
+
+      [row] =
+        conn_for(owner)
+        |> get_json("/api/skills")
+        |> json_response(200)
+        |> Map.fetch!("data")
+
+      assert row["slug"] == "propio"
+      # El flag era del catálogo de sistema: con la columna fuera, el contrato
+      # tampoco lo anuncia.
+      refute Map.has_key?(row, "system")
+    end
+
+    test "el alta de un slug de la suite es 422, con el error en el campo que se mandó", %{
+      owner: owner
+    } do
+      # Slug explícito → el error va a `slug`.
+      from_slug =
+        conn_for(owner)
+        |> post_json("/api/skills", %{
+          "slug" => "loader",
+          "description" => "d",
+          "body" => "# d"
+        })
+        |> json_response(422)
+
+      assert from_slug["errors"]["slug"] == [
+               "is reserved by the Dran suite (served by the plugin)"
+             ]
+
+      # Sin slug, la dirección se DERIVA del `name`: el error va también ahí.
+      from_name =
+        conn_for(owner)
+        |> post_json("/api/skills", %{
+          "name" => "skills-flow",
+          "description" => "d",
+          "body" => "# d"
+        })
+        |> json_response(422)
+
+      assert from_name["errors"]["name"] == [
+               "is reserved by the Dran suite (served by the plugin)"
+             ]
+
+      # Y nada se creó: la reserva es la LISTA, no una fila.
+      assert Skills.list_skills(scope: :all) == []
+    end
+
+    test "una fila normal se escribe y se borra sin guardas de built-in", %{owner: owner} do
+      body =
+        conn_for(owner)
+        |> post_json("/api/skills", %{
+          "slug" => "propio",
+          "name" => "propio",
+          "description" => "d",
+          "body" => "# uno"
+        })
+        |> json_response(201)
+
+      assert body["data"]["slug"] == "propio"
+      assert body["data"]["version"] == 1
+
+      updated =
+        conn_for(owner)
+        |> put_json("/api/skills/propio", %{"body" => "# dos"})
+        |> json_response(200)
+
+      assert updated["data"]["version"] == 2
+
+      assert conn_for(owner)
+             |> delete_json("/api/skills/propio")
+             |> response(204)
+
+      assert Skills.get_skill("propio", scope: :all) == nil
+    end
+  end
+
   # ── Helpers ───────────────────────────────────────────────────────────────
 
   defp params(slug, body \\ "# uno") do

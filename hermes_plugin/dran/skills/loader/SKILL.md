@@ -17,12 +17,15 @@ This is the MAIN skill of Dran: load it first. It holds what every flow shares
 the answer to two questions that would otherwise fall into a catalog that does
 not carry them: *"what can I do with Dran"* and *"list the skills"*.
 
-It is also the ONE local row the plugin registers (`dran:loader`, loadable with
-`skill_view` with no network) AND the built-in `loader` the server serves to every
-API credential — the same file, so neither side can be stale relative to the
-other. Dran is the second brain: knowledge (pages), memory, and WORK (goals,
-tasks, plans). The agent's local execution discipline (ledger, briefs,
-delegation) is riel — this suite owns only the Dran call sequences.
+It is the entry of the suite the PLUGIN ships: one local row
+(`dran:loader`, loadable with `skill_view` with no network) whose file lives in
+this repo next to the plugin (`hermes_plugin/dran/skills/<slug>/SKILL.md`) — the
+SAME bytes the plugin registers. Dran itself no longer serves the suite: its
+catalog carries the workspace's skills, and these nine slugs are simply
+RESERVED there (a user skill with one of them is a `422`), so the suite cannot be
+shadowed and cannot drift. Dran is the second brain: knowledge (pages), memory,
+and WORK (goals, tasks, plans). The agent's local execution discipline (ledger,
+briefs, delegation) is riel — this suite owns only the Dran call sequences.
 
 The agent consumes Dran through the **Hermes plugin tools** (`dran_*`). The
 plugin registers its toolsets via `register(ctx)` in
@@ -174,13 +177,13 @@ load it and run the flow.
 
 ### What the catalog contains
 
-- The 9 built-ins — `dran` (this skill), `knowledge-flow`,
-  `relations-flow`, `memory-flow`, `workers-flow`,
-  `goal-flow`, `plan-flow`, `services-flow`,
-  `skills-flow` — are served to every credential (`system: true`). They
-  are edited in the Dran repo and reconciled on boot, so `dran_skill_save` /
-  `dran_skill_delete` answer `403` on them.
-- Everything else belongs to a reader: the key's scope decides what appears.
+- The **workspace's** skills: everything a reader created, with the key's scope
+  deciding what appears. `dran_skills` is the live list; `dran_skill` serves the
+  body.
+- **Not** the suite: `loader` (this skill) and the eight flows are NOT in Dran's
+  catalog — they ship with the plugin and are read locally with
+  `skill_view("dran:<slug>")`. Their slugs are RESERVED in Dran (a `422` on
+  create), so no user skill can take the same address.
 - The block in the system prompt is a snapshot frozen at session start; the tool
   is the live truth — a skill created mid-session only shows up there.
 

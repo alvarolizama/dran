@@ -9,6 +9,15 @@ defmodule Dran.Skills do
   `Dran.ContentVisibility.filter/3` (el punto único); las escrituras reciben el
   dueño YA resuelto server-side.
 
+  ## La suite no vive acá
+
+  El router y los ocho flows (`loader`, `knowledge-flow`, …) son las
+  instrucciones de la SUITE: viajan CON el plugin de Hermes
+  (`hermes_plugin/dran/skills/<slug>/SKILL.md`, filas locales `dran:<slug>`) y no
+  son filas del catálogo de ninguna instancia — Dran no sirve ningún built-in.
+  Sus slugs quedan RESERVADOS (`reserved_slug?/1`) para que un skill de usuario no
+  ocupe la misma dirección.
+
   ## El contrato de wire
 
   `name` + `description` (≤ 60) + `body` + `version` + `content_hash`. Se sirve
@@ -29,10 +38,17 @@ defmodule Dran.Skills do
 
   @orders ~w(name updated)
 
-  # Los built-ins (`system: true`) los sirve Dran a TODA credencial por default:
-  # índice, detalle y conteo los incluyen con cualquier scope — incluido el de
-  # grupo, que por la Constraint 3 lee exactamente lo compartido a su grupo.
-  @system_field [system_field: :system]
+  # Los slugs de la SUITE (el router y los ocho flows) están RESERVADOS: la suite
+  # son las instrucciones que viajan CON el plugin de Hermes
+  # (`hermes_plugin/dran/skills/<slug>/SKILL.md`, filas locales `dran:<slug>`), no
+  # contenido del catálogo de la instancia. Un skill de usuario con uno de esos
+  # slugs sería una dirección con dos dueños en el detalle (`/api/skills/:slug`,
+  # `dran_skill`), así que el alta lo rechaza con el error en el campo que el
+  # cliente escribió. El conjunto es ESTÁTICO: la lista es la única verdad y no
+  # depende de filas (antes eran filas `system: true`, que ya no existen: Dran no
+  # sirve ningún built-in).
+  @reserved_slugs ~w(loader knowledge-flow relations-flow workers-flow memory-flow
+                     goal-flow plan-flow services-flow skills-flow)
 
   # ──────────────────────────────────────────────────────────────────────────
   # Lectura
@@ -84,7 +100,7 @@ defmodule Dran.Skills do
     query = filter_by_query(query, query_text)
 
     query
-    |> Dran.ContentVisibility.filter(scope, :skill, @system_field)
+    |> Dran.ContentVisibility.filter(scope, :skill)
     |> Repo.all()
   end
 
@@ -137,7 +153,7 @@ defmodule Dran.Skills do
     Skill
     |> where([s], s.slug == ^slug)
     |> order_by([s], asc: s.inserted_at)
-    |> Dran.ContentVisibility.filter(scope, :skill, @system_field)
+    |> Dran.ContentVisibility.filter(scope, :skill)
     |> Repo.all()
     |> List.first()
   end
@@ -159,7 +175,7 @@ defmodule Dran.Skills do
     scope = Keyword.get(opts, :scope, :all)
 
     Skill
-    |> Dran.ContentVisibility.filter(scope, :skill, @system_field)
+    |> Dran.ContentVisibility.filter(scope, :skill)
     |> Repo.aggregate(:count, :id)
   end
 
@@ -223,7 +239,6 @@ defmodule Dran.Skills do
       version: skill.version,
       content_hash: skill.content_hash,
       visibility: skill.visibility,
-      system: skill.system,
       updated_at: skill.updated_at,
       mine: is_integer(reader_id) and skill.owner_user_id == reader_id
     }
@@ -238,121 +253,22 @@ defmodule Dran.Skills do
   defp frontmatter_value(_value), do: ~s("")
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Built-ins (los skills de SISTEMA)
+  # Slugs reservados (la suite vive en el plugin, no en la tabla)
   # ──────────────────────────────────────────────────────────────────────────
 
   @doc """
-  Los built-ins, ordenados por slug.
-
-  Es el conjunto que ship el CÓDIGO (`Dran.Skills.Builtin`), no una lectura de
-  lector: por eso NO pasa por el scope — el sincronizador necesita su conjunto
-  completo para reconciliarlo, y la lectura de un lector pasa por
-  `list_skills/1`.
-  """
-  def list_system_skills do
-    Skill
-    |> where([s], s.system)
-    |> order_by([s], asc: s.slug)
-    |> Repo.all()
-  end
-
-  @doc "El built-in con ese slug (`system: true`), sin scope."
-  def get_system_skill(slug) when is_binary(slug) do
-    Repo.one(from s in Skill, where: s.system and s.slug == ^slug)
-  end
-
-  def get_system_skill(_slug), do: nil
-
-  @doc """
-  ¿Ese slug está RESERVADO por un built-in?
+  ¿Ese slug está RESERVADO por la suite?
 
   El detalle resuelve por slug, así que un skill de usuario homónimo sería una
-  dirección con dos dueños: el alta lo rechaza (`{:error, :reserved_slug}`) en
-  vez de dejar una fila inalcanzable.
+  dirección con dos dueños: el alta lo rechaza (`{:error, changeset}`) en vez de
+  dejar una fila inalcanzable. La lista es ESTÁTICA (`@reserved_slugs`): la suite
+  no tiene filas — sus instrucciones viajan con el plugin de Hermes.
   """
-  def system_slug?(slug) when is_binary(slug) do
-    Repo.exists?(from s in Skill, where: s.system and s.slug == ^slug)
-  end
+  def reserved_slug?(slug) when is_binary(slug), do: slug in @reserved_slugs
+  def reserved_slug?(_slug), do: false
 
-  def system_slug?(_slug), do: false
-
-  @doc """
-  Poda los built-ins que el código YA NO sirve.
-
-  Son contenido de código, no datos de nadie: un flow que se retira del repo
-  tiene que dejar de servirse, o quedaría para siempre en el catálogo de todos
-  los consumidores. Devuelve cuántas filas se borraron.
-  """
-  def prune_system_skills(slugs) when is_list(slugs) do
-    {count, _} = Repo.delete_all(from s in Skill, where: s.system and s.slug not in ^slugs)
-    count
-  end
-
-  @doc """
-  Reconcilia la tabla con las definiciones embebidas (los `SKILL.md` del repo).
-
-  Idempotente y sin sorpresas:
-
-  * slug nuevo → alta con `system: true`, sin dueño y `visibility: "public"`;
-  * slug conocido con el MISMO cuerpo y descripción → no escribe nada (ni
-    `updated_at` ni versión: reescribir el mismo cuerpo deja el hash igual);
-  * cuerpo o descripción distintos → el MISMO changeset del wire, con
-    `version + 1`;
-  * slug que ya no se sirve → poda.
-
-  Devuelve `%{created:, updated:, pruned:, total:}`.
-  """
-  def sync_system_skills(definitions) when is_list(definitions) do
-    slugs = Enum.map(definitions, & &1.slug)
-
-    {created, updated} =
-      Enum.reduce(definitions, {0, 0}, fn definition, {created, updated} ->
-        case upsert_system_skill(definition) do
-          :created -> {created + 1, updated}
-          :updated -> {created, updated + 1}
-          :unchanged -> {created, updated}
-        end
-      end)
-
-    %{
-      created: created,
-      updated: updated,
-      pruned: prune_system_skills(slugs),
-      total: length(definitions)
-    }
-  end
-
-  # El insert/update va con `!` a propósito: un built-in que no se puede
-  # sincronizar es un despliegue roto (nombre inválido, base sin migrar), no un
-  # caso de negocio — el error tiene que verse, no degradarse en silencio.
-  defp upsert_system_skill(%{slug: slug, name: name, description: description, body: body}) do
-    case get_system_skill(slug) do
-      nil ->
-        %Skill{}
-        |> Skill.system_changeset(%{
-          "slug" => slug,
-          "name" => name,
-          "description" => description,
-          "body" => body,
-          "visibility" => "public"
-        })
-        |> Repo.insert!()
-
-        :created
-
-      %Skill{} = skill ->
-        if skill.content_hash == Skill.content_hash(body) and skill.description == description do
-          :unchanged
-        else
-          skill
-          |> Skill.system_changeset(%{"description" => description, "body" => body})
-          |> bump_version(skill)
-          |> Repo.update!()
-
-          :updated
-        end
-    end
-  end
+  @doc "Los slugs que la suite reserva (el router y los ocho flows)."
+  def reserved_slugs, do: @reserved_slugs
 
   # ──────────────────────────────────────────────────────────────────────────
   # Escritura
@@ -363,9 +279,9 @@ defmodule Dran.Skills do
   NUNCA del body.
 
   El slug es la dirección del wire y se escribe UNA vez: no hay rename — lo
-  único que se edita es el cuerpo, la descripción y el destino. Un slug que ya
-  sirve un built-in está RESERVADO (`{:error, changeset}` con el error en el
-  campo que el cliente mandó): la dirección del wire tiene un solo dueño.
+  único que se edita es el cuerpo, la descripción y el destino. Un slug de la
+  SUITE está RESERVADO (`{:error, changeset}` con el error en el campo que el
+  cliente mandó): la dirección del wire tiene un solo dueño.
   """
   def create_skill(attrs, opts \\ []) do
     attrs = normalize_attrs(attrs)
@@ -381,7 +297,7 @@ defmodule Dran.Skills do
       |> put_owner(opts[:owner_user_id])
       |> then(&Skill.changeset(%Skill{}, &1))
 
-    if system_slug?(attrs["slug"] || attrs[:slug]) do
+    if reserved_slug?(attrs["slug"] || attrs[:slug]) do
       {:error, reserved_slug_error(changeset, sent_slug?)}
     else
       Repo.insert(changeset)
@@ -391,10 +307,6 @@ defmodule Dran.Skills do
   @doc """
   Actualiza un skill: el cuerpo versionado y el destino.
 
-  * Un skill de SISTEMA no se escribe por acá (`{:error, :system_readonly}`): su
-    contenido es el archivo del repo y su ciclo es un redeploy. Sin esta guarda,
-    la credencial de la instancia podría dejar a todos los consumidores con una
-    versión que el código ya no sirve.
   * Una escritura que CAMBIA el cuerpo bumpea `version` y recalcula
     `content_hash`; reescribir el MISMO cuerpo deja hash y versión iguales — es
     lo que sostiene el `unchanged` del agente.
@@ -402,10 +314,10 @@ defmodule Dran.Skills do
     no un descarte en silencio), porque el slug es la dirección del wire.
   """
   def update_skill(%Skill{} = skill, attrs) do
-    cond do
-      Skill.system?(skill) -> {:error, :system_readonly}
-      rename_attempted?(skill, attrs) -> {:error, :rename}
-      true -> update_readable_skill(skill, attrs)
+    if rename_attempted?(skill, attrs) do
+      {:error, :rename}
+    else
+      update_readable_skill(skill, attrs)
     end
   end
 
@@ -419,17 +331,14 @@ defmodule Dran.Skills do
   @doc """
   Borra un skill.
 
-  Un built-in NO se borra (`{:error, :system_readonly}`): es contenido de código
-  y su ciclo es el repo, no una credencial. Los grants de `content_shares` no
-  tienen FK polimórfica y quedan inertes (la misma postura que pages, goals y
-  planes): sin la fila, el `EXISTS` no puede alcanzarlos.
+  Los grants de `content_shares` no tienen FK polimórfica y quedan inertes (la
+  misma postura que pages, goals y planes): sin la fila, el `EXISTS` no puede
+  alcanzarlos.
   """
-  def delete_skill(%Skill{} = skill) do
-    if Skill.system?(skill), do: {:error, :system_readonly}, else: Repo.delete(skill)
-  end
+  def delete_skill(%Skill{} = skill), do: Repo.delete(skill)
 
   # El mensaje del slug reservado: una sola frase para el API y la web.
-  @reserved_slug_message "is reserved by a built-in skill"
+  @reserved_slug_message "is reserved by the Dran suite (served by the plugin)"
 
   # La web pinta los errores de un changeset sólo si trae `action` (lo que setea
   # `Repo.insert/1` al fallar): `apply_action/2` presenta este changeset como el

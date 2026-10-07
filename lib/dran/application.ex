@@ -19,10 +19,6 @@ defmodule Dran.Application do
         start: {Task, :start_link, [&Dran.Actors.ensure_system_actors!/0]},
         restart: :temporary
       },
-      # Built-in skills: the code-managed catalog that Dran serves to EVERY API
-      # credential, reconciled with the `skills/**/SKILL.md` baked into the
-      # release on every boot. `nil` in test (the sync is opt-in there).
-      Dran.Skills.BuiltinBoot.child_spec(),
       {DNSCluster, query: Application.get_env(:dran, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Dran.PubSub},
       {Registry, keys: :unique, name: Dran.Worker.SessionRegistry},

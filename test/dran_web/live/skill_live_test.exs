@@ -333,50 +333,8 @@ defmodule DranWeb.SkillLiveTest do
     end
   end
 
-  describe "los built-ins (el catálogo que sirve el código)" do
-    setup do
-      Dran.Skills.Builtin.sync!()
-      :ok
-    end
-
-    test "la lista los muestra marcados y sin lápiz", %{author: author, conn: conn} do
-      {:ok, view, _html} = live(login(conn, author), ~p"/skills")
-
-      row = Skills.get_system_skill("loader")
-
-      assert has_element?(view, "#skill-row-#{row.id}")
-      # El slug ES la dirección del wire y el built-in no se edita: no hay lápiz
-      # para el lector, ni para el privilegiado de la instancia.
-      refute has_element?(view, "#skill-#{row.id}-edit")
-    end
-
-    test "el detalle declara que es del código y no ofrece editarlo", %{
-      author: author,
-      conn: conn
-    } do
-      {:ok, view, _html} = live(login(conn, author), ~p"/skills/plan-flow")
-
-      assert has_element?(view, "#skill-system-badge", t("Built-in"))
-      assert has_element?(view, "#skill-detail")
-      refute has_element?(view, "#skill-edit")
-      refute has_element?(view, "#skill-delete")
-      refute has_element?(view, "#skill-share")
-    end
-
-    test "?edit=true a mano NO abre el panel de edición", %{author: author, conn: conn} do
-      {:ok, view, _html} = live(login(conn, author), ~p"/skills/loader?edit=true")
-
-      # El estado de URL no es autorización: el panel no se pinta y el form
-      # tampoco existe, así que no hay submit que forjar.
-      refute has_element?(view, "#skill-edit-panel")
-      refute has_element?(view, "#skill-form")
-      assert has_element?(view, "#skill-body")
-    end
-
-    test "el alta sigue funcionando para un slug libre, con los built-ins en la lista", %{
-      author: author,
-      conn: conn
-    } do
+  describe "los slugs de la suite (reservados)" do
+    test "el alta sigue funcionando para un slug libre", %{author: author, conn: conn} do
       {:ok, view, _html} = live(login(conn, author), ~p"/skills?new=true")
 
       render_submit(view, "save_skill", %{
@@ -387,7 +345,7 @@ defmodule DranWeb.SkillLiveTest do
       assert Skills.get_skill("propio", scope: {:reader, author.id}).name == "propio"
     end
 
-    test "el alta con el nombre de un built-in muestra el error en el campo", %{
+    test "el alta con el nombre de un slug de la suite muestra el error en el campo", %{
       author: author,
       conn: conn
     } do
@@ -398,10 +356,37 @@ defmodule DranWeb.SkillLiveTest do
           "skill" => %{"name" => "loader", "description" => "d", "body" => "# d"}
         })
 
-      assert html =~ "is reserved by a built-in skill"
-      # El catálogo no creció: la fila del código sigue siendo su única dueña.
-      assert Skills.get_system_skill("loader").owner_user_id == nil
-      assert length(Skills.list_system_skills()) == 9
+      assert html =~ "is reserved by the Dran suite (served by the plugin)"
+      # La reserva es la LISTA, no una fila: no se creó nada y el catálogo no
+      # tiene un `loader` — la suite viaja con el plugin, no con la instancia.
+      assert Skills.get_skill("loader", scope: :all) == nil
+
+      for slug <- Skills.reserved_slugs() do
+        assert Skills.reserved_slug?(slug)
+
+        assert {:error, %Ecto.Changeset{}} =
+                 Skills.create_skill(%{
+                   "name" => slug,
+                   "description" => "x",
+                   "body" => "# x"
+                 })
+      end
+    end
+
+    test "?edit=true a mano NO abre el panel de edición de un skill AJENO", %{
+      author: author,
+      stranger: stranger,
+      conn: conn
+    } do
+      other = skill!(stranger, %{"slug" => "ajeno", "visibility" => "public"})
+
+      # El estado de URL no es autorización: el skill público se LEE, pero el
+      # panel no se pinta (ni existe el form, así que no hay submit que forjar).
+      {:ok, view, _html} = live(login(conn, author), ~p"/skills/#{other.slug}?edit=true")
+
+      refute has_element?(view, "#skill-edit-panel")
+      refute has_element?(view, "#skill-form")
+      assert has_element?(view, "#skill-body")
     end
   end
 

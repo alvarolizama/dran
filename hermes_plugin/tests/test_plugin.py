@@ -1248,7 +1248,8 @@ def test_the_system_skills_are_registered_for_the_local_listing(plugin):
     `dran-*`: el pedido «listar skills» caía en un registro donde Dran no existía.
     `ctx.register_skill` pone las filas (aparecen en `skills_list`, se cargan con
     `skill_view` SIN red, NO se copian a `~/.hermes/skills/` y no entran al índice
-    del prompt). Cada archivo es el MISMO que el servidor hornea como built-in.
+    del prompt). Cada archivo es la ÚNICA copia del cuerpo: estos archivos no se
+    sirven por la API (Dran sólo reserva sus slugs).
     """
     ctx = FakeCtx()
     plugin.register(ctx)
@@ -1275,9 +1276,10 @@ def test_the_system_skills_are_registered_for_the_local_listing(plugin):
 def test_system_skill_files_match_what_the_plugin_registers(plugin):
     """Cada SKILL.md y su fila registrada son la MISMA verdad (los nueve).
 
-    La descripción sale del frontmatter, así que el listado local y el índice del
-    prompt no pueden decir cosas distintas — y como esos mismos archivos los hornea
-    el servidor, la deriva viajaría también al catálogo remoto.
+    La descripción sale del frontmatter, así que el listado local y la línea del
+    bloque del prompt no pueden decir cosas distintas — y como estos archivos son
+    la única copia de la suite (la API ya no la sirve), no hay otra superficie que
+    pueda driftear.
     """
     ctx = FakeCtx()
     plugin.register(ctx)
@@ -1702,14 +1704,15 @@ def test_skills_discovery_is_a_trigger_not_a_side_note(plugin):
     assert "q" in schema["parameters"]["properties"]
 
     # El pedido de LISTADO es el otro disparo: la lista local no trae los skills
-    # del workspace (se sirven, no se instalan), así que el bloque y la tool tienen
-    # que decir que el catálogo ES la lista — y nombrar lo que sí se ve local.
+    # del workspace (se sirven, no se instalan) y el catálogo remoto no trae la
+    # suite (viaja con el plugin), así que el bloque y la tool tienen que decir
+    # las DOS mitades y cómo se lee cada una.
     assert "LIST the skills" in text
-    assert "system skills" in text
-    assert "loader" in text
+    assert "dran:loader" in text
+    assert "skill_view" in text  # la suite se lee LOCAL: dran_skill no la sirve
     assert "tool_search" in text  # las 4 tools están diferidas: hay que decirlo
     assert "LIST the skills" in schema["description"]
-    assert "served, not installed" in schema["description"]
+    assert "skill_view" in schema["description"]
 
 
 def test_skill_tools_reject_missing_arguments_without_calling_the_api(plugin):
@@ -1759,13 +1762,12 @@ def _sha(body: str) -> str:
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
-def _row(slug: str, body: str, *, version: int = 1, description: str = "d",
-         system: bool = False) -> dict:
+def _row(slug: str, body: str, *, version: int = 1, description: str = "d") -> dict:
     """Una fila de DETALLE como la sirve `/api/skills/:slug` (sin `skill_md`: el
     caso en que el espejo tiene que montar el archivo él mismo)."""
     return {"slug": slug, "name": slug, "description": description, "body": body,
             "version": version, "content_hash": _sha(body),
-            "system": system, "visibility": "public"}
+            "visibility": "public"}
 
 
 class _FakeMirrorClient:
@@ -2102,23 +2104,6 @@ def test_force_imposes_the_local_edit(plugin, hermetic_dran_home):
     assert report["pushed"][0]["over_remote"] is True
     # El remoto (el fake) ya tiene el cuerpo local: el espejo queda limpio.
     assert _manifest(hermetic_dran_home)["skills"]["weekly"]["content_hash"] == _sha(local_body)
-
-
-def test_a_builtin_is_never_pushed(plugin, hermetic_dran_home):
-    """Un built-in es contenido de CÓDIGO: el espejo lo dice, no lo intenta."""
-    handlers, client, ctx = _mirror(plugin, {
-        "skills-flow": _row("skills-flow", "# flow", system=True),
-    })
-    _sync(plugin, client, ctx)
-    _mirror_file(hermetic_dran_home, "skills-flow").write_text(
-        plugin._mount_skill_md("skills-flow", "d", "# editado"), encoding="utf-8")
-
-    report = _sync(plugin, client, ctx, push=True)
-
-    assert client.writes == []
-    assert report["pending_push"] == [] and report["pushed"] == []
-    [skipped] = report["skipped"]
-    assert skipped["slug"] == "skills-flow" and "built-in" in skipped["reason"]
 
 
 def test_sync_can_target_one_slug(plugin, hermetic_dran_home):

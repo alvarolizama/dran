@@ -15,16 +15,6 @@ defmodule Dran.Skills.Skill do
   `Dran.ContentVisibility.filter(scope, :skill)` en el punto único; el dueño se
   resuelve server-side y NUNCA sale del body.
 
-  ## Skills de SISTEMA (`system`)
-
-  Los built-ins que Dran sirve POR DEFAULT a toda credencial (cuenta, grupo o
-  admin legacy) son filas con `system: true` y sin dueño: su contenido sale de
-  los archivos `skills/**/SKILL.md` del repo, los sincroniza
-  `Dran.Skills.Builtin` en cada boot, y **no se escriben por API ni por la
-  web** — la única forma de cambiarlos es el archivo y un redeploy. El flag es
-  server-side (no está en `cast/2`) y su `slug` está RESERVADO: el detalle
-  resuelve por slug, y un homónimo sería una dirección con dos dueños.
-
   ## El contrato de wire
 
   `name` + `description` (≤ 60) + `body` + `version` + `content_hash`. El
@@ -48,7 +38,6 @@ defmodule Dran.Skills.Skill do
              :version,
              :content_hash,
              :visibility,
-             :system,
              :owner_user_id,
              :inserted_at,
              :updated_at
@@ -73,11 +62,7 @@ defmodule Dran.Skills.Skill do
     # Visibilidad por ítem, default privado.
     field :visibility, :string, default: "private"
 
-    # Built-in servido por default a toda credencial. Lo escribe SÓLO el
-    # sincronizador de código (`Dran.Skills.Builtin`): no viene del body.
-    field :system, :boolean, default: false
-
-    # Dueño server-side; NULL = contenido sin dueño (admin legacy, sistema).
+    # Dueño server-side; NULL = contenido sin dueño (admin legacy).
     field :owner_user_id, :integer
 
     timestamps(type: :utc_datetime)
@@ -110,21 +95,6 @@ defmodule Dran.Skills.Skill do
   def content_hash(body) when is_binary(body) do
     :crypto.hash(:sha256, body) |> Base.encode16(case: :lower)
   end
-
-  @doc """
-  El changeset de un skill de SISTEMA: el MISMO contrato, con `system: true`.
-
-  `system` no está en `cast/2` a propósito (es server-side, como el dueño): esta
-  es la única puerta que lo escribe, y la usa `Dran.Skills.Builtin` — ninguna
-  credencial puede declararse de sistema desde el body.
-  """
-  def system_changeset(%__MODULE__{} = skill, attrs) do
-    skill |> changeset(attrs) |> put_change(:system, true)
-  end
-
-  @doc "¿Es un built-in servido por default a toda credencial?"
-  def system?(%__MODULE__{system: true}), do: true
-  def system?(_skill), do: false
 
   @doc "Descripciones válidas: el tope que el índice del prompt respeta."
   def description_max, do: @description_max

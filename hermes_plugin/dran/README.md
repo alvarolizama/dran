@@ -424,9 +424,9 @@ hashea igual.
 **En el conflicto gana el remoto.** Si el cuerpo cambió en los dos lados, la
 edición local se descarta, el espejo se reescribe con el del servidor y el
 reporte lo dice (`conflicts: [{resolution: "remote"}]`); `force=true` es la única
-puerta por la que el local se impone. Un **built-in** nunca se pushea —es
-contenido de código y la API lo rechaza con 403—: el reporte lo declara
-(`skipped`) en vez de intentarlo.
+puerta por la que el local se impone. La SUITE no entra acá: sus nueve slugs no
+están en el catálogo (viajan con el plugin), así que el espejo sólo reconcilia los
+skills del workspace.
 
 Las tres invariantes que lo sostienen (y que los tests miden):
 
@@ -455,14 +455,13 @@ bloque le parezca sospechoso al modelo. Con `q` la búsqueda es del servidor
 repite como red de seguridad contra un Dran que todavía no conozca el param:
 nunca ensancha el resultado.
 
-**Los 9 skills de la suite son built-ins**: Dran los sirve por default a toda
-credencial (`system: true` en el payload), así que un perfil nuevo ya los ve en
-`dran_skills` y en el bloque del prompt sin instalarlos; su slug está reservado y
-`dran_skill_save`/`dran_skill_delete` sobre uno responde `403`. Se cambian
-editando el archivo y redeployando: todos viven en
-`hermes_plugin/dran/skills/<slug>/SKILL.md` — la misma carpeta que el plugin
-registra como sus filas locales, así que el listado y el bloque del prompt salen
-de los MISMOS archivos.
+**La suite NO es del catálogo**: el router y los ocho flows viven en el PLUGIN
+(`hermes_plugin/dran/skills/<slug>/SKILL.md`), que los registra como filas locales y
+los apunta desde el bloque del prompt; `dran_skills`/`dran_skill` nunca los
+devuelven (un agente los lee con `skill_view("dran:<slug>")`, sin red). Dran
+reserva los nueve slugs (crear uno ajeno da `422`) para que no puedan ser
+suplantados, y el espejo del perfil sólo reconcilia los skills del WORKSPACE. Se
+cambian editando el archivo y redeployando el plugin (`hermes plugins update dran`).
 
 **Las cinco tools están DIFERIDAS.** Hermes reemplaza toda tool de plugin por el
 puente (`tool_search` / `tool_describe` / `tool_call`): un toolset de plugin no
@@ -473,7 +472,7 @@ cuerpo del puntero nombran el puente y la query en INGLÉS (`"dran skills"`): un
 query en español no matchea ningún tool y devuelve vacío, que no es lo mismo que
 una capacidad ausente.
 
-### La suite del sistema: las filas locales Y los built-ins (los mismos archivos)
+### La suite del sistema: las nueve filas LOCALES (el plugin es su única puerta)
 
 El pedido «listar los skills» corre `skills_list` — el registro LOCAL — y ahí no
 había ni una fila de Dran (el catálogo se sirve, no se instala), así que la
@@ -487,10 +486,10 @@ los ocho flows (`knowledge-flow`, `relations-flow`, `workers-flow`, `memory-flow
 no diga. El router contesta además «¿qué se puede hacer con Dran?»: es la entrada
 de la suite y el índice del catálogo.
 
-Y son los **mismos archivos** que el servidor hornea como built-ins:
-`Dran.Skills.Builtin` lee `hermes_plugin/dran/skills/`, así que hay UNA sola
-fuente de bytes para las dos puertas — el listado local y la línea del bloque del
-prompt — y ninguna puede quedar describiendo una versión vieja de la otra.
+Y son el **único** lugar donde viven esos bytes: el plugin registra estas filas
+locales y el bloque del prompt apunta a ellas, así que hay UNA sola fuente para el
+listado, el bloque y el `skill_view` del agente — nada que pueda driftear (Dran ya
+no los sirve: sólo reserva sus slugs).
 
 - **viven dentro del plugin y no se copian a `~/.hermes/skills/`**; Hermes las
   retracta al descargar el plugin. Los slugs no llevan prefijo `dran-`: el
@@ -565,11 +564,11 @@ Memory). Apaga la mitad de memoria completa — recall, captura y las cuatro too
    `skills_list`, cargables con `skill_view` sin red. El router se llama
    **`loader`** (entrada de la suite + índice del catálogo) y los flows pierden el
    prefijo `dran-` (`knowledge-flow`, `relations-flow`, …): el namespace lo pone el
-   host. El servidor sigue horneando los mismos archivos como built-ins
-   (`Dran.Skills.Builtin` lee esa carpeta y el Dockerfile la copia). **Los slugs de
-   los built-ins SÍ cambian** (`dran-knowledge-flow` → `knowledge-flow`, …): el sync
-   del boot poda las filas viejas y crea las nuevas, y quien tuviera un slug viejo
-   anotado (en un `related_skills`, en una nota) tiene que actualizarlo.
+   host. El servidor deja de hornear la suite — su catálogo es sólo el del
+   workspace y los nueve slugs quedan RESERVADOS (`422` al crear uno) —, así que la
+   nomenclatura vieja desaparece con las filas: quien tuviera un slug
+   `dran-knowledge-flow` anotado (en un `related_skills`, en una nota) tiene que
+   actualizarlo al slug nuevo.
 2. Se suman `dran_skill_sync` (el toolset `dran_skills` pasa de 4 a 5 tools) y la
    clave de tarjeta **Skills mirror on disk** (`skills_cache`, default ON). Nada que
    hacer: un perfil existente arranca con el espejo encendido y sin bodies en disco
@@ -637,7 +636,7 @@ contrato, en orden de importancia:
    respeta su presupuesto (`deferred`), repara un archivo borrado o ilegible y no
    aborta por un slug que falla;
 4. push: una edición local se reporta (`pending_push`) y se sube fast-forward; en
-   conflicto gana el remoto y `force` impone la local; un built-in sale `skipped`;
+   conflicto gana el remoto y `force` impone la local;
 5. y las guardas: slug inválido (`../../`) no arma ninguna ruta ni escribe,
    manifiesto corrupto se lee vacío, `"false"` en el `config.json` apaga el espejo
    (sin escribir nada a disco) y el arranque usa el índice que ya bajó el prompt

@@ -113,26 +113,26 @@ Full detail: [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md).
 
 ## The skills
 
-One suite, versioned with this repo — and **served by Dran itself**: every API
-credential (account, group or admin token) gets the 9 built-in skills by
-default through `GET /api/skills`, with no install — the catalog is
-`lib/dran/skills.ex`, the routes are in `lib/dran_web/router.ex`.
+One suite, versioned with this repo, and it **ships with the plugin**: the router
+and the eight flows live in `hermes_plugin/dran/skills/<slug>/SKILL.md` and the
+plugin registers them as local rows (`dran:loader`, `dran:<flow>`) — loadable with
+`skill_view`, no network, no install. Dran's own catalog (`GET /api/skills`) is the
+workspace's skills and nothing else: the nine suite slugs are simply RESERVED
+there (`422` on a colliding create), so the suite cannot be shadowed.
 
-No local install is needed to see them: the plugin already puts the catalog in
-front of the agent — a line per skill in the prompt block, the live list and
-`q=` search through `dran_skills`, and the body through `dran_skill`. The old
-symlinks under `skills.external_dirs` were a second copy of the same bytes,
-so they are retired (see
+The prompt block tells the agent both halves: the workspace catalog (a line per
+skill, `q=` search and the body through `dran_skills` / `dran_skill`) and the
+suite's local rows (`skill_view("dran:loader")`). The old symlinks under
+`skills.external_dirs` were a second copy of the same bytes, so they are retired
+(see
 [skills/README.md § Retiring the local install](skills/README.md#retiring-the-local-install)).
 
-One row IS registered locally, and it is a pointer rather than a copy:
-`dran:dran-skills-index` (`ctx.register_skill`) is what makes "list the skills"
-— which runs the LOCAL listing — land on the live catalog, since the plugin's
-tools are deferred behind `tool_search`. No body of the suite is on disk:
-[skills/README.md § The one local row](skills/README.md#the-one-local-row-the-pointer).
-
-The files are the SINGLE source of truth: what Dran serves is what those
-`SKILL.md` files say, embedded at compile time and reconciled on every boot.
+The nine rows the plugin registers are the whole local face of the suite:
+`dran:loader` (the router, which answers "what can I do with Dran") plus
+`dran:<flow>` for the eight flows — what makes "list the skills" land on it,
+since the five skill tools are deferred behind `tool_search`. No body of the
+suite is copied anywhere: the files in this repo are the only copy.
+[skills/README.md § The nine local rows](skills/README.md#the-nine-local-rows-the-suite).
 
 Details: [skills/README.md](skills/README.md).
 
@@ -142,10 +142,10 @@ injected every turn, so it stays a single line):
 ```text
 - **Dran skills (remote)** — to initialize and search them, list the catalog with
   `dran_skills` before a task that may match a skill (pass `q=` to query slug,
-  name and description) and load the one that applies with `dran_skill`; nothing
-  is copied to disk, and when the user asks to LIST the skills, that catalog IS
-  the list. The tools are DEFERRED: reach them through `tool_search` with an
-  English query.
+  name and description) and load the one that applies with `dran_skill`; the
+  suite itself (`dran:loader` + the eight flows) ships with the plugin and is
+  read locally with `skill_view`. Nothing is copied to disk. The tools are
+  DEFERRED: reach them through `tool_search` with an English query.
 ```
 
 One credential, no per-agent keys: the account's API token (Settings → Account),
