@@ -179,6 +179,16 @@ config_schema:
     default: true
     label: Connected services
     description: "Inspect the connected services, emit a connect link, DISCOVER a toolkit's tool catalog and run one of its tools (dran_services*). The catalog travels as data — never one tool per toolkit. Hermes toolset: dran_services."
+  services_timeout_s:
+    type: int
+    default: 15
+    label: Services read timeout (s)
+    description: "Client budget for a services READ (dran_services, dran_services_tools). Keep it ABOVE the instance's DRAN_COMPOSIO_TIMEOUT: with the client cap below the server's, the socket wins the race and a slow provider arrives as a dumb timeout instead of dran's typed error. The connect link uses a fixed 20s and dran_services_run its own setting."
+  services_run_timeout_s:
+    type: int
+    default: 45
+    label: Services run timeout (s)
+    description: "Client budget for dran_services_run — a real action against the provider (send, create, upload), the only call that can legitimately take tens of seconds. Keep it ABOVE the instance's DRAN_COMPOSIO_EXECUTE_TIMEOUT. It is never retried on timeout: a mutating tool that ran out of budget may still have landed."
   skills:
     type: bool
     default: true

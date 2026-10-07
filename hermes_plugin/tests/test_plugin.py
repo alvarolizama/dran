@@ -783,6 +783,7 @@ class _FakeServiceClient:
         self._memories = memories or []
         self.service_calls = 0
         self.search_calls = 0
+        self.last_timeout = None
 
     def agent_config(self, timeout=3.0):
         return None
@@ -791,15 +792,18 @@ class _FakeServiceClient:
         self.search_calls += 1
         return list(self._memories)
 
-    def list_services(self):
+    def list_services(self, timeout=None):
         self.service_calls += 1
+        self.last_timeout = timeout
         return self._services
 
 
 def _armed_provider(plugin, client, *, cadence=1):
     provider = plugin.DranMemoryProvider()
     provider._config = {"auto_recall": True, "recall_cadence": cadence,
-                        "max_recall_results": 5, "max_recall_chars": 800}
+                        "max_recall_results": 5, "max_recall_chars": 800,
+                        "base_url": "http://dran.test", "api_key": "k",
+                        "workspace": "personal"}
     provider._client = client
     provider._turns_since_inject = 1_000_000
     provider._workspace_resolved_at = 0.0
@@ -810,14 +814,18 @@ def test_services_inventory_is_injected_in_prefetch(plugin):
     client = _FakeServiceClient(_SERVICES_PAYLOAD)
     provider = _armed_provider(plugin, client, cadence=1)
 
-    provider.queue_prefetch("hola", session_id="s1")
-    provider.shutdown()  # join the background recall pass
-    text = provider.prefetch("hola", session_id="s1")
+    # La línea se paga con un cliente EFÍMERO y cap corto: el cliente de la
+    # memoria (y su breaker) no se toca.
+    with mock.patch.object(plugin, "_DranClient", return_value=client):
+        provider.queue_prefetch("hola", session_id="s1")
+        provider.shutdown()  # join the background recall pass
+        text = provider.prefetch("hola", session_id="s1")
 
     assert "Dran services:" in text
     assert "gmail ACTIVE (alvaro@gmail.com)" in text
     assert "github not connected" in text
     assert client.service_calls == 1
+    assert client.last_timeout == plugin.PREFETCH_SERVICES_TIMEOUT
 
 
 def test_services_inventory_respects_cadence_and_dedupe(plugin):
@@ -825,13 +833,14 @@ def test_services_inventory_respects_cadence_and_dedupe(plugin):
     client = _FakeServiceClient(_SERVICES_PAYLOAD)
     provider = _armed_provider(plugin, client, cadence=3)
 
-    provider.queue_prefetch("uno", session_id="s1")
-    provider.shutdown()
-    provider.prefetch("uno", session_id="s1")
+    with mock.patch.object(plugin, "_DranClient", return_value=client):
+        provider.queue_prefetch("uno", session_id="s1")
+        provider.shutdown()
+        provider.prefetch("uno", session_id="s1")
 
-    provider.queue_prefetch("dos", session_id="s1")  # dentro de la ventana
-    provider.shutdown()
-    text = provider.prefetch("dos", session_id="s1")
+        provider.queue_prefetch("dos", session_id="s1")  # dentro de la ventana
+        provider.shutdown()
+        text = provider.prefetch("dos", session_id="s1")
 
     assert client.service_calls == 1, "one GET /api/services per prefetch window"
     assert text == ""
@@ -846,7 +855,7 @@ def test_services_connect_returns_redirect_url(plugin):
     ctx = FakeCtx()
 
     class Client:
-        def connect_service(self, toolkit):
+        def connect_service(self, toolkit, timeout=None):
             return {"data": {"toolkit": toolkit,
                              "redirect_url": "https://dran.test/connect/abc",
                              "expires_in": 600}}
@@ -865,7 +874,7 @@ def test_services_run_surfaces_not_connected_409(plugin):
     ctx = FakeCtx()
 
     class NotConnected:
-        def execute_service(self, toolkit, tool_slug, arguments):
+        def execute_service(self, toolkit, tool_slug, arguments, timeout=None):
             raise urllib.error.HTTPError(
                 "http://dran.test/api/services/execute", 409, "Conflict", {},
                 io.BytesIO(json.dumps({
@@ -891,7 +900,7 @@ def test_services_wait_returns_when_active(plugin):
     ctx = FakeCtx()
 
     class Client:
-        def list_services(self):
+        def list_services(self, timeout=None):
             return {"configured": True, "data": [
                 {"toolkit": "gmail", "connected": True, "status": "ACTIVE"}]}
 
@@ -908,7 +917,7 @@ def test_services_wait_times_out_with_expiry_hint(plugin):
     ctx = FakeCtx()
 
     class Client:
-        def list_services(self):
+        def list_services(self, timeout=None):
             return {"configured": True, "data": [
                 {"toolkit": "gmail", "connected": False, "status": "INITIATED"}]}
 
@@ -920,6 +929,206 @@ def test_services_wait_times_out_with_expiry_hint(plugin):
     assert out["active"] is False
     assert "10 minutes" in out["hint"]
     assert "expires" in out["hint"]
+
+
+# ── Presupuestos de la superficie de servicios (el ladder) ───────────────────
+#
+# El invariante: el cap del CLIENTE va SIEMPRE por encima del presupuesto del
+# servidor, y un timeout sale TIPADO (capa, cap, retryable) en vez de
+# disfrazarse de «dran unavailable».
+
+
+class _RecordingBudgetClient:
+    """Cliente falso que anota el presupuesto con el que se lo llamó."""
+
+    def __init__(self):
+        self.services_timeout = 15.0
+        self.services_run_timeout = 45.0
+        self.calls = []
+
+    def list_services(self, timeout=None):
+        self.calls.append(("list_services", timeout))
+        return {"configured": True, "data": []}
+
+    def connect_service(self, toolkit, timeout=None):
+        self.calls.append(("connect_service", timeout))
+        return {"data": {"toolkit": toolkit, "redirect_url": "https://d.test/c"}}
+
+    def list_service_tools(self, toolkit, slug="", timeout=None):
+        self.calls.append(("list_service_tools", timeout))
+        return {"toolkit": toolkit, "tools": []}
+
+    def search_service_tools(self, use_case, timeout=None):
+        self.calls.append(("search_service_tools", timeout))
+        return {"query": use_case, "primary_tool_slugs": []}
+
+    def execute_service(self, toolkit, tool_slug, arguments, timeout=None):
+        self.calls.append(("execute_service", timeout))
+        return {"data": {"toolkit": toolkit, "tool_slug": tool_slug}}
+
+
+def test_services_budget_is_per_surface(plugin):
+    """Leer espera el turno, conectar es interactivo, ejecutar es una acción real."""
+    client = _RecordingBudgetClient()
+    ctx = FakeCtx()
+
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        plugin._handle_plugin_tool("dran_services", {}, ctx=ctx)
+        plugin._handle_plugin_tool("dran_services_tools", {"toolkit": "gmail"}, ctx=ctx)
+        plugin._handle_plugin_tool("dran_services_tools", {"use_case": "mail"}, ctx=ctx)
+        plugin._handle_plugin_tool("dran_services_connect", {"toolkit": "gmail"}, ctx=ctx)
+        plugin._handle_plugin_tool(
+            "dran_services_run",
+            {"toolkit": "gmail", "tool_slug": "GMAIL_SEND_EMAIL"}, ctx=ctx)
+
+    budgets = dict(client.calls)
+    assert budgets["list_services"] == 15.0
+    assert budgets["list_service_tools"] == 15.0
+    assert budgets["search_service_tools"] == 15.0
+    assert budgets["connect_service"] == plugin.SERVICES_CONNECT_TIMEOUT
+    assert budgets["execute_service"] == 45.0
+    # NINGUNA llamada de services sale con el default corto del camino de
+    # memoria: el presupuesto viaja explícito en cada una.
+    assert all(t is not None for _, t in client.calls)
+
+
+def test_services_run_budget_comes_from_the_card(plugin):
+    """El cap de una acción real es el de la tarjeta, no una constante."""
+    client = _RecordingBudgetClient()
+    client.services_run_timeout = 90.0
+    ctx = FakeCtx()
+
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        plugin._handle_plugin_tool(
+            "dran_services_run",
+            {"toolkit": "gmail", "tool_slug": "GMAIL_SEND_EMAIL"}, ctx=ctx)
+
+    assert client.calls == [("execute_service", 90.0)]
+
+
+def test_services_card_budgets_are_clamped(plugin, tmp_path):
+    """La tarjeta manda; un valor basura o fuera de rango cae al default/piso."""
+    ctx = FakeCtx(config={"services_timeout_s": 30, "services_run_timeout_s": 120})
+    config = plugin._load_dran_config(str(tmp_path), ctx)
+    assert config["services_timeout_s"] == 30.0
+    assert config["services_run_timeout_s"] == 120.0
+
+    ctx = FakeCtx(config={"services_timeout_s": "mucho", "services_run_timeout_s": 0})
+    config = plugin._load_dran_config(str(tmp_path), ctx)
+    assert config["services_timeout_s"] == plugin.SERVICES_TIMEOUT_DEFAULT
+    assert config["services_run_timeout_s"] == plugin.SERVICES_TIMEOUT_MIN
+
+    ctx = FakeCtx(config={"services_timeout_s": 10_000})
+    config = plugin._load_dran_config(str(tmp_path), ctx)
+    assert config["services_timeout_s"] == plugin.SERVICES_TIMEOUT_MAX
+
+
+def test_services_timeout_is_typed_not_unavailable(plugin):
+    """El cap del plugin dice que cortó él, con qué presupuesto y si reintentar."""
+    class Slow:
+        services_timeout = 15.0
+        services_run_timeout = 45.0
+
+        def list_services(self, timeout=None):
+            raise TimeoutError("timed out")
+
+    with mock.patch.object(plugin, "_client_for", return_value=Slow()):
+        out = json.loads(plugin._handle_plugin_tool("dran_services", {}, ctx=FakeCtx()))
+
+    assert out["error"] == "timeout"
+    assert out["layer"] == "plugin"
+    assert out["cap_s"] == 15.0
+    assert out["retryable"] is True
+    assert "not down" in out["hint"]
+
+
+def test_services_run_timeout_is_not_blindly_retryable(plugin):
+    """Un execute que se pasó del cap puede haber aterrizado: no se reintenta a ciegas."""
+    class Slow:
+        services_timeout = 15.0
+        services_run_timeout = 45.0
+
+        def execute_service(self, toolkit, tool_slug, arguments, timeout=None):
+            raise TimeoutError("timed out")
+
+    with mock.patch.object(plugin, "_client_for", return_value=Slow()):
+        out = json.loads(plugin._handle_plugin_tool(
+            "dran_services_run",
+            {"toolkit": "gmail", "tool_slug": "GMAIL_SEND_EMAIL"}, ctx=FakeCtx()))
+
+    assert out["error"] == "timeout"
+    assert out["cap_s"] == 45.0
+    assert out["retryable"] is False
+    assert "may still have landed" in out["hint"]
+
+
+def test_unreachable_dran_is_typed_as_transport(plugin):
+    """Dran caído ≠ cap vencido: otra capa y otro retryable."""
+    class Down:
+        services_timeout = 15.0
+        services_run_timeout = 45.0
+
+        def list_services(self, timeout=None):
+            raise urllib.error.URLError(ConnectionRefusedError(61, "Connection refused"))
+
+    with mock.patch.object(plugin, "_client_for", return_value=Down()):
+        out = json.loads(plugin._handle_plugin_tool("dran_services", {}, ctx=FakeCtx()))
+
+    assert out["layer"] == "transport"
+    assert out["retryable"] is True
+    assert "unreachable" in out["error"]
+
+
+def test_connect_timeout_is_transport_not_slow_provider(plugin):
+    """Un timeout ENVUELTO en URLError es el connect: no abrió, no es lentitud."""
+    class NeverConnects:
+        services_timeout = 15.0
+        services_run_timeout = 45.0
+
+        def list_services(self, timeout=None):
+            raise urllib.error.URLError(TimeoutError("timed out"))
+
+    with mock.patch.object(plugin, "_client_for", return_value=NeverConnects()):
+        out = json.loads(plugin._handle_plugin_tool("dran_services", {}, ctx=FakeCtx()))
+
+    assert out["error"] == "timeout"
+    assert out["layer"] == "transport"
+    assert "never accepted the connection" in out["hint"]
+
+
+def test_timeout_is_never_retried(plugin):
+    """Un timeout no se reintenta: reintentarlo duplica el peor caso."""
+    client = plugin._DranClient("http://dran.test", "k")
+    calls = []
+
+    def boom(method, path, payload, timeout):
+        calls.append((method, path, timeout))
+        raise TimeoutError("timed out")
+
+    with mock.patch.object(client, "_request_once", side_effect=boom), \
+            mock.patch.object(plugin.time, "sleep") as sleeper:
+        with pytest.raises(TimeoutError):
+            client.request("GET", "/api/services", timeout=15.0)
+
+    assert len(calls) == 1, "a timed-out GET must not be retried"
+    sleeper.assert_not_called()
+
+
+def test_connect_refused_still_retries_once(plugin):
+    """La red que parpadea sí se reintenta: un connect refused no es un timeout."""
+    client = plugin._DranClient("http://dran.test", "k")
+    calls = []
+
+    def boom(method, path, payload, timeout):
+        calls.append(1)
+        raise urllib.error.URLError(ConnectionRefusedError(61, "refused"))
+
+    with mock.patch.object(client, "_request_once", side_effect=boom), \
+            mock.patch.object(plugin.time, "sleep"):
+        with pytest.raises(urllib.error.URLError):
+            client.request("GET", "/api/services", timeout=15.0)
+
+    assert len(calls) == 2
 
 
 def test_services_tools_hit_documented_routes(plugin):

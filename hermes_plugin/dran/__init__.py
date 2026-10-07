@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 import threading
 import time
 import urllib.error
@@ -83,6 +84,27 @@ SKILLS_SECTION_MAX_CHARS = 3_000
 SKILLS_SECTION_MAX_DESC_CHARS = 80
 SKILLS_INDEX_TIMEOUT = 3.0
 SKILLS_INDEX_LIMIT = 200
+# Presupuestos de la superficie de SERVICIOS (el ladder y su invariante están
+# documentados en el README: «Presupuestos de transporte»).
+#
+# La regla es una: el cap del CLIENTE va SIEMPRE por encima del presupuesto del
+# SERVIDOR (`DRAN_COMPOSIO_TIMEOUT` / `DRAN_COMPOSIO_EXECUTE_TIMEOUT`), para que
+# un proveedor lento llegue como error TIPADO de dran y no como un socket
+# timeout mudo de este lado. Con el cliente por debajo, el que gana la carrera
+# es el socket y el agente sólo puede decir «dran unavailable».
+#
+# El cap es por CONSECUENCIA, no por endpoint: lo que espera un turno no lleva
+# el mismo presupuesto que una acción real contra el proveedor.
+SERVICES_TIMEOUT_DEFAULT = 15.0  # lecturas: services | tools | search (card: services_timeout_s)
+SERVICES_CONNECT_TIMEOUT = 20.0  # emitir el link hospedado: interactivo, el usuario ya está esperando
+SERVICES_RUN_TIMEOUT_DEFAULT = 45.0  # execute: acción real contra el proveedor (card: services_run_timeout_s)
+SERVICES_TIMEOUT_MIN = 1.0
+SERVICES_TIMEOUT_MAX = 300.0
+SERVICES_RUN_TIMEOUT_MAX = 600.0
+# La línea de inventario del turno (`queue_prefetch`) es decoración: se paga con
+# un cliente EFÍMERO y este cap corto, para que una ventana lenta de Composio no
+# retrase el arranque del turno ni toque el breaker que apaga el recall.
+PREFETCH_SERVICES_TIMEOUT = 3.0
 # Ingest cursor state file (per profile): session_id -> messages digested.
 INGEST_CURSOR_FILE = "dran_memory_cursor.json"
 
@@ -97,6 +119,8 @@ def _default_config() -> dict:
         "max_recall_results": 5,
         "max_recall_chars": 800,
         "recall_cadence": 1,
+        "services_timeout_s": SERVICES_TIMEOUT_DEFAULT,
+        "services_run_timeout_s": SERVICES_RUN_TIMEOUT_DEFAULT,
     }
 
 
@@ -244,7 +268,28 @@ def _load_dran_config(hermes_home: str, ctx: Any = None) -> dict:
         config["recall_cadence"] = max(1, min(10, int(config.get("recall_cadence", 1))))
     except (TypeError, ValueError):
         config["recall_cadence"] = 1
+    # Presupuestos de servicios: un valor basura de la tarjeta cae al default
+    # (nunca a 0, que cortaría toda llamada antes de salir).
+    config["services_timeout_s"] = _clamp_seconds(
+        config.get("services_timeout_s"), SERVICES_TIMEOUT_DEFAULT,
+        SERVICES_TIMEOUT_MIN, SERVICES_TIMEOUT_MAX,
+    )
+    config["services_run_timeout_s"] = _clamp_seconds(
+        config.get("services_run_timeout_s"), SERVICES_RUN_TIMEOUT_DEFAULT,
+        SERVICES_TIMEOUT_MIN, SERVICES_RUN_TIMEOUT_MAX,
+    )
     return config
+
+
+def _clamp_seconds(value: Any, default: float, low: float, high: float) -> float:
+    """Un presupuesto en segundos: número finito dentro de [low, high] o el default."""
+    try:
+        secs = float(value)
+    except (TypeError, ValueError):
+        return default
+    if secs != secs or secs in (float("inf"), float("-inf")):  # NaN/inf
+        return default
+    return max(low, min(high, secs))
 
 
 def _save_dran_config(values: dict, hermes_home: str) -> None:
@@ -259,10 +304,36 @@ def _save_dran_config(values: dict, hermes_home: str) -> None:
     config_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
 
 
+def _is_timeout_error(exc: BaseException) -> bool:
+    """True when the failure is the socket cap firing (not the server answering).
+
+    `urlopen(timeout=…)` raises bare `TimeoutError` on a read timeout and
+    `urllib.error.URLError(timeout)` when the connect itself times out, so both
+    shapes count: they mean the same thing — this call did not fit in its
+    budget and retrying it will not make it fit.
+
+    `socket.timeout` va explícito a propósito: desde 3.10 es un alias de
+    `TimeoutError`, pero en un intérprete más viejo es una clase aparte y sin
+    esto el cap se escaparía disfrazado de error desconocido.
+
+    Ojo con lo que este cap significa: `urlopen(timeout=)` es un timeout de
+    SOCKET INACTIVO, no una fecha límite de reloj. Una respuesta lenta pero que
+    sigue goteando puede pasarse del cap (medido: 16 s con cap de 15 s). El cap
+    acota el silencio, no el total.
+    """
+    timeouts = (TimeoutError, socket.timeout)
+    if isinstance(exc, timeouts):
+        return True
+    reason = getattr(exc, "reason", None)
+    return isinstance(reason, timeouts)
+
+
 class _DranClient:
     """Minimal REST client for Dran's /api/memory endpoints.
 
-    Idempotent GETs get one retry with short backoff; everything tracks a
+    Idempotent GETs get one retry with short backoff — a TIMEOUT never does:
+    retrying a timeout doubles the worst case and asserts the opposite of what
+    the timeout just said (this endpoint is slow). Everything tracks a
     per-instance circuit breaker (after BREAKER_THRESHOLD consecutive
     failures all calls fast-fail until the cooldown elapses) so a down
     Dran doesn't add a timeout to every turn.
@@ -270,7 +341,9 @@ class _DranClient:
 
     def __init__(self, base_url: str, api_key: str, workspace: str = "",
                  agent_identity: str = "", timeout: float = REQUEST_TIMEOUT,
-                 default_scope: str = "private", default_group: str = ""):
+                 default_scope: str = "private", default_group: str = "",
+                 services_timeout: float = SERVICES_TIMEOUT_DEFAULT,
+                 services_run_timeout: float = SERVICES_RUN_TIMEOUT_DEFAULT):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         # El destino por defecto del PERFIL (panel: «Write scope» / «Group slug»).
@@ -281,6 +354,10 @@ class _DranClient:
         self.workspace = workspace
         self.agent_identity = agent_identity
         self.timeout = timeout
+        # Presupuesto por consecuencia de la superficie de servicios (ver el
+        # ladder en el README). La superficie de memoria sigue con `timeout`.
+        self.services_timeout = services_timeout
+        self.services_run_timeout = services_run_timeout
         self._failures = 0
         self._breaker_open_until = 0.0
 
@@ -331,6 +408,11 @@ class _DranClient:
             except Exception as exc:
                 last_exc = exc
                 self._record_failure()
+                # Un TIMEOUT no se reintenta: duplicaría el peor caso (2× el
+                # cap + backoff) para volver a concluir lo mismo, y contra un
+                # POST mutador reintentar es peor que fallar.
+                if _is_timeout_error(exc):
+                    break
 
             if attempt + 1 < attempts:
                 time.sleep(HTTP_RETRY_BACKOFF_SECS * (attempt + 1))
@@ -845,26 +927,27 @@ class _DranClient:
     # toolkit, qué tool, la conexión OAuth) vive server-side. La identidad es
     # la credencial: NUNCA viaja un user_id ni un session_id en el body.
 
-    def list_services(self) -> dict:
+    def list_services(self, timeout: float | None = None) -> dict:
         """GET /api/services -> {"configured": bool, "data": [...]}.
 
         `status` es ACTIVE | INITIALIZING | INITIATED | EXPIRED | INACTIVE,
         o null cuando nunca se conectó; `identity` puede ser null. Sin key
         de Composio el server responde {"configured": false, "data": []}.
         """
-        data = self.request("GET", "/api/services")
+        data = self.request("GET", "/api/services", timeout=timeout)
         return data if isinstance(data, dict) else {}
 
-    def connect_service(self, toolkit: str) -> dict:
+    def connect_service(self, toolkit: str, timeout: float | None = None) -> dict:
         """POST /api/services/:toolkit/connect -> el link hosted (redirect_url).
 
         El link dura 10 minutos: vencido se pide uno NUEVO, nunca se reintenta.
         """
         from urllib.parse import quote
         seg = quote(str(toolkit or "").strip(), safe="")
-        return self.request("POST", f"/api/services/{seg}/connect", {})
+        return self.request("POST", f"/api/services/{seg}/connect", {}, timeout=timeout)
 
-    def list_service_tools(self, toolkit: str, slug: str = "") -> Optional[dict]:
+    def list_service_tools(self, toolkit: str, slug: str = "",
+                           timeout: float | None = None) -> Optional[dict]:
         """GET /api/services/:toolkit/tools[?slug=…] -> catálogo de tools.
 
         Sin `slug`, la lista liviana (slug, name, description). Con `slug`,
@@ -875,17 +958,18 @@ class _DranClient:
         path = f"/api/services/{seg}/tools"
         if slug:
             path += "?" + urlencode({"slug": slug})
-        data = self.request("GET", path)
+        data = self.request("GET", path, timeout=timeout)
         return data.get("data") if isinstance(data, dict) else None
 
-    def search_service_tools(self, use_case: str) -> Optional[dict]:
+    def search_service_tools(self, use_case: str, timeout: float | None = None) -> Optional[dict]:
         """GET /api/services/search?q=… -> búsqueda por caso de uso."""
         from urllib.parse import urlencode
         qs = urlencode({"q": use_case})
-        data = self.request("GET", f"/api/services/search?{qs}")
+        data = self.request("GET", f"/api/services/search?{qs}", timeout=timeout)
         return data.get("data") if isinstance(data, dict) else None
 
-    def execute_service(self, toolkit: str, tool_slug: str, arguments: Any) -> dict:
+    def execute_service(self, toolkit: str, tool_slug: str, arguments: Any,
+                        timeout: float | None = None) -> dict:
         """POST /api/services/execute -> corre una tool del toolkit.
 
         Fail-closed: cuando el toolkit no está ACTIVE el server responde 409
@@ -1145,8 +1229,15 @@ class DranMemoryProvider(MemoryProvider):
                 # Inventario de servicios: MISMA pasada y MISMA cadencia que la
                 # memoria — a lo sumo un GET /api/services por ventana de
                 # prefetch, nunca uno por turno ni en el camino crítico del turno.
+                # Cliente EFÍMERO y cap corto: esta línea es decoración, y un
+                # Composio lento no puede ni retrasar el turno ni abrir el
+                # breaker que apaga el recall.
                 try:
-                    services_line = _services_line(client.list_services())
+                    inventory = self._inventory_client()
+                    services_line = (
+                        _services_line(inventory.list_services(timeout=PREFETCH_SERVICES_TIMEOUT))
+                        if inventory else ""
+                    )
                 except Exception:
                     services_line = ""
                 if services_line:
@@ -1164,6 +1255,25 @@ class DranMemoryProvider(MemoryProvider):
 
         self._worker = threading.Thread(target=work, daemon=True)
         self._worker.start()
+
+    def _inventory_client(self):
+        """Cliente EFÍMERO para la línea de inventario del turno.
+
+        Efímero a propósito: su breaker y su contador de fallos mueren con él,
+        así que una ventana lenta de Composio no puede abrir el breaker que
+        apaga el recall — y el cap corto (`PREFETCH_SERVICES_TIMEOUT`) no deja
+        que la decoración retrase el arranque del turno.
+        """
+        try:
+            return _DranClient(
+                self._config["base_url"],
+                self._config["api_key"],
+                self._config["workspace"],
+                agent_identity=self._agent_identity,
+                timeout=PREFETCH_SERVICES_TIMEOUT,
+            )
+        except Exception:
+            return None
 
     def _enrich_query(self, query: str) -> str:
         parts = []
@@ -1634,6 +1744,17 @@ def _client_for(ctx) -> Optional[_DranClient]:
         config.get("workspace") or DEFAULT_WORKSPACE,
         default_scope=str(config.get("scope") or "private"),
         default_group=str(config.get("scope_group") or ""),
+        # Presupuesto por consecuencia para la superficie de servicios (el
+        # ladder está en el README). La superficie de memoria sigue con el
+        # REQUEST_TIMEOUT corto: es camino de turno, no una acción del usuario.
+        services_timeout=_clamp_seconds(
+            config.get("services_timeout_s"), SERVICES_TIMEOUT_DEFAULT,
+            SERVICES_TIMEOUT_MIN, SERVICES_TIMEOUT_MAX,
+        ),
+        services_run_timeout=_clamp_seconds(
+            config.get("services_run_timeout_s"), SERVICES_RUN_TIMEOUT_DEFAULT,
+            SERVICES_TIMEOUT_MIN, SERVICES_RUN_TIMEOUT_MAX,
+        ),
     )
 
 
@@ -2925,16 +3046,91 @@ def _services_http_error(exc: "urllib.error.HTTPError", toolkit: str = "") -> st
     return json.dumps(out)
 
 
+def _services_cap(client: Any, tool_name: str) -> float:
+    """El presupuesto del CLIENTE para esta tool (el ladder, en un solo lugar).
+
+    Por consecuencia, no por endpoint: leer el inventario espera el turno
+    (`services_timeout_s`), emitir el link es interactivo (20 s fijos — el
+    usuario ya está mirando) y ejecutar es una acción real contra el proveedor
+    (`services_run_timeout_s`).
+    """
+    if tool_name == "dran_services_connect":
+        return SERVICES_CONNECT_TIMEOUT
+    if tool_name == "dran_services_run":
+        return getattr(client, "services_run_timeout", SERVICES_RUN_TIMEOUT_DEFAULT)
+    return getattr(client, "services_timeout", SERVICES_TIMEOUT_DEFAULT)
+
+
+def _services_local_error(exc: BaseException, tool_name: str,
+                          args: Dict[str, Any], cap: float) -> str:
+    """El fallo del lado del CLIENTE, TIPADO: capa, cap vencido y si vale reintentar.
+
+    Un socket timeout ya no se disfraza de «dran unavailable»: dice que cortó
+    este lado, con qué presupuesto y sobre qué endpoint, para que el agente
+    pueda distinguir «lento» de «caído» y decírselo al usuario en vez de
+    reportar un servicio roto que funciona.
+    """
+    out: Dict[str, Any] = {"tool": tool_name}
+    toolkit = str(args.get("toolkit") or "").strip()
+    if toolkit:
+        out["toolkit"] = toolkit
+
+    if _is_timeout_error(exc):
+        # Un timeout ENVUELTO en URLError es el del CONNECT: la conexión nunca
+        # llegó a abrirse (red o instancia caída), que no es lo mismo que un
+        # proveedor lento con la conexión ya abierta.
+        unreachable = isinstance(exc, urllib.error.URLError)
+        out.update({
+            "error": "timeout",
+            "layer": "transport" if unreachable else "plugin",
+            "cap_s": cap,
+            # Un execute que se pasó del cap NO se reintenta a ciegas: puede
+            # haber aterrizado del otro lado (el mutador corrió y sólo se
+            # perdió la respuesta).
+            "retryable": tool_name != "dran_services_run",
+        })
+        if unreachable:
+            out["hint"] = (
+                "dran never accepted the connection inside the cap (network or "
+                "instance down) — check reachability, then retry"
+            )
+        elif tool_name == "dran_services_run":
+            out["hint"] = (
+                "the plugin budget expired before dran answered; a mutating tool "
+                "may still have landed — verify with a read tool (or the audit "
+                "log) before retrying, never blind-retry a send/write"
+            )
+        else:
+            out["hint"] = (
+                f"the call did not fit in the {cap:.0f}s plugin budget "
+                "(plugin → dran → Composio → provider). Retry once: this says "
+                "slow, not down."
+            )
+    else:
+        out.update({
+            "error": f"dran unreachable: {exc}",
+            "layer": "transport",
+            "retryable": True,
+            "hint": "dran did not answer at all (network or instance down)",
+        })
+    return json.dumps(out)
+
+
 def _handle_services_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> str:
     """Servicios conectados: cliente delgado del REST /api/services.
 
     El catálogo viaja como DATO (`dran_services_tools`), nunca como una tool
     por toolkit. Las respuestas van acotadas y el 409 `not_connected` se
     traduce con su connect_url — fail-closed, nunca un falso éxito.
+
+    Cada llamada sale con el presupuesto de su consecuencia (`_services_cap/2`,
+    siempre por encima del del servidor) y un fallo del lado del cliente sale
+    TIPADO (`_services_local_error/4`): qué capa cortó, con qué cap y si vale
+    reintentar.
     """
     try:
         if tool_name == "dran_services":
-            payload = client.list_services()
+            payload = client.list_services(timeout=_services_cap(client, tool_name))
             if not isinstance(payload, dict):
                 payload = {}
             services = []
@@ -2958,7 +3154,7 @@ def _handle_services_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> 
             toolkit = str(args.get("toolkit", "")).strip()
             if not toolkit:
                 return json.dumps({"error": "toolkit is required"})
-            data = client.connect_service(toolkit)
+            data = client.connect_service(toolkit, timeout=_services_cap(client, tool_name))
             payload = data.get("data") if isinstance(data, dict) else None
             payload = payload if isinstance(payload, dict) else {}
             redirect_url = payload.get("redirect_url")
@@ -2978,13 +3174,17 @@ def _handle_services_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> 
             slug = str(args.get("slug") or "").strip()
             use_case = str(args.get("use_case") or "").strip()
             if toolkit:
-                catalog = client.list_service_tools(toolkit, slug=slug)
+                catalog = client.list_service_tools(
+                    toolkit, slug=slug, timeout=_services_cap(client, tool_name)
+                )
                 if catalog is None:
                     return json.dumps({"error": f"unknown toolkit: {toolkit}",
                                        "toolkit": toolkit})
                 return json.dumps(catalog)
             if use_case:
-                found = client.search_service_tools(use_case)
+                found = client.search_service_tools(
+                    use_case, timeout=_services_cap(client, tool_name)
+                )
                 if found is None:
                     return json.dumps({"error": "search unavailable"})
                 return json.dumps(found)
@@ -2999,7 +3199,10 @@ def _handle_services_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> 
             if not toolkit or not tool_slug:
                 return json.dumps({"error": "toolkit and tool_slug are required"})
             try:
-                data = client.execute_service(toolkit, tool_slug, args.get("arguments"))
+                data = client.execute_service(
+                    toolkit, tool_slug, args.get("arguments"),
+                    timeout=_services_cap(client, tool_name),
+                )
             except urllib.error.HTTPError as exc:
                 return _services_http_error(exc, toolkit)
             payload = data.get("data") if isinstance(data, dict) else None
@@ -3011,9 +3214,12 @@ def _handle_services_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> 
                 return json.dumps({"error": "toolkit is required"})
             timeout = _coerce_wait_timeout(args.get("timeout_seconds"))
             deadline = time.monotonic() + timeout
+            # Cada sondeo cabe en el presupuesto de LECTURA y en lo que queda
+            # del cap del wait: ni un sondeo puede estirar el turno más allá.
+            poll_timeout = min(_services_cap(client, tool_name), max(1.0, timeout))
             status = None
             while True:
-                payload = client.list_services()
+                payload = client.list_services(timeout=poll_timeout)
                 rows = payload.get("data") if isinstance(payload, dict) else None
                 for svc in rows or []:
                     if isinstance(svc, dict) and str(svc.get("toolkit") or "") == toolkit:
@@ -3038,6 +3244,13 @@ def _handle_services_tool(client: Any, tool_name: str, args: Dict[str, Any]) -> 
         return json.dumps({"error": f"unknown tool {tool_name}"})
     except urllib.error.HTTPError as exc:
         return _services_http_error(exc, str(args.get("toolkit") or ""))
+    except Exception as exc:
+        # El transporte (timeout del cap, dran caído) sale TIPADO: es la
+        # diferencia entre «lento» y «no está», y el agente la necesita para
+        # no reportar un servicio roto que funciona.
+        if _is_timeout_error(exc) or isinstance(exc, urllib.error.URLError):
+            return _services_local_error(exc, tool_name, args, _services_cap(client, tool_name))
+        raise
 
 
 def _brief(row: Any) -> Dict[str, Any]:

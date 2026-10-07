@@ -55,7 +55,9 @@ No hay un segundo archivo de config para la credencial: **un solo token**
 **La tarjeta** (`plugin.yaml` → `config_schema`): **Capabilities → Plugins →
 Dran → engranaje** (el mismo engranaje aparece sólo si el manifiesto declara
 `config_schema`; el TUI tiene la misma puerta). Ahí viven la instancia, el
-destino de escritura, la credencial y los **siete toggles** de tools. Se guarda
+destino de escritura, la credencial, los **siete toggles** de tools y los
+**dos presupuestos** de la superficie de servicios
+([el ladder](#presupuestos-de-servicios-el-ladder)). Se guarda
 por campo, en `plugins.entries.dran.settings` del perfil (`config.yaml`); el
 token va al `.env` por la ruta de credenciales, nunca al YAML.
 
@@ -232,10 +234,57 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
 ### Robustez de transporte
 
 - **Retry**: los GET idempotentes reintentan una vez con backoff; los 4xx
-  (salvo 429) no se reintentan — el servidor ya respondió.
+  (salvo 429) no se reintentan — el servidor ya respondió. Un **timeout tampoco
+  se reintenta nunca**: reintentarlo duplica el peor caso (2× el cap + backoff)
+  para volver a concluir lo mismo, y contra un mutador es peor que fallar.
 - **Circuit breaker**: tras 3 fallos consecutivos, todas las llamadas
   fallan rápido durante 60 s — un Dran caído no agrega un timeout a cada
-  turno. Cualquier éxito rearma el contador.
+  turno. Cualquier éxito rearma el contador. La línea de inventario de servicios
+  del turno se paga con un cliente **efímero** (su breaker muere con él): una
+  ventana lenta de Composio no puede abrir el breaker que apaga el recall.
+
+#### Presupuestos de servicios: el ladder
+
+Un timeout no es «un número que se sube»: es un contrato entre DOS capas, y el
+invariante no se negocia — **el cap del cliente va SIEMPRE por encima del
+presupuesto del servidor**. Con el cliente cortando primero, el socket gana la
+carrera y el agente sólo puede decir «dran unavailable»: sin capa, sin endpoint
+y sin saber si vale reintentar. Con el servidor por debajo, el error llega
+**tipado** desde dran y el mensaje dice qué pasó de verdad.
+
+| Capa | Presupuesto | Dónde se ajusta |
+|---|---|---|
+| Camino caliente (memoria, pages, goals, tasks, skills) | **5 s** | `REQUEST_TIMEOUT` (constante) |
+| Línea de inventario de servicios del turno | **3 s** | `PREFETCH_SERVICES_TIMEOUT` (constante) |
+| Leer servicios (`dran_services`, `dran_services_tools`) | **15 s** | tarjeta → **Services read timeout (s)** |
+| Emitir el link de conexión (`dran_services_connect`) | **20 s** | `SERVICES_CONNECT_TIMEOUT` (constante) |
+| Ejecutar una tool (`dran_services_run`) | **45 s** | tarjeta → **Services run timeout (s)** |
+| dran → Composio, lecturas | **12 s** | instancia → `DRAN_COMPOSIO_TIMEOUT` |
+| dran → Composio, ejecución | **25 s** | instancia → `DRAN_COMPOSIO_EXECUTE_TIMEOUT` |
+
+El cap es por **consecuencia**, no por endpoint: lo que espera un turno no lleva
+el mismo presupuesto que una acción real contra el proveedor. Y todo lo que no
+sea del camino caliente sale con su presupuesto **explícito**: ninguna llamada
+de services hereda el `REQUEST_TIMEOUT` de 5 s.
+
+Un detalle del transporte que conviene tener claro: `urlopen(timeout=…)` —y el
+`receive_timeout` de Req del otro lado— acotan el **silencio del socket**, no el
+tiempo total. Una respuesta lenta pero que sigue goteando puede pasarse del cap
+(medido: 16 s con un cap de 15 s en `GET /api/services`, contra 0.6–0.8 s de
+mediana). El cap corta la llamada muerta; no es una fecha límite de reloj.
+
+Un timeout del lado del cliente sale **tipado**, nunca como «dran unavailable»:
+
+```json
+{"error": "timeout", "layer": "plugin", "cap_s": 15.0, "retryable": true,
+ "hint": "the call did not fit in the 15s plugin budget (plugin → dran → Composio → provider). Retry once: this says slow, not down."}
+```
+
+`dran_services_run` es la excepción y por eso `retryable` es `false`: un mutador
+que se pasó del presupuesto puede haber aterrizado igual (el envío corrió y sólo
+se perdió la respuesta), así que se verifica con una lectura — o con el registro
+de `service_calls` — antes de reintentar. Dran caído es OTRA cosa: sale
+`layer: "transport"` con `retryable: true`.
 
 ## Tools del plugin
 
