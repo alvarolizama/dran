@@ -2313,7 +2313,6 @@ msgstr ""
 msgid "Could not save the page type"
 msgstr ""
 
-#: lib/dran_web/live/memory_live.ex:95
 #: lib/dran_web/live/settings_live.ex:176
 #, elixir-autogen, elixir-format
 msgid "Could not save the preference"
@@ -2432,11 +2431,6 @@ msgstr ""
 msgid "Memory not found"
 msgstr ""
 
-#: lib/dran_web/live/memory_live.ex:351
-#, elixir-autogen, elixir-format
-msgid "Memory scope"
-msgstr ""
-
 #: lib/dran_web/live/admin_system_live.ex:94
 #, elixir-autogen, elixir-format
 msgid "Monitoring, instance configuration and environment."
@@ -2487,11 +2481,6 @@ msgstr ""
 #: lib/dran_web/live/admin_system_live.ex:663
 #, elixir-autogen, elixir-format
 msgid "Offline"
-msgstr ""
-
-#: lib/dran_web/live/memory_live.ex:364
-#, elixir-autogen, elixir-format
-msgid "Only mine"
 msgstr ""
 
 #: lib/dran_web/live/workspace_settings_live.ex:623
@@ -2547,11 +2536,6 @@ msgstr ""
 #: lib/dran_web/live/memory_live.ex:317
 #, elixir-autogen, elixir-format
 msgid "Search worker memory..."
-msgstr ""
-
-#: lib/dran_web/live/memory_live.ex:577
-#, elixir-autogen, elixir-format
-msgid "Showing only your memories"
 msgstr ""
 
 #: lib/dran_web/live/skill_live.ex:252
@@ -4412,11 +4396,6 @@ msgstr ""
 #: lib/dran_web/live/admin_live.ex:51
 #, elixir-autogen, elixir-format
 msgid "Manage users, roles, tokens, and impersonation."
-msgstr ""
-
-#: lib/dran_web/live/memory_live.ex:578
-#, elixir-autogen, elixir-format
-msgid "Showing the whole instance"
 msgstr ""
 
 #: lib/dran_web/live/memory_live.ex:611

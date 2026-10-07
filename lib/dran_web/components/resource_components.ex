@@ -629,12 +629,24 @@ defmodule DranWeb.ResourceComponents do
     """
   end
 
-  # ── El destino (scope): UN control y UNA píldora ───────────────────────────
+  # ── El destino (scope): UN control y UNA píldora, en toda sección ──────────
   #
   # El destino de un recurso (quién puede leerlo) se declara y se muestra con
-  # estos componentes en TODAS las superficies — pages, goals, plans y memory.
-  # El vocabulario de la fila es `private | public | shared`, y el control lo
-  # declara con el nombre de campo del form que lo monta (pages:
+  # estos componentes en TODAS las superficies — pages, goals, plans, skills,
+  # collections, reports, tasks (heredado) y memory. Ninguna sección inventa su
+  # propio widget de scope: el toggle «todo | solo míos» de /memory se retiró
+  # justamente por eso — el ALCANCE de lectura lo resuelve la política única
+  # (`Dran.ContentVisibility`), no un control de la vista.
+  #
+  # CÓMO se presenta (una sola regla, acá): el ALTA lo monta `compact` en el
+  # header del `<.resource_modal>`; la EDICIÓN, rotulado, dentro del form del
+  # recurso; el LISTADO pinta la píldora en cada fila (`always={true}`, el
+  # default incluido) y el DETALLE la calla cuando el nivel es `private` (el
+  # default no se anuncia donde el lector mira UN recurso).
+  #
+  # QUIÉN lo administra: `can_manage_scope?/2`, una sola vez para todas las
+  # secciones. El vocabulario de la fila es `private | public | shared`, y el
+  # control lo declara con el nombre de campo del form que lo monta (pages:
   # `page[visibility]`, goals: `goal[visibility]`, …).
 
   @doc "The three levels of the destination, translated."
@@ -660,6 +672,25 @@ defmodule DranWeb.ResourceComponents do
   def scope_icon("public"), do: "hero-globe-alt"
   def scope_icon("shared"), do: "hero-user-group"
   def scope_icon(_), do: "hero-lock-closed"
+
+  @doc """
+  Quién ADMINISTRA el destino de un recurso: su DUEÑO, y nadie más. La misma
+  regla en todas las secciones (pages, goals, plans, skills, memory) —
+  Constraint 5: el destino lo mueve el dueño.
+
+  Vivía copiada en cuatro LiveViews (memory, goal, plan y el `can_manage?/2` de
+  skills); acá es una sola, junto al control y la píldora que gobierna.
+
+  NO es `DranWeb.ResourceAuthorization.can_write_row?/2`: aquella es la
+  autoridad de escritura por ROL — un admin con `:all` escribe cualquier fila
+  que pueda leer — y usarla para el destino le daría a un admin el control de un
+  recurso ajeno que hoy no tiene. Leer más no es administrar más.
+  """
+  @spec can_manage_scope?(map() | struct() | nil, map() | struct() | nil) :: boolean()
+  def can_manage_scope?(%{owner_user_id: owner_id}, %{id: id}) when is_integer(id),
+    do: owner_id == id
+
+  def can_manage_scope?(_resource, _user), do: false
 
   @doc """
   The destination CONTROL: three buttons (private / public / shared), the hidden

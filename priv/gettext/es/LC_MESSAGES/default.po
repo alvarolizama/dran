@@ -2310,7 +2310,6 @@ msgstr "Conexión rechazada — el servidor no responde"
 msgid "Could not save the page type"
 msgstr "No se pudo guardar el tipo de página"
 
-#: lib/dran_web/live/memory_live.ex:95
 #: lib/dran_web/live/settings_live.ex:176
 #, elixir-autogen, elixir-format
 msgid "Could not save the preference"
@@ -2429,11 +2428,6 @@ msgstr "Bearer legacy para el API con acceso full-owner. Vacío = deshabilitado;
 msgid "Memory not found"
 msgstr "Memoria no encontrada"
 
-#: lib/dran_web/live/memory_live.ex:351
-#, elixir-autogen, elixir-format
-msgid "Memory scope"
-msgstr "Alcance de la memoria"
-
 #: lib/dran_web/live/admin_system_live.ex:94
 #, elixir-autogen, elixir-format
 msgid "Monitoring, instance configuration and environment."
@@ -2485,11 +2479,6 @@ msgstr "No útil (−0.10 trust)"
 #, elixir-autogen, elixir-format
 msgid "Offline"
 msgstr "Sin conexión"
-
-#: lib/dran_web/live/memory_live.ex:364
-#, elixir-autogen, elixir-format
-msgid "Only mine"
-msgstr "Solo míos"
 
 #: lib/dran_web/live/workspace_settings_live.ex:623
 #, elixir-autogen, elixir-format
@@ -2545,11 +2534,6 @@ msgstr "Quitar"
 #, elixir-autogen, elixir-format
 msgid "Search worker memory..."
 msgstr "Buscar en la memoria de los workers..."
-
-#: lib/dran_web/live/memory_live.ex:577
-#, elixir-autogen, elixir-format
-msgid "Showing only your memories"
-msgstr "Mostrando solo tus memorias"
 
 #: lib/dran_web/live/skill_live.ex:252
 #: lib/dran_web/live/skill_live.ex:329
@@ -4406,11 +4390,6 @@ msgstr "Administra usuarios y su acceso a la instancia."
 #, elixir-autogen, elixir-format
 msgid "Manage users, roles, tokens, and impersonation."
 msgstr "Administra usuarios, roles, tokens y suplantación."
-
-#: lib/dran_web/live/memory_live.ex:578
-#, elixir-autogen, elixir-format
-msgid "Showing the whole instance"
-msgstr "Mostrando toda la instancia"
 
 #: lib/dran_web/live/memory_live.ex:611
 #: lib/dran_web/live/memory_live.ex:614

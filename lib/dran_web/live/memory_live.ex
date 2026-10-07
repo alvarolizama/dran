@@ -14,6 +14,14 @@ defmodule DranWeb.MemoryLive do
   retrieval counters that the workers' API path uses as a usage signal.
   Search always covers active memories, regardless of the status filter
   (superseded facts are excluded from search by design).
+
+  El ALCANCE de lectura no se elige en esta superficie: lo resuelve la política
+  única (`Dran.ContentVisibility.resolve/3`, con la identidad del socket) y
+  acota lista, búsqueda, relacionadas y contador. El toggle «todo | solo míos»
+  del modelo v1 —que en v2 no gobernaba nada y persistía una preferencia que
+  nadie leía— se retiró: /memory usa el ÚNICO control de scope de la casa
+  (`DranWeb.ResourceComponents`), el que administra el DESTINO de un hecho y
+  sólo su dueño.
   """
 
   use DranWeb, :live_view
@@ -47,12 +55,6 @@ defmodule DranWeb.MemoryLive do
         creator_labels: %{},
         memory_count: safe_count(context, nil),
         has_more: false,
-        # Toggle "todo el workspace | solo míos": solo se ofrece cuando el
-        # workspace COMPARTE memoria (en aislado la política ya filtra y el
-        # toggle no tendría efecto). Se evalúa con el `context` local: dentro
-        # del assign/2 el socket todavía no lleva el assign nuevo.
-        content_scope: content_scope_assign(socket, context),
-        show_scope_toggle: show_scope_toggle?(context),
         # El destino (quién puede leer el hecho) y su diálogo: los grants de
         # `content_shares` viajan por la MISMA puerta que en goals, plans y
         # pages — memory era la única superficie con destino y sin diálogo.
@@ -64,36 +66,6 @@ defmodule DranWeb.MemoryLive do
       )
 
     {:ok, reload_memories(socket)}
-  end
-
-  @impl true
-  def handle_event("set_content_scope", %{"scope" => scope}, socket)
-      when scope in ~w(all own) do
-    context = socket.assigns.context
-    user = socket.assigns[:user]
-
-    persisted =
-      case user do
-        %Dran.Accounts.User{} ->
-          Dran.Accounts.update_content_scope(user, context, scope)
-
-        _ ->
-          # Sin usuario con membresía no hay preferencia que persistir: el
-          # cambio aplica solo a esta sesión.
-          {:ok, :session_only}
-      end
-
-    case persisted do
-      {:ok, _} ->
-        {:noreply,
-         socket
-         |> assign(content_scope: scope)
-         |> put_flash(:info, scope_label(scope))
-         |> reload_memories()}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, gettext("Could not save the preference"))}
-    end
   end
 
   @impl true
@@ -257,10 +229,6 @@ defmodule DranWeb.MemoryLive do
     end
   end
 
-  # El destino lo mueve el DUEÑO del hecho — la misma regla que goals y plans.
-  defp can_manage_scope?(%{owner_user_id: owner_id}, %{id: id}), do: owner_id == id
-  defp can_manage_scope?(_memory, _user), do: false
-
   @impl true
   def handle_info({:memory_changed, _action, _memory}, socket) do
     # A fact was created/deleted (by a worker via the REST API, or by this
@@ -341,29 +309,6 @@ defmodule DranWeb.MemoryLive do
                 value="all"
                 label={gettext("All")}
                 active={@status_filter == "all"}
-              />
-            </div>
-
-            <div
-              :if={@show_scope_toggle}
-              id="memory-scope-toggle"
-              role="group"
-              aria-label={gettext("Memory scope")}
-              class="inline-flex rounded-lg bg-base-200 p-1 self-start"
-            >
-              <.scope_button
-                id="memory-scope-all"
-                value="all"
-                label={gettext("All")}
-                icon="hero-users"
-                active={@content_scope == "all"}
-              />
-              <.scope_button
-                id="memory-scope-own"
-                value="own"
-                label={gettext("Only mine")}
-                icon="hero-user"
-                active={@content_scope == "own"}
               />
             </div>
 
@@ -544,7 +489,8 @@ defmodule DranWeb.MemoryLive do
   end
 
   # El scope de lectura sale del módulo único de política, resuelto con la
-  # identidad del socket (el struct User) y la política del workspace.
+  # identidad del socket (el struct User). La superficie NO elige un alcance:
+  # no hay preferencia que leer ni toggle que aplicar (ver el moduledoc).
   defp memory_scope(socket) do
     Dran.ContentVisibility.resolve(
       socket.assigns[:context],
@@ -552,30 +498,6 @@ defmodule DranWeb.MemoryLive do
       :memory
     )
   end
-
-  # El toggle se lee de la preferencia persistida del usuario (no de un
-  # assign efímero), así sobrevive a un reload de la vista.
-  defp content_scope_assign(socket, context) do
-    case {socket.assigns[:user], context} do
-      {%Dran.Accounts.User{id: user_id}, %{id: workspace_id}} ->
-        Dran.ContentVisibility.content_scope_for(user_id, workspace_id)
-
-      _ ->
-        "all"
-    end
-  end
-
-  # "Only mine" no se ofrece cuando el workspace ya está aislado: la política
-  # fuerza ese scope para todos, así que un toggle sería mentira.
-  defp show_scope_toggle?(context) do
-    case context do
-      %{share_memory: shared} -> shared == true
-      _ -> false
-    end
-  end
-
-  defp scope_label("own"), do: gettext("Showing only your memories")
-  defp scope_label(_), do: gettext("Showing the whole instance")
 
   defp blank?(nil), do: true
   defp blank?(""), do: true
@@ -630,34 +552,6 @@ defmodule DranWeb.MemoryLive do
         !@active && "text-base-content/60 hover:text-base-content"
       ]}
     >
-      {@label}
-    </button>
-    """
-  end
-
-  attr :id, :string, required: true
-  attr :value, :string, required: true
-  attr :label, :string, required: true
-  attr :icon, :string, required: true
-  attr :active, :boolean, required: true
-
-  # Toggle de alcance de lectura ("todo | solo míos"). El mismo lenguaje
-  # visual que status_filter_button, con icono para que el alcance se lea de
-  # un vistazo.
-  defp scope_button(assigns) do
-    ~H"""
-    <button
-      id={@id}
-      phx-click="set_content_scope"
-      phx-value-scope={@value}
-      aria-pressed={to_string(@active)}
-      class={[
-        "inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-md transition-all duration-150",
-        @active && "bg-base-100 shadow-sm font-medium",
-        !@active && "text-base-content/60 hover:text-base-content"
-      ]}
-    >
-      <.icon name={@icon} class="size-3.5" />
       {@label}
     </button>
     """

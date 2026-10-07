@@ -264,14 +264,6 @@ defmodule Dran.ContentVisibility do
 
   def privileged?(_identity, _workspace), do: false
 
-  @doc """
-  The personal content preference of `user_id` (`"all"` | `"own"`), kept for
-  the memory LiveView toggle. With per-item visibility the default is
-  `"all"` — the filter already narrows to what the reader may see.
-  """
-  @spec content_scope_for(integer() | nil, binary() | nil) :: String.t()
-  def content_scope_for(_user_id, _workspace_id), do: "all"
-
   # ── Internals ─────────────────────────────────────────────────────────────
 
   # El contenido de SISTEMA: el call site nombra la columna (`system_field`) y la

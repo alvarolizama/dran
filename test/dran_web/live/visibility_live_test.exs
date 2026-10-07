@@ -2,16 +2,19 @@ defmodule DranWeb.VisibilityLiveTest do
   @moduledoc """
   Gate W6 (P3 + P4 + P5-UI): superficies LiveView de la visibilidad.
 
-  - memory_live filtra por el scope del lector y ofrece el toggle
-    "todo | solo míos" SOLO en workspace compartido.
+  - memory_live NO ofrece un control de alcance de lectura: el alcance lo
+    resuelve la política única (`Dran.ContentVisibility`) con la identidad del
+    lector. El toggle «todo | solo míos» del modelo v1 se retiró (persistía una
+    preferencia que nadie leía desde W3, así que mentía).
   - settings expone los toggles de compartición del workspace.
   """
   use DranWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
 
-  alias Dran.{Knowledge, Memory, Repo}
-  alias Dran.Accounts.{User, UserWorkspace}
+  alias Dran.Memory
+  alias Dran.Repo
+  alias Dran.Accounts.User
 
   setup do
     original = Application.get_env(:dran, :inference)
@@ -62,170 +65,45 @@ defmodule DranWeb.VisibilityLiveTest do
     })
   end
 
-  defp create_workspace(unique, share_memory) do
-    {:ok, ws} =
-      Knowledge.create_workspace(%{name: "VL #{unique}", slug: "vl-#{unique}"})
-
-    {:ok, ws} =
-      ws
-      |> Dran.Workspace.settings_changeset(%{share_memory: share_memory, share_pages: true})
-      |> Repo.update()
-
-    ws
-  end
-
-  defp member(user, workspace, role, content_scope \\ "all") do
-    {:ok, _} =
-      %UserWorkspace{}
-      |> UserWorkspace.changeset(%{
-        user_id: user.id,
-        workspace_id: workspace.id,
-        role: role,
-        content_scope: content_scope
-      })
-      |> Repo.insert()
-
-    :ok
-  end
-
-  # W3: the all|mine toggle and shared/isolated workspace semantics
-  # died with per-item visibility (own ∪ public ∪ shared).
-  describe "memory_live — filtro y toggle" do
-    @tag :skip
-    test "workspace compartido: el usuario ve ambos facts y el toggle aparece", %{conn: conn} do
+  # W3: el toggle «todo | solo míos» y la semántica de workspace compartido /
+  # aislado murieron con la visibilidad por ítem (own ∪ public ∪ shared). Lo que
+  # VIVE es que la superficie no vuelva a ofrecer un alcance que no gobierna:
+  # /memory monta el control de DESTINO (de `ResourceComponents`, el de todas
+  # las secciones) y ningún control de lectura.
+  describe "memory_live — el alcance lo decide la política, no la superficie" do
+    test "el toggle v1 no existe y el único control de scope es el del destino", %{conn: conn} do
       unique = System.unique_integer([:positive])
-      ws = create_workspace(unique, true)
+      ws = Dran.DataCase.ensure_workspace!()
+      {owner, _} = create_user(unique * 10 + 1)
+      owner = owner |> Ecto.Changeset.change(is_owner: true) |> Repo.update!()
 
-      {alice, _} = create_user(unique * 10 + 1)
-      {bob, _} = create_user(unique * 10 + 2)
-      member(alice, ws, "editor")
-      member(bob, ws, "editor")
+      # La instancia COMPARTE memoria: el caso exacto en el que el toggle v1 se
+      # ofrecía. Ya no aparece — el alcance sale de la política.
+      assert ws.share_memory == true
 
-      {:ok, _, _} =
+      {:ok, fact, :created} =
         Memory.add(%{
           "workspace_id" => ws.id,
-          "content" => "Fact A #{unique}",
-          "owner_user_id" => alice.id
+          "content" => "Hecho del dueño #{unique}",
+          "owner_user_id" => owner.id
         })
 
-      {:ok, _, _} =
-        Memory.add(%{
-          "workspace_id" => ws.id,
-          "content" => "Fact B #{unique}",
-          "owner_user_id" => bob.id
-        })
+      {:ok, view, html} = conn |> login(owner) |> live(~p"/memory")
 
-      {:ok, view, html} = conn |> login(alice) |> live(~p"/memory")
+      assert html =~ "Hecho del dueño #{unique}"
 
-      assert has_element?(view, "#memory-scope-toggle")
-      assert html =~ "Fact A #{unique}"
-      assert html =~ "Fact B #{unique}"
-    end
+      refute has_element?(view, "#memory-scope-toggle")
+      refute has_element?(view, "#memory-scope-all")
+      refute has_element?(view, "#memory-scope-own")
+      # Ni la copia cruda del control retirado: los msgid salieron del catálogo,
+      # así que `t/1` devolvería el propio msgid — se afirma el texto literal.
+      refute html =~ "Memory scope"
+      refute html =~ "Only mine"
 
-    @tag :skip
-    test "el toggle cambia a 'solo míos' y persiste la preferencia", %{conn: conn} do
-      unique = System.unique_integer([:positive])
-      ws = create_workspace(unique, true)
-
-      {alice, _} = create_user(unique * 10 + 3)
-      {bob, _} = create_user(unique * 10 + 4)
-      member(alice, ws, "editor")
-      member(bob, ws, "editor")
-
-      {:ok, _, _} =
-        Memory.add(%{
-          "workspace_id" => ws.id,
-          "content" => "Mía #{unique}",
-          "owner_user_id" => alice.id
-        })
-
-      {:ok, _, _} =
-        Memory.add(%{
-          "workspace_id" => ws.id,
-          "content" => "Ajena #{unique}",
-          "owner_user_id" => bob.id
-        })
-
-      {:ok, view, _html} = conn |> login(alice) |> live(~p"/memory")
-
-      html =
-        view
-        |> element("#memory-scope-own")
-        |> render_click()
-
-      assert html =~ "Mía #{unique}"
-      refute html =~ "Ajena #{unique}"
-
-      # La preferencia se persistió (los agentes de Alice la heredan).
-      assert Dran.ContentVisibility.content_scope_for(alice.id, ws.id) == "own"
-
-      # Y sobrevive a un remount.
-      {:ok, _view2, html2} = conn |> login(alice) |> live(~p"/memory")
-      assert html2 =~ "Mía #{unique}"
-      refute html2 =~ "Ajena #{unique}"
-    end
-
-    @tag :skip
-    test "workspace aislado: no hay toggle y cada uno ve lo suyo", %{conn: conn} do
-      unique = System.unique_integer([:positive])
-      ws = create_workspace(unique, false)
-
-      {alice, _} = create_user(unique * 10 + 5)
-      {bob, _} = create_user(unique * 10 + 6)
-      member(alice, ws, "editor", "all")
-      member(bob, ws, "editor", "all")
-
-      {:ok, _, _} =
-        Memory.add(%{
-          "workspace_id" => ws.id,
-          "content" => "Propia #{unique}",
-          "owner_user_id" => alice.id
-        })
-
-      {:ok, _, _} =
-        Memory.add(%{
-          "workspace_id" => ws.id,
-          "content" => "De otro #{unique}",
-          "owner_user_id" => bob.id
-        })
-
-      {:ok, view, html} = conn |> login(alice) |> live(~p"/memory")
-
-      refute has_element?(view, "#memory-scope-toggle"),
-             "en aislado la política ya filtra: el toggle sería mentira"
-
-      assert html =~ "Propia #{unique}"
-      refute html =~ "De otro #{unique}"
-    end
-
-    @tag :skip
-    test "el admin conserva la vista completa en aislado", %{conn: conn} do
-      unique = System.unique_integer([:positive])
-      ws = create_workspace(unique, false)
-
-      {admin, _} = create_user(unique * 10 + 7)
-      {other, _} = create_user(unique * 10 + 8)
-      member(admin, ws, "admin")
-      member(other, ws, "editor")
-
-      {:ok, _, _} =
-        Memory.add(%{
-          "workspace_id" => ws.id,
-          "content" => "Del admin #{unique}",
-          "owner_user_id" => admin.id
-        })
-
-      {:ok, _, _} =
-        Memory.add(%{
-          "workspace_id" => ws.id,
-          "content" => "Del otro #{unique}",
-          "owner_user_id" => other.id
-        })
-
-      {:ok, _view, html} = conn |> login(admin) |> live(~p"/memory")
-
-      assert html =~ "Del admin #{unique}"
-      assert html =~ "Del otro #{unique}"
+      # El ÚNICO control de scope de la casa —el destino del hecho— sigue
+      # montado para su dueño, con el mismo molde de todas las secciones.
+      assert has_element?(view, "#memory-scope-#{fact.id}")
+      assert has_element?(view, "#memory-visibility-#{fact.id}")
     end
   end
 
@@ -258,7 +136,7 @@ defmodule DranWeb.VisibilityLiveTest do
 
       assert html =~ "Settings saved"
 
-      reloaded = Knowledge.get_workspace!(ws.id)
+      reloaded = Dran.Knowledge.get_workspace!(ws.id)
       assert reloaded.worker_max_pages == 7
       # Las columnas quedan (decisión D2: retiro de UI, sin migración) y ningún
       # save de la página las toca.

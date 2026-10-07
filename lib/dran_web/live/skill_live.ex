@@ -34,6 +34,7 @@ defmodule DranWeb.SkillLive do
       resource_filters: 1,
       resource_scope_field: 1,
       resource_visibility_pill: 1,
+      can_manage_scope?: 2,
       form_actions: 1,
       markdown_body_field: 1,
       sidebar_section: 1,
@@ -714,11 +715,11 @@ defmodule DranWeb.SkillLive do
     do: {:noreply, put_flash(socket, :error, gettext("Could not save the skill."))}
 
   # El destino lo administra quien puede escribir: el DUEÑO (la misma regla que
-  # goals y planes). Un skill de SISTEMA no lo administra NADIE por la web: es
+  # goals y planes — `can_manage_scope?/2` de `DranWeb.ResourceComponents`, acá
+  # vivía copiada). Un skill de SISTEMA no lo administra NADIE por la web: es
   # contenido del código y su ciclo es el archivo y un redeploy.
   defp can_manage?(%{system: true}, _user), do: false
-  defp can_manage?(%{owner_user_id: owner_id}, %{id: id}), do: owner_id == id
-  defp can_manage?(_resource, _user), do: false
+  defp can_manage?(resource, user), do: can_manage_scope?(resource, user)
 
   # El texto de los dos rechazos que hablan de built-ins: una sola frase, la
   # misma que dice el API, para que el operador sepa qué hacer.

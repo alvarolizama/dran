@@ -37,6 +37,7 @@ defmodule DranWeb.PlanLive do
       resource_filters: 1,
       resource_scope_field: 1,
       resource_visibility_pill: 1,
+      can_manage_scope?: 2,
       related_panel: 1,
       form_actions: 1,
       markdown_body_field: 1,
@@ -794,8 +795,8 @@ defmodule DranWeb.PlanLive do
 
   # El destino lo administra quien puede escribir: el DUEÑO (constraint 8). El
   # diálogo agrega y quita grants; compartir fija `shared` en la misma operación.
-  defp can_manage_scope?(%{owner_user_id: owner_id}, %{id: id}), do: owner_id == id
-  defp can_manage_scope?(_resource, _user), do: false
+  # La regla es UNA para todas las secciones: `can_manage_scope?/2` de
+  # `DranWeb.ResourceComponents` (acá vivía copiada).
 
   # El dueño del plan para el bloque Metadata del aside: la tabla guarda el id
   # (`owner_user_id`) y NULL es contenido de sistema. Se pinta el NOMBRE de la
