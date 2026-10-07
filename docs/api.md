@@ -547,11 +547,17 @@ ni índice anónimo.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/api/skills` | read | El catálogo legible, **sin cuerpos** (`visibility`, `order`, `limit`) |
+| GET | `/api/skills` | read | El catálogo legible, **sin cuerpos** (`visibility`, `order`, `q`, `limit`) |
 | GET | `/api/skills/:slug` | read | El `SKILL.md` montado (frontmatter + body) + `body` crudo, `version` y `content_hash` |
 | POST | `/api/skills` | write | Alta (sella el dueño de la credencial; el slug se deriva del `name` si no viene) |
 | PUT | `/api/skills/:slug` | write | Edición versionada del cuerpo/descripción; un `scope` re-traduce el destino |
 | DELETE | `/api/skills/:slug` | write | Borrar (sólo el dueño o un lector privilegiado) |
+
+**El filtro del índice es de TEXTO, no semántico**: `q` busca substring —sin
+distinguir mayúsculas— en `slug`, `name` y `description`, y los comodines de
+LIKE (`%`, `_`) se buscan como CARACTERES: un `%` no puede convertirse en «todo
+el catálogo», porque un filtro que devuelve de más se reporta como si estuviera
+filtrado. Un `q` vacío no filtra, y el filtro nunca ensancha el scope del lector.
 
 **El contrato de wire** es `name` + `description` (≤ 60 chars) + `body` +
 `version` + `content_hash`. La validación es server-side y el changeset es la
@@ -575,6 +581,9 @@ privilegiado): un skill `public` ajeno **se lee, no se edita** (`403`).
 ```bash
 # El catálogo del lector (sin cuerpos)
 curl -s localhost:4000/api/skills -H "Authorization: Bearer ***"
+
+# El catálogo FILTRADO por texto (slug, name o description, sin mayúsculas)
+curl -s "localhost:4000/api/skills?q=semanal" -H "Authorization: Bearer ***"
 
 # El SKILL.md montado de un slug legible
 curl -s localhost:4000/api/skills/revision-semanal -H "Authorization: Bearer ***"

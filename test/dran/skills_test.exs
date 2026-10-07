@@ -120,6 +120,48 @@ defmodule Dran.SkillsTest do
       assert slugs.(visibility: "private") == ["zeta"]
       assert slugs.(order: "updated") == ["alfa", "zeta"]
     end
+
+    test "el filtro de texto (`q`) busca en slug, name y description", %{owner: owner} do
+      insert_skill!(owner, %{"slug" => "revision-semanal", "description" => "Cerrar la semana"})
+      insert_skill!(owner, %{"slug" => "informe-mensual", "description" => "Revisar los numeros"})
+
+      scope = {:reader, owner.id}
+
+      slugs = fn query ->
+        Skills.list_skills(scope: scope, query: query) |> Enum.map(& &1.slug)
+      end
+
+      # Los tres campos del contrato de wire, sin distinguir mayúsculas.
+      assert slugs.("REVISION") == ["revision-semanal"]
+      assert slugs.("semanal") == ["revision-semanal"]
+      assert slugs.("NUMEROS") == ["informe-mensual"]
+      assert slugs.("que-no-existe") == []
+
+      # Vacío, en blanco o de otro tipo: el listado completo, nunca una lista
+      # vacía que el agente reportaría como «no hay skills».
+      assert slugs.("") == ["informe-mensual", "revision-semanal"]
+      assert slugs.("   ") == ["informe-mensual", "revision-semanal"]
+      assert slugs.(nil) == ["informe-mensual", "revision-semanal"]
+    end
+
+    test "un comodín de LIKE en el texto se busca como carácter", %{owner: owner} do
+      insert_skill!(owner, %{"slug" => "cien-por-ciento", "description" => "100% del tiempo"})
+      insert_skill!(owner, %{"slug" => "otro", "description" => "para probar"})
+
+      scope = {:reader, owner.id}
+
+      # `%` y `_` son comodines de LIKE. Escapados buscan el CARÁCTER: el `%`
+      # encuentra la fila que lo tiene (y no el catálogo entero), y el `_` no
+      # encuentra nada — sin escape, `%_%` matchearía cualquier texto.
+      assert Skills.list_skills(scope: scope, query: "%") |> Enum.map(& &1.slug) ==
+               ["cien-por-ciento"]
+
+      assert Skills.list_skills(scope: scope, query: "_") == []
+
+      # Y el mismo carácter, dentro de un texto, encuentra la fila.
+      assert Skills.list_skills(scope: scope, query: "100%") |> Enum.map(& &1.slug) ==
+               ["cien-por-ciento"]
+    end
   end
 
   describe "el hash es del CUERPO (P4)" do

@@ -107,6 +107,37 @@ defmodule DranWeb.API.SkillsTest do
              |> length() == 2
     end
 
+    test "el filtro de texto (`q`) viaja en la query y no ensancha el scope", %{
+      owner: owner,
+      stranger: stranger
+    } do
+      insert_skill!(owner, %{"slug" => "revision-semanal", "description" => "cerrar la semana"})
+      insert_skill!(owner, %{"slug" => "informe-mensual", "description" => "los numeros"})
+
+      data =
+        conn_for(owner)
+        |> get_json("/api/skills?q=semanal")
+        |> json_response(200)
+        |> Map.fetch!("data")
+
+      assert Enum.map(data, & &1["slug"]) == ["revision-semanal"]
+      refute Map.has_key?(hd(data), "body")
+
+      # Un `q` vacío (o de otro tipo) no filtra: el catálogo completo.
+      assert conn_for(owner)
+             |> get_json("/api/skills?q=")
+             |> json_response(200)
+             |> Map.fetch!("data")
+             |> length() == 2
+
+      # El filtro es del listado, no una puerta nueva: lo ajeno privado sigue
+      # fuera del alcance del lector aunque el texto lo nombre.
+      assert conn_for(stranger)
+             |> get_json("/api/skills?q=semanal")
+             |> json_response(200)
+             |> Map.fetch!("data") == []
+    end
+
     test "sin credencial NO hay lista: el caso anónimo no existe", %{owner: owner} do
       insert_skill!(owner, %{"slug" => "privado"})
 

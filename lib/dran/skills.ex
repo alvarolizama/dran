@@ -57,13 +57,15 @@ defmodule Dran.Skills do
 
   Opts: `:scope` (default `:all` para callers internos), `:owner_user_id`,
   `:visibility` (el filtro de destino de la lista), `:order` (vocabulario de
-  `orders/0`, default `:name`), `:limit`.
+  `orders/0`, default `:name`), `:query` (filtro de texto sobre slug, name y
+  description), `:limit`.
   """
   def list_skills(opts \\ []) do
     scope = Keyword.get(opts, :scope, :all)
     owner_user_id = Keyword.get(opts, :owner_user_id)
     visibility = Keyword.get(opts, :visibility)
     order = Keyword.get(opts, :order)
+    query_text = Keyword.get(opts, :query)
     limit = Keyword.get(opts, :limit, 500)
 
     query =
@@ -79,9 +81,44 @@ defmodule Dran.Skills do
 
     query = if visibility, do: where(query, [s], s.visibility == ^visibility), else: query
 
+    query = filter_by_query(query, query_text)
+
     query
     |> Dran.ContentVisibility.filter(scope, :skill, @system_field)
     |> Repo.all()
+  end
+
+  # El filtro de texto del listado: busca en slug, name y description sin
+  # distinguir mayúsculas. Los comodines de LIKE que vengan en el texto se
+  # ESCAPAN para que se busquen como caracteres — un `%` del usuario no puede
+  # convertirse en «todo el catálogo»: un filtro que devuelve de más es peor que
+  # uno que devuelve de menos, porque el agente lo reporta como filtrado.
+  defp filter_by_query(query, text) when is_binary(text) do
+    case escape_like(text) do
+      "" ->
+        query
+
+      escaped ->
+        pattern = "%#{escaped}%"
+
+        where(
+          query,
+          [s],
+          fragment("? ILIKE ? ESCAPE '\\'", s.slug, ^pattern) or
+            fragment("? ILIKE ? ESCAPE '\\'", s.name, ^pattern) or
+            fragment("? ILIKE ? ESCAPE '\\'", s.description, ^pattern)
+        )
+    end
+  end
+
+  defp filter_by_query(query, _text), do: query
+
+  # El backslash que agrega sólo vale con el `ESCAPE` explícito del fragment:
+  # sin él, `\%` busca un backslash seguido de cualquier cosa.
+  defp escape_like(text) do
+    text
+    |> String.trim()
+    |> String.replace(~r/[\\%_]/, fn char -> "\\" <> char end)
   end
 
   @doc """

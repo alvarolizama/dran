@@ -31,6 +31,7 @@ defmodule DranWeb.API.SkillController do
       [scope: Instance.scope_for(conn, :skill)]
       |> maybe_put(:visibility, visibility_param(params["visibility"]))
       |> maybe_put(:order, order_param(params["order"]))
+      |> maybe_put(:query, query_param(params["q"]))
       |> maybe_put(:limit, parse_int(params["limit"]))
 
     json(conn, %{data: Skills.index_payload(Skills.list_skills(opts), reader_id(conn))})
@@ -219,6 +220,18 @@ defmodule DranWeb.API.SkillController do
   end
 
   defp visibility_param(_value), do: nil
+
+  # El filtro de texto del índice (`q`). Un valor vacío o de otro tipo no
+  # filtra: un listado que devuelve de menos por un param mal formado es peor
+  # que uno completo — el texto se sanea en el contexto `Dran.Skills`.
+  defp query_param(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      text -> text
+    end
+  end
+
+  defp query_param(_value), do: nil
 
   defp order_param(value) when is_binary(value) do
     if value in Skills.orders(), do: value, else: nil
