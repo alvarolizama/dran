@@ -377,19 +377,22 @@ sale igual con el slug humanizado. Medido contra el vendor real: 897 ms en serie
 
 Un **skill** es instrucciones para un agente — no conocimiento que se lee. Vive
 sólo en Dran (tabla `skills`, con dueño y visibilidad por ítem) y viaja por tool:
-**ningún cuerpo se copia a disco** (nada de `external_dirs` ni de registrar la
-suite como skills locales), el cuerpo muere con la sesión y no hay índice
-anónimo (sin lector no hay scope). La única fila local es el PUNTERO — ver abajo
-—, y no es un cuerpo del catálogo: es el texto que enseña la ruta.
+el cuerpo se sirve por tool y muere con la sesión, no se registra como skill
+local (nada de `external_dirs`) y no hay índice anónimo (sin lector no hay
+scope). La única fila local es el PUNTERO — ver abajo —, y no es un cuerpo del
+catálogo: es el texto que enseña la ruta. La única copia en disco de un cuerpo es
+el **espejo del plugin** (ver «El espejo en disco»), que no entra a `skills_list`.
 Cuatro tools FIJAS y el catálogo como DATO — una tool por skill sería una lista
-que el servidor no puede cambiar sin reiniciar el perfil.
+que el servidor no puede cambiar sin reiniciar el perfil — más la que reconcilia
+el espejo:
 
 | Tool | Ruta que golpea |
 |---|---|
 | `dran_skills` | `GET /api/skills` — el catálogo VIVO del lector (slug, descripción, versión, hash, destino), **sin cuerpos**; `q` filtra por texto en el servidor (slug, name, description) |
-| `dran_skill` | `GET /api/skills/:slug` — el cuerpo enmarcado con slug, versión y `content_hash`; `unchanged` cuando el hash no cambió desde la última carga de la SESIÓN |
+| `dran_skill` | `GET /api/skills/:slug` — el cuerpo enmarcado con slug, versión y `content_hash`; `unchanged` cuando el hash no cambió desde la última carga de la SESIÓN; y el espejo se actualiza con lo que volvió |
 | `dran_skill_save` | `POST`/`PUT /api/skills[/:slug]` — slug nuevo crea, existente edita versionado (misma puerta y misma validación server-side que la web) |
 | `dran_skill_delete` | `DELETE /api/skills/:slug` |
+| `dran_skill_sync` | `GET /api/skills` + `GET /api/skills/:slug` (+ `PUT` con `push=true`) — reconcilia el espejo por checksum y sube las ediciones locales |
 
 El descubrimiento no depende de la red en el camino crítico: `initialize()`
 (que corre ANTES del build del prompt) calienta el caché del índice, y la
@@ -398,6 +401,49 @@ el tope de 4000— renderiza una línea por skill desde ESE caché y manda a
 `dran_skills` para el listado vivo, porque el bloque se congela por sesión. La
 sección se registra SIEMPRE y con Dran caído devuelve `""`: Hermes la descarta y
 el prompt no se rompe (fail-open).
+
+### El espejo en disco (el cache del catálogo)
+
+El cuerpo sigue viniendo por tool y **el remoto sigue mandando**: `dran_skill`
+pide `/api/skills/:slug` SIEMPRE y sirve lo que el servidor contestó. Lo que
+agrega el espejo es lo que la red no puede dar, y vive en un solo lugar:
+`$HERMES_HOME/dran/skills/` — tarjeta → **Skills mirror on disk** (default ON).
+
+| Necesidad | Cómo la resuelve |
+|---|---|
+| Contestar con Dran caído | si el detalle no llega (sin conexión, timeout, breaker abierto, 5xx) el cuerpo sale del archivo, con `source: cache`, `stale: true` y el frame marcado `OFFLINE COPY`. Un **404 no** cae acá: ahí el servidor contestó y la copia vieja NO se sirve |
+| No re-verificar a mano | el índice ya trae el `content_hash` de todo lo legible: al abrir sesión (en un hilo, sin bloquear el arranque) se compara con `manifest.json` y se bajan SÓLO los cuerpos que cambiaron o faltan |
+| Poder editar y subir | el hash del cuerpo EN DISCO contra la BASE del manifiesto dice si hay una edición local; `dran_skill_sync` (con `push`) la manda |
+
+Layout: `manifest.json` (por slug: `content_hash` = el remoto la última vez,
+`body_hash` = lo que hay en disco, versión, `file_mtime_ns`/`file_size`) y
+`<slug>/SKILL.md` — el archivo montado (frontmatter + cuerpo), el MISMO formato
+que el servidor sirve en `skill_md` y que se escribe verbatim cuando su cuerpo
+hashea igual.
+
+**En el conflicto gana el remoto.** Si el cuerpo cambió en los dos lados, la
+edición local se descarta, el espejo se reescribe con el del servidor y el
+reporte lo dice (`conflicts: [{resolution: "remote"}]`); `force=true` es la única
+puerta por la que el local se impone. Un **built-in** nunca se pushea —es
+contenido de código y la API lo rechaza con 403—: el reporte lo declara
+(`skipped`) en vez de intentarlo.
+
+Las tres invariantes que lo sostienen (y que los tests miden):
+
+1. **`body_hash == content_hash` recién bajado** — si no, cada archivo se leería
+   como editado y el push subiría versiones que nadie escribió;
+2. **la verdad sobre «editado» es el ARCHIVO** (con `mtime` + tamaño para no
+   releer lo intacto): el `body_hash` del manifiesto lo dejó el último write y una
+   edición a mano no lo actualiza; un archivo borrado o ilegible cuenta como
+   ausente y el próximo pull lo repara;
+3. **el slug es un nombre de directorio** — se valida contra el formato del wire
+   antes de armar cualquier ruta: un `../../` no escribe nada.
+
+Nada de esto entra a `skills_list`: el espejo es del plugin, no se copia a
+`~/.hermes/skills/` y no se registra como skill local. Los presupuestos del
+arranque (`SKILLS_CACHE_MAX_BODIES` / `_CHARS`) existen para que una sesión no se
+lleve el catálogo entero: lo que no entra queda `deferred` y lo baja
+`dran_skill_sync` cuando alguien lo pide.
 
 **El discovery es un DISPARO, no una nota al pie.** La descripción de la tool y
 el pie del bloque dicen *«antes de arrancar una tarea que pueda matchear un
@@ -409,13 +455,16 @@ bloque le parezca sospechoso al modelo. Con `q` la búsqueda es del servidor
 repite como red de seguridad contra un Dran que todavía no conozca el param:
 nunca ensancha el resultado.
 
-**Los 9 flows del repo son built-ins**: Dran los sirve por default a toda
+**Los 9 skills de la suite son built-ins**: Dran los sirve por default a toda
 credencial (`system: true` en el payload), así que un perfil nuevo ya los ve en
 `dran_skills` y en el bloque del prompt sin instalarlos; su slug está reservado y
-`dran_skill_save`/`dran_skill_delete` sobre uno responde `403` (se cambian en
-`skills/<slug>/SKILL.md` y un redeploy).
+`dran_skill_save`/`dran_skill_delete` sobre uno responde `403`. Se cambian
+editando el archivo y redeployando: todos viven en
+`hermes_plugin/dran/skills/<slug>/SKILL.md` — la misma carpeta que el plugin
+registra como sus filas locales, así que el listado y el bloque del prompt salen
+de los MISMOS archivos.
 
-**Las cuatro tools están DIFERIDAS.** Hermes reemplaza toda tool de plugin por el
+**Las cinco tools están DIFERIDAS.** Hermes reemplaza toda tool de plugin por el
 puente (`tool_search` / `tool_describe` / `tool_call`): un toolset de plugin no
 está entre los core ni entre las superficies GUI, así que `is_deferrable_tool_name`
 lo difiere SIEMPRE y el manifest del catálogo corta cada descripción (~60 chars) —
@@ -424,28 +473,39 @@ cuerpo del puntero nombran el puente y la query en INGLÉS (`"dran skills"`): un
 query en español no matchea ningún tool y devuelve vacío, que no es lo mismo que
 una capacidad ausente.
 
-### El puntero: `skills_list` tiene que poder contestar «listar skills»
+### La suite del sistema: las filas locales Y los built-ins (los mismos archivos)
 
 El pedido «listar los skills» corre `skills_list` — el registro LOCAL — y ahí no
 había ni una fila de Dran (el catálogo se sirve, no se instala), así que la
-respuesta honesta del listado era «no hay skills». El plugin registra entonces
-UN skill con `ctx.register_skill`
-(`hermes_plugin/dran/skills/dran-skills-index/SKILL.md`), que Hermes lista como
-`dran:dran-skills-index` y sirve con `skill_view`:
+respuesta honesta del listado era «no hay skills». El plugin registra entonces la
+suite entera con `ctx.register_skill`: **nueve filas** —
+`hermes_plugin/dran/skills/<slug>/SKILL.md`, con el router (`loader`) primero y
+los ocho flows (`knowledge-flow`, `relations-flow`, `workers-flow`, `memory-flow`,
+`goal-flow`, `plan-flow`, `services-flow`, `skills-flow`) —, que Hermes lista como
+`dran:<slug>` y sirve con `skill_view`. La descripción de cada una sale del
+**frontmatter del archivo**, así que el listado no puede decir algo que el cuerpo
+no diga. El router contesta además «¿qué se puede hacer con Dran?»: es la entrada
+de la suite y el índice del catálogo.
 
-- **no es un cuerpo del catálogo**: es la fila cuyo cuerpo ENSEÑA la ruta
-  (`tool_search` → `dran_skills` → `dran_skill`). El catálogo y sus cuerpos
-  siguen viviendo sólo en Dran;
-- **no se copia a `~/.hermes/skills/`** y Hermes lo retracta al descargar el
-  plugin;
-- **no entra en `<available_skills>`** (el índice del prompt): no cuesta tokens
-  por sesión — se ve cuando alguien pide la lista, que es exactamente el caso;
-- **fail-open**: si el archivo no está (un install que no copió `skills/`) se
-  pierde la fila y queda un warning; el plugin carga igual;
-- su `description` es el disparo y mide ≤60 chars, porque Hermes corta ahí:
-  `Use when asked to list skills: Dran serves them remotely.` (el SKILL.md y las
-  constantes `POINTER_SKILL_*` de `__init__.py` se verifican iguales en los tests:
-  archivo y registro no pueden derivar).
+Y son los **mismos archivos** que el servidor hornea como built-ins:
+`Dran.Skills.Builtin` lee `hermes_plugin/dran/skills/`, así que hay UNA sola
+fuente de bytes para las dos puertas — el listado local y la línea del bloque del
+prompt — y ninguna puede quedar describiendo una versión vieja de la otra.
+
+- **viven dentro del plugin y no se copian a `~/.hermes/skills/`**; Hermes las
+  retracta al descargar el plugin. Los slugs no llevan prefijo `dran-`: el
+  namespace es del host (`dran:loader`), y `dran:dran-knowledge-flow` leería dos
+  veces lo mismo;
+- **no entran en `<available_skills>`** (el índice del prompt): no cuestan tokens
+  por sesión — se ven cuando alguien pide la lista, que es exactamente el caso (la
+  línea del prompt la pone el bloque `dran-skills`, que lee el catálogo remoto);
+- **fail-open por archivo**: el que falte (un install que no copió `skills/`) se
+  pierde con un warning y el plugin carga igual;
+- la descripción del router es el disparo de las DOS preguntas y mide ≤60 chars,
+  porque Hermes corta ahí: `Use when asked to list skills or operate Dran.` (el
+  frontmatter del SKILL.md y lo que registra `__init__.py` se verifican iguales en
+  los tests: archivo y registro no pueden derivar, y el parser del servidor valida
+  el mismo frontmatter al compilar).
 
 Cada tool escribe por `_DranClient`, así que **todo write lleva
 `X-Hermes-Agent`** con el nombre del perfil. El handler recibe `(args, **kw)`
@@ -454,7 +514,7 @@ por closure (`_make_handler`).
 
 ### Apagar superficies (el switch por grupo)
 
-Las 46 tools son **siete superficies**, y cada una tiene **dos interruptores
+Las 47 tools son **siete superficies**, y cada una tiene **dos interruptores
 sobre la misma cosa** — la tabla `_TOOL_GROUPS` de `__init__.py` es la única
 fuente de verdad de a qué grupo pertenece cada tool:
 
@@ -497,9 +557,34 @@ Memory). Apaga la mitad de memoria completa — recall, captura y las cuatro too
 `dran_memory_*` — y su semántica está en
 [El switch de memoria](#el-switch-de-memoria-la-mitad-de-memoria-del-plugin).
 
+**Nota de migración (v1.5 → v1.6):** tres cosas en un cambio.
+
+1. La suite del sistema pasa a vivir **dentro del plugin**
+   (`hermes_plugin/dran/skills/`; la carpeta `skills/` de la raíz desaparece) y el
+   plugin la **registra entera** — nueve filas locales `dran:<slug>` en
+   `skills_list`, cargables con `skill_view` sin red. El router se llama
+   **`loader`** (entrada de la suite + índice del catálogo) y los flows pierden el
+   prefijo `dran-` (`knowledge-flow`, `relations-flow`, …): el namespace lo pone el
+   host. El servidor sigue horneando los mismos archivos como built-ins
+   (`Dran.Skills.Builtin` lee esa carpeta y el Dockerfile la copia). **Los slugs de
+   los built-ins SÍ cambian** (`dran-knowledge-flow` → `knowledge-flow`, …): el sync
+   del boot poda las filas viejas y crea las nuevas, y quien tuviera un slug viejo
+   anotado (en un `related_skills`, en una nota) tiene que actualizarlo.
+2. Se suman `dran_skill_sync` (el toolset `dran_skills` pasa de 4 a 5 tools) y la
+   clave de tarjeta **Skills mirror on disk** (`skills_cache`, default ON). Nada que
+   hacer: un perfil existente arranca con el espejo encendido y sin bodies en disco
+   — se llena al cargar skills y en el primer arranque de sesión. Apagado, el plugin
+   no escribe nada y todo lo demás se comporta como en la v1.5.
+3. El plugin se instala en vez de linkearse (el symlink de desarrollo nunca fue una
+   instalación: no hay provenance ni `plugins update`):
+
+   ```bash
+   hermes plugins install "git@github.com:alvarolizama/dran.git#hermes_plugin/dran"
+   ```
+
 **Nota de migración (v1.4 → v1.5):** el toolset `dran` ya no existe; quien lo
 tuviera deshabilitado en `platform_toolsets`/`agent.disabled_toolsets`
-recupera las 46 tools, porque las claves nuevas son desconocidas y Hermes las
+recupera las 47 tools, porque las claves nuevas son desconocidas y Hermes las
 enciende por default. Volver a apagarlas es una línea por superficie:
 
 ```bash
@@ -538,3 +623,27 @@ tools comparten. Un `config.json` con un solo knob de memoria no debe arrastrar
 `base_url` al default de localhost: hay un test para eso. Y otro que fija qué
 hace el switch apagado: `is_available()` false, `get_tool_schemas()` vacío y la
 llamada rechazada.
+
+**El espejo de skills** tiene su propio bloque (26 tests). Los que fijan el
+contrato, en orden de importancia:
+
+1. `mount → parse` devuelve el MISMO cuerpo (cuerpos con `---`, comillas, barras y
+   saltos finales incluidos) y su hash es el `content_hash` del servidor: si esto
+   no cerrara, todo archivo se leería editado;
+2. el remoto manda: cargar un skill escribe el espejo con `body_hash == content_hash`,
+   un cuerpo nuevo del servidor reescribe el archivo, un **404 no** cae al espejo y
+   con Dran caído la respuesta llega con `source: cache` + `stale: true`;
+3. la reconciliación baja SÓLO lo que cambió (se mide que no haya GET de detalle),
+   respeta su presupuesto (`deferred`), repara un archivo borrado o ilegible y no
+   aborta por un slug que falla;
+4. push: una edición local se reporta (`pending_push`) y se sube fast-forward; en
+   conflicto gana el remoto y `force` impone la local; un built-in sale `skipped`;
+5. y las guardas: slug inválido (`../../`) no arma ninguna ruta ni escribe,
+   manifiesto corrupto se lee vacío, `"false"` en el `config.json` apaga el espejo
+   (sin escribir nada a disco) y el arranque usa el índice que ya bajó el prompt
+   (UN GET, en un hilo). El smoke end-to-end contra los payloads reales del
+   servidor vive fuera de la suite (ver abajo).
+
+Y el smoke de contrato (`mix run` + un cliente que sirve esos payloads), que
+verifica lo mismo contra los bytes que emite `Dran.Skills` — incluida la versión
+que el `PUT` real devuelve.

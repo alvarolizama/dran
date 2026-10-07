@@ -342,7 +342,7 @@ defmodule DranWeb.SkillLiveTest do
     test "la lista los muestra marcados y sin lápiz", %{author: author, conn: conn} do
       {:ok, view, _html} = live(login(conn, author), ~p"/skills")
 
-      row = Skills.get_system_skill("dran")
+      row = Skills.get_system_skill("loader")
 
       assert has_element?(view, "#skill-row-#{row.id}")
       # El slug ES la dirección del wire y el built-in no se edita: no hay lápiz
@@ -354,7 +354,7 @@ defmodule DranWeb.SkillLiveTest do
       author: author,
       conn: conn
     } do
-      {:ok, view, _html} = live(login(conn, author), ~p"/skills/dran-plan-flow")
+      {:ok, view, _html} = live(login(conn, author), ~p"/skills/plan-flow")
 
       assert has_element?(view, "#skill-system-badge", t("Built-in"))
       assert has_element?(view, "#skill-detail")
@@ -364,7 +364,7 @@ defmodule DranWeb.SkillLiveTest do
     end
 
     test "?edit=true a mano NO abre el panel de edición", %{author: author, conn: conn} do
-      {:ok, view, _html} = live(login(conn, author), ~p"/skills/dran?edit=true")
+      {:ok, view, _html} = live(login(conn, author), ~p"/skills/loader?edit=true")
 
       # El estado de URL no es autorización: el panel no se pinta y el form
       # tampoco existe, así que no hay submit que forjar.
@@ -395,12 +395,12 @@ defmodule DranWeb.SkillLiveTest do
 
       html =
         render_submit(view, "save_skill", %{
-          "skill" => %{"name" => "dran", "description" => "d", "body" => "# d"}
+          "skill" => %{"name" => "loader", "description" => "d", "body" => "# d"}
         })
 
       assert html =~ "is reserved by a built-in skill"
       # El catálogo no creció: la fila del código sigue siendo su única dueña.
-      assert Skills.get_system_skill("dran").owner_user_id == nil
+      assert Skills.get_system_skill("loader").owner_user_id == nil
       assert length(Skills.list_system_skills()) == 9
     end
   end

@@ -1,5 +1,5 @@
 ---
-name: dran-goal-flow
+name: goal-flow
 description: "Use when creating or moving Dran goals and their tasks."
 version: 1.0.0
 author: Álvaro Lizama
@@ -7,26 +7,26 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, goals, tasks, board, capture, hermes-plugin]
-    related_skills: [dran, dran-plan-flow]
+    related_skills: [loader, plan-flow]
 ---
 
-# dran-goal-flow — Goals, their tasks and the destination
+# goal-flow — Goals, their tasks and the destination
 
 The **container and the action**: a goal holds tasks (a task does not exist
 without a goal) and the board is one goal's tasks. Everything is a thin client
 over the REST (`/api/goals`, `/api/tasks`, `/api/capture`, `/api/groups`)
 through the plugin tools. The **plan** — an intention with steps — is its own
-flow: `dran-plan-flow`.
+flow: `plan-flow`.
 
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"create/capture an action"| T["THIS SKILL\ndran-goal-flow"]
+  Q{What do you need?} -->|"create/capture an action"| T["THIS SKILL\ngoal-flow"]
   Q -->|"a container for work"| T
   Q -->|"move a task between columns,\nor to another goal"| T
   Q -->|"put something in a group\n(destination)"| G["RUN dran_list_groups\nthen write with group=slug"]
-  Q -->|"an intention with steps,\nits checklist"| P[dran-plan-flow]
+  Q -->|"an intention with steps,\nits checklist"| P[plan-flow]
 
   style T fill:#d1fae5,stroke:#059669
 ```
@@ -44,7 +44,7 @@ readback (the item appears/lands where it was sent in the `list`/`get` tool).
 |---|---|---|
 | Content of a **goal** or a **task**: título, cuerpo, prioridad, horizonte/fechas, asignado, pasos, recurrencia, archivado, `completed_at` | `dran_update_goal` · `dran_update_task` | Es la puerta del contenido (`status` NO está acá) |
 | **Estado / posición / goal de una task** | `dran_move_task` | Única puerta de la columna: mantiene las posiciones de ambas y exige `lock_version` (409 si perdió la carrera) |
-| Un ítem del checklist de una **task** | `dran_toggle_checklist` (`target: "task"`) | Un ítem, por `index` o `text`. El checklist de un **plan** vive en `dran-plan-flow` |
+| Un ítem del checklist de una **task** | `dran_toggle_checklist` (`target: "task"`) | Un ítem, por `index` o `text`. El checklist de un **plan** vive en `plan-flow` |
 | Alta | `dran_create_goal` · `dran_create_task` · `dran_capture` | `capture` = captura rápida, sin goal, a la bandeja del dueño |
 | Lectura | `dran_list_goals` · `dran_get_goal` · `dran_list_tasks` · `dran_get_task` | El readback: el `ok` de una escritura no es estado |
 
@@ -84,7 +84,7 @@ flowchart TD
 - **Dar una escritura por hecha sin readback**: el `ok` de la tool es
   transporte, no estado. Confirmá con `dran_get_task` / `dran_get_goal`.
 - **Buscar el checklist de un plan acá**: `dran_set_plan_checklist` y el
-  `toggle` con `target: "plan"` son de `dran-plan-flow`.
+  `toggle` con `target: "plan"` son de `plan-flow`.
 - **Borrar sin preguntar**: `dran_delete_goal` se lleva sus tasks (FK
   `delete_all`) y `dran_delete_task` borra aristas del grafo. Irreversible:
   **ASK** antes.
@@ -94,4 +94,4 @@ flowchart TD
 - Plugin-side surface (schemas + dispatch): `hermes_plugin/dran/__init__.py`
 - Routes y la puerta de escritura: `lib/dran_web/router.ex`
 - Quién lee qué: `Dran.ContentVisibility` (own ∪ public ∪ shared con tus grupos)
-- El plan y su checklist: `dran-plan-flow`
+- El plan y su checklist: `plan-flow`

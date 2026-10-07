@@ -1,5 +1,5 @@
 ---
-name: dran-knowledge-flow
+name: knowledge-flow
 description: "Use when creating/editing/deleting Dran pages."
 version: 2.1.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, knowledge, pages, tools]
-    related_skills: [dran, dran-relations-flow]
+    related_skills: [loader, relations-flow]
 ---
 
-# dran-knowledge-flow — Create and edit knowledge pages
+# knowledge-flow — Create and edit knowledge pages
 
 Pages are the unit of knowledge. There are **four built-in page types** —
 `note`, `entity`, `concept`, `reference` — and the instance may declare **its
@@ -26,8 +26,8 @@ over its REST API.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"write/read/delete\na page"| SELF["THIS SKILL\ndran-knowledge-flow"]
-  Q -->|"typed link between\ntwo pages"| R[dran-relations-flow]
+  Q{What do you need?} -->|"write/read/delete\na page"| SELF["THIS SKILL\nknowledge-flow"]
+  Q -->|"typed link between\ntwo pages"| R[relations-flow]
   Q -->|"connection, auth,\nreadback rule"| D[dran — main]
 
   style SELF fill:#d1fae5,stroke:#059669

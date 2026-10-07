@@ -13,11 +13,13 @@ Run: python3 -m pytest hermes_plugin/tests/ -q
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
 import re
 import sys
+import threading
 import time
 import types
 import urllib.error
@@ -78,6 +80,11 @@ def hermetic_dran_home(plugin, tmp_path, monkeypatch):
     home = tmp_path / "hermes_home"
     home.mkdir()
     monkeypatch.setattr(plugin, "_active_hermes_home", lambda: str(home))
+    # El provider resuelve el home por su cuenta (un staticmethod que en
+    # producción es idéntico a `_active_hermes_home`): sin esto, el sync de
+    # arranque de un test apuntaría al `~/.hermes` REAL del usuario.
+    monkeypatch.setattr(plugin.DranMemoryProvider, "_hermes_home",
+                        staticmethod(lambda: str(home)))
     # La tarjeta se lee del config.yaml del perfil ACTIVO cuando la llamada no
     # trae ctx: que ningún test lea el config real del usuario (misma razón que
     # el home hermético), y que el `register()` previo no se filtre entre tests.
@@ -85,6 +92,12 @@ def hermetic_dran_home(plugin, tmp_path, monkeypatch):
     monkeypatch.setattr(plugin, "_PLUGIN_CTX", None)
     plugin._TOGGLES_CACHE.clear()
     plugin._MEMORY_CACHE.clear()
+    # El espejo en disco: mismo aislamiento (el home de arriba) y el lock del
+    # sync de arranque SIN tomar, para que un hilo que quedó vivo en otro test no
+    # haga que la reconciliación de éste salga temprano.
+    plugin._SKILLS_CACHE_TOGGLE.clear()
+    plugin._SKILL_HASHES = {}
+    monkeypatch.setattr(plugin, "_SKILLS_WARM_LOCK", threading.Lock())
     return home
 
 
@@ -173,12 +186,14 @@ def test_register_registers_memory_provider_and_tools(plugin):
         "dran_services_tools",
         "dran_services_run",
         "dran_services_wait",
-        # Skills remotos (contrato de skills remotos, W4) — 4 tools FIJAS y el
-        # catálogo como DATO: el cuerpo viaja por tool y nunca se baja a disco.
+        # Skills remotos (contrato de skills remotos, W4) — tools FIJAS y el
+        # catálogo como DATO: el cuerpo viaja por tool, y el espejo en disco
+        # (`dran_skill_sync`) sólo agrega el fallback y la reconciliación.
         "dran_skills",
         "dran_skill",
         "dran_skill_save",
         "dran_skill_delete",
+        "dran_skill_sync",
     ]
     assert len(set(names)) == len(names), "no duplicate tool names"
 
@@ -1193,7 +1208,8 @@ def test_services_tools_hit_documented_routes(plugin):
 # P13: `dran_skill` enmarca el cuerpo con slug/versión/hash y responde
 #      `unchanged` cuando el hash de la sesión no cambió.
 
-_SKILL_TOOL_NAMES = {"dran_skills", "dran_skill", "dran_skill_save", "dran_skill_delete"}
+_SKILL_TOOL_NAMES = {"dran_skills", "dran_skill", "dran_skill_save",
+                     "dran_skill_delete", "dran_skill_sync"}
 
 
 def test_skills_tools_registered_and_declared(plugin):
@@ -1219,67 +1235,89 @@ def test_no_per_skill_tool_exists(plugin):
     names = [t["name"] for t in ctx.tools]
 
     assert sorted(n for n in names if n.startswith("dran_skill")) == [
-        "dran_skill", "dran_skill_delete", "dran_skill_save", "dran_skills"]
+        "dran_skill", "dran_skill_delete", "dran_skill_save", "dran_skill_sync",
+        "dran_skills"]
     assert "dran_skill_weekly_review" not in names
 
 
-def test_skills_pointer_registered_for_the_local_listing(plugin):
-    """El plugin registra UNA fila en `skills_list`: la que contesta «listar skills».
+def test_the_system_skills_are_registered_for_the_local_listing(plugin):
+    """El plugin registra NUEVE filas en `skills_list`: la suite del sistema.
 
-    La suite se SIRVE, no se instala, así que el listado local no tiene ni un
+    La suite se SIRVE, no se instala, así que el listado local no tenía ni un
     `dran-*`: el pedido «listar skills» caía en un registro donde Dran no existía.
-    `ctx.register_skill` pone la fila (aparece en `skills_list`, se carga con
-    `skill_view`, NO se copia a `~/.hermes/skills/` y no entra en el índice del
-    prompt). Es un puntero al catálogo vivo, no un cuerpo de la suite.
+    `ctx.register_skill` pone las filas (aparecen en `skills_list`, se cargan con
+    `skill_view` SIN red, NO se copian a `~/.hermes/skills/` y no entran al índice
+    del prompt). Cada archivo es el MISMO que el servidor hornea como built-in.
     """
     ctx = FakeCtx()
     plugin.register(ctx)
 
-    [pointer] = ctx.skills
-    assert pointer["name"] == plugin.POINTER_SKILL_NAME
-    assert pointer["path"] == plugin.POINTER_SKILL_PATH
-    assert pointer["description"] == plugin.POINTER_SKILL_DESCRIPTION
-    assert pointer["path"].exists(), "el SKILL.md registrado tiene que existir"
-    assert _PLUGIN_DIR in pointer["path"].parents, "el puntero vive dentro del plugin"
-    # Hermes corta la descripción a 60 chars en el índice: el disparo entra entero.
-    assert len(pointer["description"]) <= 60, len(pointer["description"])
-    assert pointer["description"].startswith("Use when asked to list skills")
+    names = [s["name"] for s in ctx.skills]
+    assert names == list(plugin.SYSTEM_SKILL_SLUGS)
+    assert names[0] == "loader", "el router es la primera fila: es la entrada"
+    # Los slugs van SIN el prefijo `dran-`: el namespace lo pone el host (`dran:x`).
+    assert not any(n.startswith("dran-") for n in names), names
+    assert "knowledge-flow" in names and "skills-flow" in names
+
+    for skill in ctx.skills:
+        assert skill["path"].exists(), skill["path"]
+        assert _PLUGIN_DIR in skill["path"].parents, "los archivos viven en el plugin"
+        description = skill["description"]
+        # Hermes corta la descripción a 60 chars en el índice: tiene que entrar.
+        assert 0 < len(description) <= 60, (skill["name"], description)
+
+    router = ctx.skills[0]
+    assert router["description"].startswith("Use when asked to list skills")
+    assert "operate Dran" in router["description"]
 
 
-def test_pointer_skill_file_matches_what_the_plugin_registers(plugin):
-    """El SKILL.md y lo que `register()` registra son la MISMA verdad.
+def test_system_skill_files_match_what_the_plugin_registers(plugin):
+    """Cada SKILL.md y su fila registrada son la MISMA verdad (los nueve).
 
-    Un archivo que diga otra cosa (o un nombre de disparo distinto) es la deriva
-    clásica: el listado mostraría una descripción y el cuerpo hablaría de otra.
+    La descripción sale del frontmatter, así que el listado local y el índice del
+    prompt no pueden decir cosas distintas — y como esos mismos archivos los hornea
+    el servidor, la deriva viajaría también al catálogo remoto.
     """
-    text = plugin.POINTER_SKILL_PATH.read_text(encoding="utf-8")
-    frontmatter = text.split("---")[1]
-    name_match = re.search(r"^name:\s*(.+)$", frontmatter, re.M)
-    description_match = re.search(r'^description:\s*"?(.+?)"?\s*$', frontmatter, re.M)
-    assert name_match is not None and description_match is not None, \
-        "el frontmatter del puntero necesita name y description"
-
-    assert name_match.group(1).strip() == plugin.POINTER_SKILL_NAME
-    assert description_match.group(1) == plugin.POINTER_SKILL_DESCRIPTION
-    # El cuerpo tiene que traer LA ruta, no una promesa: la tool diferida se
-    # alcanza por el puente y la query es en inglés (una en español no matchea).
-    assert "tool_search" in text
-    assert "dran_skills" in text
-    assert "dran_skill" in text
-
-
-def test_pointer_failure_does_not_cost_the_rest_of_the_plugin(plugin):
-    """Fail-open: sin el archivo (install que no copió `skills/`) el plugin carga."""
-
-    class NoPointerCtx(FakeCtx):
-        def register_skill(self, *args, **kwargs):
-            raise FileNotFoundError("skills/dran-skills-index/SKILL.md")
-
-    ctx = NoPointerCtx()
+    ctx = FakeCtx()
     plugin.register(ctx)
+    registered = {s["name"]: s for s in ctx.skills}
+    assert set(registered) == set(plugin.SYSTEM_SKILL_SLUGS)
 
+    for slug in plugin.SYSTEM_SKILL_SLUGS:
+        text = plugin._system_skill_path(slug).read_text(encoding="utf-8")
+        frontmatter = text.split("---")[1]
+        name_match = re.search(r"^name:\s*(.+)$", frontmatter, re.M)
+        description_match = re.search(r'^description:\s*"?(.+?)"?\s*$', frontmatter, re.M)
+        assert name_match is not None and description_match is not None, slug
+        assert name_match.group(1).strip() == slug, "el nombre ES la dirección"
+        assert registered[slug]["description"] == description_match.group(1)
+
+    # El router trae LA ruta (la tool diferida se alcanza por el puente, con query
+    # en inglés) y nombra a los ocho flows: es el índice de la suite.
+    router = plugin._system_skill_path("loader").read_text(encoding="utf-8")
+    assert "tool_search" in router
+    assert "dran_skills" in router and "dran_skill" in router
+    for flow in plugin.SYSTEM_SKILL_SLUGS[1:]:
+        assert flow in router, flow
+
+
+def test_a_missing_system_skill_file_does_not_cost_the_rest(plugin):
+    """Fail-open POR ARCHIVO: el que falta se pierde, los otros ocho se registran."""
+    original = plugin._system_skill_entry
+
+    def flaky(slug):
+        return None if slug == "workers-flow" else original(slug)
+
+    ctx = FakeCtx()
+    with mock.patch.object(plugin, "_system_skill_entry", flaky):
+        plugin.register(ctx)
+
+    names = [s["name"] for s in ctx.skills]
+    assert "workers-flow" not in names
+    assert len(names) == 8, names
+    assert "loader" in names and "knowledge-flow" in names
     assert len(ctx.providers) == 1
-    assert len(ctx.tools) == 46
+    assert len(ctx.tools) == 47
     assert len(ctx.prompt_sections) == 1
 
 
@@ -1566,11 +1604,12 @@ def test_skills_discovery_is_a_trigger_not_a_side_note(plugin):
     assert "BEFORE starting" in schema["description"]
     assert "q" in schema["parameters"]["properties"]
 
-    # El pedido de LISTADO es el otro disparo: la lista local no trae la suite
-    # (se sirve, no se instala), así que el bloque y la tool tienen que decir que
-    # el catálogo ES la lista — y nombrar la fila puntero que sí se ve.
+    # El pedido de LISTADO es el otro disparo: la lista local no trae los skills
+    # del workspace (se sirven, no se instalan), así que el bloque y la tool tienen
+    # que decir que el catálogo ES la lista — y nombrar lo que sí se ve local.
     assert "LIST the skills" in text
-    assert "dran-skills-index" in text
+    assert "system skills" in text
+    assert "loader" in text
     assert "tool_search" in text  # las 4 tools están diferidas: hay que decirlo
     assert "LIST the skills" in schema["description"]
     assert "served, not installed" in schema["description"]
@@ -1606,6 +1645,603 @@ def test_skill_not_found_is_an_error_never_an_invented_body(plugin):
     assert "error" in out
     assert "ajeno-privado" in out["error"]
     assert "body" not in out
+
+
+# ── El espejo en disco (el cache de skills) ──────────────────────────────────
+# El contrato, en cuatro reglas:
+#   1. el REMOTO siempre manda — el cuerpo se pide a Dran en cada carga y el
+#      espejo sólo contesta cuando Dran NO responde (un 404 no es «no responde»);
+#   2. recién bajado, `body_hash == content_hash` (si no, todo se leería editado);
+#   3. la reconciliación compara hashes del ÍNDICE: baja sólo lo que cambió;
+#   4. en conflicto gana el remoto, salvo `force`.
+# Y una invariante de superficie: nada de esto entra a `skills_list`.
+
+
+def _sha(body: str) -> str:
+    """El MISMO hash del servidor (`Dran.Skills.Skill.content_hash/1`)."""
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def _row(slug: str, body: str, *, version: int = 1, description: str = "d",
+         system: bool = False) -> dict:
+    """Una fila de DETALLE como la sirve `/api/skills/:slug` (sin `skill_md`: el
+    caso en que el espejo tiene que montar el archivo él mismo)."""
+    return {"slug": slug, "name": slug, "description": description, "body": body,
+            "version": version, "content_hash": _sha(body),
+            "system": system, "visibility": "public"}
+
+
+class _FakeMirrorClient:
+    """Cliente con estado: el catálogo del servidor + los PUT anotados."""
+
+    def __init__(self, rows=None, *, down=False):
+        self.skills = {slug: dict(row) for slug, row in (rows or {}).items()}
+        self.down = down
+        self.base_url = "http://dran.test"
+        self.detail_calls = []
+        self.writes = []
+
+    def _guard(self):
+        if self.down:
+            raise ConnectionError("dran unreachable")
+
+    def list_skills(self, limit=None, timeout=None):
+        self._guard()
+        # El índice NUNCA trae cuerpos (ni el archivo montado).
+        return [{k: v for k, v in row.items() if k not in ("body", "skill_md")}
+                for row in self.skills.values()]
+
+    def get_skill(self, slug, timeout=None):
+        self._guard()
+        self.detail_calls.append(slug)
+        return self.skills.get(slug)
+
+    def update_skill(self, slug, description=None, body=None, visibility=""):
+        self._guard()
+        self.writes.append({"slug": slug, "description": description, "body": body})
+        row = dict(self.skills.get(slug) or {})
+        row.update({"slug": slug, "body": body, "description": description,
+                    "version": (row.get("version") or 1) + 1,
+                    "content_hash": _sha(body)})
+        self.skills[slug] = row
+        return {"data": dict(row)}
+
+
+def _mirror(plugin, rows=None, *, down=False):
+    """Handlers registrados + un cliente con estado (el espejo vive en el home
+    hermético del fixture, así que cada test arranca con el cache vacío)."""
+    handlers, _routes, _detail, _client, ctx = _skills_plugin(plugin)
+    return handlers, _FakeMirrorClient(rows, down=down), ctx
+
+
+def _mirror_root(home) -> Path:
+    return Path(home) / "dran" / "skills"
+
+
+def _mirror_file(home, slug) -> Path:
+    return _mirror_root(home) / slug / "SKILL.md"
+
+
+def _manifest(home) -> dict:
+    return json.loads((_mirror_root(home) / "manifest.json").read_text(encoding="utf-8"))
+
+
+def _load(plugin, handlers, client, ctx, slug):
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        return json.loads(handlers["dran_skill"]({"slug": slug}, ctx=ctx))
+
+
+def _sync(plugin, client, ctx, **kwargs):
+    return plugin._skills_sync(client, ctx, **kwargs)
+
+
+def test_skill_md_mount_and_parse_round_trip(plugin):
+    """LA invariante del espejo: montar y parsear devuelven el MISMO cuerpo.
+
+    Si esto no cerrara byte a byte, cada archivo recién bajado se leería como
+    editado y el push subiría versiones que nadie escribió.
+    """
+    bodies = [
+        "# cuerpo",
+        "",
+        "linea\n\nlinea2\n",
+        "---\nno es un delimitador\n---\n",
+        'cita: "x" \\ fin\n',
+        "sin salto final\n\n\n",
+    ]
+    for body in bodies:
+        text = plugin._mount_skill_md("slug", 'desc: con "comillas" y \\ barra', body)
+        parsed = plugin._parse_skill_md(text)
+        assert parsed is not None, body
+        meta, parsed_body = parsed
+        assert parsed_body == body, (body, parsed_body)
+        assert meta["name"] == "slug"
+        assert meta["description"] == 'desc: con "comillas" y \\ barra'
+        # y el hash del cuerpo parseado ES el `content_hash` del servidor
+        assert plugin._body_sha256(parsed_body) == _sha(body)
+
+
+def test_a_broken_frontmatter_line_is_not_a_value(plugin):
+    """Una descripción con salto de línea parte el frontmatter: no es un valor.
+
+    El cuerpo sigue intacto (y hasheable); la descripción se lee vacía para que
+    un push caiga al dato del manifiesto en vez de mandar un fragmento.
+    """
+    text = plugin._mount_skill_md("s", "linea1\nlinea2", "# body")
+    meta, body = plugin._parse_skill_md(text)
+
+    assert body == "# body"
+    assert meta.get("description", "") == ""
+    assert plugin._parse_skill_md("sin frontmatter") is None
+    assert plugin._parse_skill_md("---\nname: x\nsin cierre") is None
+
+
+def test_loading_a_skill_mirrors_it_and_the_hashes_line_up(plugin, hermetic_dran_home):
+    """Cargar un skill escribe el archivo y su entrada, con los hashes iguales."""
+    body = "# cuerpo\n\npasos\n"
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", body, version=3)})
+
+    out = _load(plugin, handlers, client, ctx, "weekly")
+
+    assert out["source"] == "remote" and out["body"] == body and out["status"] == "ok"
+    path = _mirror_file(hermetic_dran_home, "weekly")
+    assert path.read_text(encoding="utf-8") == plugin._mount_skill_md("weekly", "d", body)
+    assert out["cache"]["path"] == str(path)
+
+    entry = _manifest(hermetic_dran_home)["skills"]["weekly"]
+    assert entry["content_hash"] == _sha(body)
+    assert entry["body_hash"] == entry["content_hash"], "recién bajado no es una edición"
+    assert entry["version"] == 3
+
+    cache = plugin._SkillCache(str(hermetic_dran_home))
+    assert cache.read("weekly")["dirty"] is False
+    assert cache.stats()["skills"] == 1
+
+
+def test_the_remote_rewrites_the_mirror_when_the_body_changes(plugin, hermetic_dran_home):
+    """El remoto manda: un cuerpo nuevo se sirve Y se reescribe en el espejo."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# viejo")})
+    _load(plugin, handlers, client, ctx, "weekly")
+
+    new_body = "# nuevo\n\notra cosa\n"
+    client.skills["weekly"] = _row("weekly", new_body, version=4)
+    plugin._SKILL_HASHES = {}  # sesión nueva
+    out = _load(plugin, handlers, client, ctx, "weekly")
+
+    assert out["body"] == new_body and out["source"] == "remote"
+    assert _mirror_file(hermetic_dran_home, "weekly").read_text(encoding="utf-8") \
+        == plugin._mount_skill_md("weekly", "d", new_body)
+    assert _manifest(hermetic_dran_home)["skills"]["weekly"]["version"] == 4
+
+
+def test_a_server_skill_md_is_written_verbatim_or_ignored_when_it_lies(plugin, hermetic_dran_home):
+    """Se prefieren los bytes del servidor… si el cuerpo que traen es el que dice.
+
+    Un `skill_md` que no cierra por hash se descarta y el archivo se monta con el
+    formato del wire: lo que no puede pasar es que el espejo escriba un archivo
+    cuyo cuerpo no sea el `content_hash` del servidor (se leería como editado).
+    """
+    cache = plugin._SkillCache(str(hermetic_dran_home))
+    body = "# cuerpo"
+
+    good = plugin._mount_skill_md("weekly", "d", body)
+    assert cache.write({**_row("weekly", body), "skill_md": good})["body_hash"] == _sha(body)
+    assert _mirror_file(hermetic_dran_home, "weekly").read_text(encoding="utf-8") == good
+
+    lying = plugin._mount_skill_md("weekly", "d", "# OTRO cuerpo")
+    entry = cache.write({**_row("weekly", body), "skill_md": lying})
+    assert entry["body_hash"] == _sha(body)
+    assert _mirror_file(hermetic_dran_home, "weekly").read_text(encoding="utf-8") != lying
+
+    assert cache.write({**_row("weekly", body), "skill_md": "basura sin frontmatter"})
+    assert cache.read("weekly")["dirty"] is False
+
+
+def test_offline_load_serves_the_mirror_marked_stale(plugin, hermetic_dran_home):
+    """Con Dran caído contesta el disco — y lo dice: `source: cache`, `stale`."""
+    body = "# cuerpo\n"
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", body)})
+    _load(plugin, handlers, client, ctx, "weekly")
+
+    client.down = True
+    plugin._SKILL_HASHES = {}  # sesión nueva: no hay nada cargado en memoria
+    out = _load(plugin, handlers, client, ctx, "weekly")
+
+    assert out["status"] == "cache" and out["stale"] is True and out["source"] == "cache"
+    assert out["body"] == body
+    assert out["content_hash"] == _sha(body)
+    assert "OFFLINE COPY" in out["frame"]
+    assert "LOCAL MIRROR" in out["note"]
+
+    # Dentro de la MISMA sesión, el segundo pedido no re-inyecta el cuerpo.
+    again = _load(plugin, handlers, client, ctx, "weekly")
+    assert again["status"] == "unchanged" and "body" not in again and again["stale"] is True
+
+
+def test_offline_without_a_cached_copy_is_still_an_error(plugin, hermetic_dran_home):
+    """Sin copia en el espejo, «Dran caído» sigue siendo un error — sin inventos."""
+    handlers, client, ctx = _mirror(plugin, {}, down=True)
+
+    out = _load(plugin, handlers, client, ctx, "weekly")
+
+    assert "error" in out and "unavailable" in out["error"]
+    assert "body" not in out
+
+
+def test_a_404_never_falls_back_to_the_mirror(plugin, hermetic_dran_home):
+    """Un 404 es el servidor contestando: la copia vieja NO se sirve.
+
+    Es la diferencia entre «no me contestó» y «no está»: servir el espejo en el
+    segundo caso mandaría al agente a seguir instrucciones que ya no existen.
+    """
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# cuerpo")})
+    _load(plugin, handlers, client, ctx, "weekly")
+    del client.skills["weekly"]  # borrado (o descompartido) en el remoto
+
+    plugin._SKILL_HASHES = {}
+    out = _load(plugin, handlers, client, ctx, "weekly")
+
+    assert "error" in out and "body" not in out
+    assert out["cache"]["path"] == str(_mirror_file(hermetic_dran_home, "weekly"))
+    assert "NOT used" in out["cache"]["note"]
+
+
+def test_sync_pulls_only_what_changed(plugin, hermetic_dran_home):
+    """La reconciliación compara hashes del índice: baja SÓLO lo que cambió."""
+    handlers, client, ctx = _mirror(plugin, {
+        "alpha": _row("alpha", "# a"),
+        "beta": _row("beta", "# b"),
+    })
+    first = _sync(plugin, client, ctx)
+
+    assert first["ok"] is True
+    assert [r["slug"] for r in first["pulled"]] == ["alpha", "beta"]
+    assert first["pulled_count"] == 2 and first["unchanged"] == 0
+    assert _mirror_file(hermetic_dran_home, "alpha").exists()
+
+    client.detail_calls.clear()
+    second = _sync(plugin, client, ctx)
+    assert client.detail_calls == []          # nada cambió: ni un GET de detalle
+    assert second["pulled_count"] == 0 and second["unchanged"] == 2
+
+    client.skills["beta"] = _row("beta", "# b2", version=2)
+    client.skills["gamma"] = _row("gamma", "# g")
+    third = _sync(plugin, client, ctx)
+
+    assert [r["slug"] for r in third["pulled"]] == ["beta", "gamma"]
+    assert third["unchanged"] == 1
+    assert third["mirror"]["skills"] == 3
+
+
+def test_sync_honours_its_body_budget(plugin, hermetic_dran_home):
+    """El sync de arranque no se lleva el catálogo entero: lo que sobra se declara."""
+    handlers, client, ctx = _mirror(plugin, {
+        "a": _row("a", "# a"), "b": _row("b", "# b"), "c": _row("c", "# c"),
+    })
+
+    report = _sync(plugin, client, ctx, max_bodies=1)
+
+    assert report["pulled_count"] == 1 and report["deferred"] == 2
+    assert _mirror_file(hermetic_dran_home, "a").exists()
+    assert not _mirror_file(hermetic_dran_home, "c").exists()
+
+
+def test_sync_is_not_the_dangerous_one_when_a_body_fails(plugin, hermetic_dran_home):
+    """Un slug que no se puede bajar se reporta y NO aborta el resto."""
+    handlers, client, ctx = _mirror(plugin, {"a": _row("a", "# a"), "b": _row("b", "# b")})
+    original = client.get_skill
+
+    def flaky(slug, timeout=None):
+        if slug == "a":
+            raise ConnectionError("boom")
+        return original(slug, timeout=timeout)
+
+    client.get_skill = flaky
+    report = _sync(plugin, client, ctx)
+
+    assert report["ok"] is True
+    assert [e["slug"] for e in report["errors"]] == ["a"]
+    assert [r["slug"] for r in report["pulled"]] == ["b"]
+    assert _mirror_file(hermetic_dran_home, "b").exists()
+
+
+def test_a_local_edit_is_reported_then_pushed_fast_forward(plugin, hermetic_dran_home):
+    """Una edición en disco se detecta por hash y se sube si nadie movió el remoto."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# cuerpo")})
+    _sync(plugin, client, ctx)
+
+    edited = "# cuerpo\n\nnuevo paso\n"
+    _mirror_file(hermetic_dran_home, "weekly").write_text(
+        plugin._mount_skill_md("weekly", "d", edited), encoding="utf-8")
+
+    dry = _sync(plugin, client, ctx)
+    assert dry["pending_push"] == ["weekly"]
+    assert client.writes == []  # sin `push` no se escribe nada en el remoto
+
+    pushed = _sync(plugin, client, ctx, push=True)
+    assert [w["slug"] for w in client.writes] == ["weekly"]
+    assert client.writes[0]["body"] == edited
+    assert [p["slug"] for p in pushed["pushed"]] == ["weekly"]
+    assert pushed["pending_push"] == []
+    # El manifiesto queda con el hash NUEVO: la edición ya no está pendiente.
+    entry = _manifest(hermetic_dran_home)["skills"]["weekly"]
+    assert entry["content_hash"] == _sha(edited)
+    assert entry["body_hash"] == entry["content_hash"]
+
+
+def test_a_conflict_hands_the_win_to_the_remote(plugin, hermetic_dran_home):
+    """Editado en los dos lados: gana el remoto, la edición local desaparece."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# cuerpo")})
+    _sync(plugin, client, ctx)
+    _mirror_file(hermetic_dran_home, "weekly").write_text(
+        plugin._mount_skill_md("weekly", "d", "# mi version"), encoding="utf-8")
+
+    remote_body = "# la version del remoto"
+    client.skills["weekly"] = _row("weekly", remote_body, version=9)
+    report = _sync(plugin, client, ctx, push=True)
+
+    assert client.writes == []  # no se pisó el remoto con la edición local
+    [conflict] = report["conflicts"]
+    assert conflict["slug"] == "weekly" and conflict["resolution"] == "remote"
+    assert report["pending_push"] == []
+    assert _mirror_file(hermetic_dran_home, "weekly").read_text(encoding="utf-8") \
+        == plugin._mount_skill_md("weekly", "d", remote_body)
+    assert _manifest(hermetic_dran_home)["skills"]["weekly"]["version"] == 9
+
+
+def test_force_imposes_the_local_edit(plugin, hermetic_dran_home):
+    """`force` es la única puerta por la que el local gana — y se declara."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# cuerpo")})
+    _sync(plugin, client, ctx)
+    local_body = "# mi version"
+    _mirror_file(hermetic_dran_home, "weekly").write_text(
+        plugin._mount_skill_md("weekly", "d", local_body), encoding="utf-8")
+    client.skills["weekly"] = _row("weekly", "# remoto", version=9)
+
+    report = _sync(plugin, client, ctx, push=True, force=True)
+
+    assert [w["body"] for w in client.writes] == [local_body]
+    assert report["conflicts"][0]["resolution"] == "local (forced)"
+    assert report["pushed"][0]["over_remote"] is True
+    # El remoto (el fake) ya tiene el cuerpo local: el espejo queda limpio.
+    assert _manifest(hermetic_dran_home)["skills"]["weekly"]["content_hash"] == _sha(local_body)
+
+
+def test_a_builtin_is_never_pushed(plugin, hermetic_dran_home):
+    """Un built-in es contenido de CÓDIGO: el espejo lo dice, no lo intenta."""
+    handlers, client, ctx = _mirror(plugin, {
+        "skills-flow": _row("skills-flow", "# flow", system=True),
+    })
+    _sync(plugin, client, ctx)
+    _mirror_file(hermetic_dran_home, "skills-flow").write_text(
+        plugin._mount_skill_md("skills-flow", "d", "# editado"), encoding="utf-8")
+
+    report = _sync(plugin, client, ctx, push=True)
+
+    assert client.writes == []
+    assert report["pending_push"] == [] and report["pushed"] == []
+    [skipped] = report["skipped"]
+    assert skipped["slug"] == "skills-flow" and "built-in" in skipped["reason"]
+
+
+def test_sync_can_target_one_slug(plugin, hermetic_dran_home):
+    """`slug` acota el pull (y el push) a un solo skill."""
+    handlers, client, ctx = _mirror(plugin, {"a": _row("a", "# a"), "b": _row("b", "# b")})
+
+    report = _sync(plugin, client, ctx, slug="b")
+
+    assert [r["slug"] for r in report["pulled"]] == ["b"]
+    assert _mirror_file(hermetic_dran_home, "b").exists()
+    assert not _mirror_file(hermetic_dran_home, "a").exists()
+
+    missing = _sync(plugin, client, ctx, slug="fantasma")
+    assert missing["errors"][0]["slug"] == "fantasma"
+
+
+def test_a_trailing_newline_is_not_a_local_edit(plugin, hermetic_dran_home):
+    """Abrir y guardar sin tocar nada no puede convertirse en un push."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# cuerpo")})
+    _sync(plugin, client, ctx)
+
+    path = _mirror_file(hermetic_dran_home, "weekly")
+    path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+    report = _sync(plugin, client, ctx)
+    assert report["pending_push"] == []
+    assert plugin._SkillCache(str(hermetic_dran_home)).read("weekly")["dirty"] is False
+
+
+def test_an_invalid_slug_never_reaches_the_filesystem(plugin, hermetic_dran_home):
+    """El slug es un nombre de directorio: fuera del vocabulario, no hay ruta."""
+    for bad in ("../x", "..", "a/b", "", "A", "-x", ".hidden", "x" * 65, None, 7):
+        assert plugin._valid_skill_slug(bad) is False, bad
+    assert plugin._valid_skill_slug("weekly") is True
+    assert plugin._valid_skill_slug("skills-flow") is True
+
+    cache = plugin._SkillCache(str(hermetic_dran_home))
+    assert cache.path_for("../../etc/passwd") is None
+    assert cache.write({"slug": "../../x", "body": "x"}) == {}
+
+    handlers, client, ctx = _mirror(plugin, {})
+    for tool in ("dran_skill", "dran_skill_sync"):
+        out = json.loads(plugin._handle_skill_tool(client, tool,
+                                                   {"slug": "../../etc/passwd"}))
+        assert "invalid slug" in out["error"], (tool, out)
+    assert not (Path(hermetic_dran_home) / "dran").exists()
+
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        out = json.loads(handlers["dran_skill"]({"slug": "../../etc/passwd"}, ctx=ctx))
+    assert "invalid slug" in out["error"]
+
+
+def test_a_corrupt_manifest_costs_only_the_manifest(plugin, hermetic_dran_home):
+    """Un manifiesto roto se lee como vacío: no cuesta el cache ni la tool."""
+    root = _mirror_root(hermetic_dran_home)
+    root.mkdir(parents=True)
+    (root / "manifest.json").write_text("{ esto no es json", encoding="utf-8")
+
+    cache = plugin._SkillCache(str(hermetic_dran_home))
+    assert cache.read_manifest() == {"schema": plugin.SKILLS_CACHE_SCHEMA,
+                                     "synced_at": 0.0, "skills": {}}
+
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# cuerpo")})
+    out = _load(plugin, handlers, client, ctx, "weekly")
+
+    assert out["body"] == "# cuerpo"
+    assert _manifest(hermetic_dran_home)["skills"]["weekly"]["content_hash"] \
+        == _sha("# cuerpo")
+
+
+def test_saving_and_deleting_keep_the_mirror_in_sync(plugin, hermetic_dran_home):
+    """Las otras dos puertas de escritura también mueven el espejo."""
+    handlers, _routes, _detail, client, ctx = _skills_plugin(plugin)
+    routes = []
+
+    def fake_request(method, path, payload=None, timeout=None):
+        routes.append((method, path, payload))
+        if method == "GET":
+            return {"data": None}  # el slug no existe todavía
+        if method == "POST":
+            return {"data": {"slug": payload["slug"], "name": payload["slug"],
+                             "description": payload["description"], "body": payload["body"],
+                             "version": 1, "content_hash": _sha(payload["body"]),
+                             "visibility": payload.get("visibility", "private")}}
+        return {}
+
+    client.request = fake_request
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        saved = json.loads(handlers["dran_skill_save"](
+            {"slug": "nuevo", "description": "d", "body": "# x"}, ctx=ctx))
+        mirrored = _mirror_file(hermetic_dran_home, "nuevo").read_text(encoding="utf-8")
+        pending = plugin._SkillCache(str(hermetic_dran_home)).dirty_slugs()
+        deleted = json.loads(handlers["dran_skill_delete"]({"slug": "nuevo"}, ctx=ctx))
+
+    assert saved["created"] is True
+    assert mirrored == plugin._mount_skill_md("nuevo", "d", "# x")
+    assert saved["cache"]["synced"] is True
+    # El alta ya dejó el espejo limpio: no queda una edición pendiente de push.
+    assert pending == []
+
+    assert deleted["cache_removed"] is True
+    assert not _mirror_file(hermetic_dran_home, "nuevo").exists()
+    assert "nuevo" not in _manifest(hermetic_dran_home)["skills"]
+
+
+def test_the_sync_repairs_a_missing_or_unreadable_file(plugin, hermetic_dran_home):
+    """El espejo roto se repara: borrado o sin frontmatter, el pull lo reescribe."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# cuerpo")})
+    _sync(plugin, client, ctx)
+    path = _mirror_file(hermetic_dran_home, "weekly")
+
+    path.unlink()
+    report = _sync(plugin, client, ctx)
+    assert [r["slug"] for r in report["pulled"]] == ["weekly"] and path.exists()
+
+    path.write_text("no es un SKILL.md", encoding="utf-8")
+    report = _sync(plugin, client, ctx)
+    assert [r["slug"] for r in report["pulled"]] == ["weekly"]
+    assert path.read_text(encoding="utf-8") == plugin._mount_skill_md("weekly", "d", "# cuerpo")
+    assert plugin._SkillCache(str(hermetic_dran_home)).dirty_slugs() == []
+
+
+def test_the_session_warm_pulls_from_the_index_it_already_has(plugin, hermetic_dran_home):
+    """El arranque no paga un segundo GET del índice: usa el que bajó el prompt."""
+    handlers, client, ctx = _mirror(plugin, {"a": _row("a", "# a"), "b": _row("b", "# b")})
+    rows = client.list_skills()
+
+    plugin._warm_skills_cache(client, rows, str(hermetic_dran_home))
+
+    assert sorted(client.detail_calls) == ["a", "b"]
+    assert _mirror_file(hermetic_dran_home, "a").exists()
+    client.detail_calls.clear()
+    plugin._warm_skills_cache(client, rows, str(hermetic_dran_home))
+    assert client.detail_calls == []  # segunda sesión: nada que bajar
+
+
+def test_the_mirror_can_be_switched_off(plugin, hermetic_dran_home):
+    """Apagado, el plugin no escribe NADA a disco — y el sync lo dice."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# cuerpo")})
+
+    with mock.patch.object(plugin, "_skills_cache_enabled", lambda *a, **k: False):
+        out = _load(plugin, handlers, client, ctx, "weekly")
+        report = _sync(plugin, client, ctx)
+
+    assert out["body"] == "# cuerpo" and "cache" not in out
+    assert report["ok"] is False and "mirror is off" in report["error"]
+    assert not (Path(hermetic_dran_home) / "dran").exists()
+
+
+def test_initialize_warms_the_mirror_with_the_index_it_already_fetched(plugin, hermetic_dran_home):
+    """El arranque reconcilia con el índice que YA bajó, en un hilo, sin otro GET."""
+    calls = []
+    done = threading.Event()
+
+    class ServingClient:
+        def __init__(self):
+            self.index_calls = 0
+
+        def list_skills(self, limit=None, timeout=None):
+            self.index_calls += 1
+            return [{"slug": "weekly", "version": 3, "content_hash": _sha("# cuerpo"),
+                     "description": "d"}]
+
+    client = ServingClient()
+    provider = plugin.DranMemoryProvider()
+
+    def fake_warm(cli, rows, hermes_home=""):
+        calls.append((cli, rows, hermes_home))
+        done.set()
+
+    with mock.patch.object(plugin, "_load_dran_config",
+                           lambda _home, _ctx=None: {"base_url": "http://dran.test",
+                                                     "api_key": "k",
+                                                     "workspace": "personal",
+                                                     "scope": "private",
+                                                     "scope_group": ""}), \
+            mock.patch.object(plugin, "_DranClient", return_value=client), \
+            mock.patch.object(plugin, "_warm_skills_cache", fake_warm), \
+            mock.patch.object(plugin.DranMemoryProvider, "_probe_connection", lambda self: None):
+        provider.initialize("sess-warm")
+
+    assert done.wait(5.0), "la reconciliación tiene que salir del arranque"
+    # UN solo GET del índice: el bloque del prompt y el espejo comparten el mismo.
+    assert client.index_calls == 1
+    [(warm_client, rows, home)] = calls
+    assert warm_client is client
+    assert [r["slug"] for r in rows] == ["weekly"]
+    assert home == str(hermetic_dran_home)
+
+
+def test_the_mirror_switch_reads_the_legacy_config(plugin, hermetic_dran_home):
+    """Un `"false"` escrito a mano en el JSON apaga el espejo (no es `bool("false")`)."""
+    assert plugin._skills_cache_enabled(None, str(hermetic_dran_home)) is True
+
+    path = Path(hermetic_dran_home) / "dran" / "config.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"skills_cache": "false"}), encoding="utf-8")
+
+    assert plugin._skills_cache_enabled(None, str(hermetic_dran_home)) is False
+    assert plugin._skill_cache(None, str(hermetic_dran_home)) is None
+
+
+def test_the_mirror_is_registered_as_a_tool_not_a_local_skill(plugin):
+    """La superficie no cambia: ninguna copia del espejo entra a `skills_list`."""
+    ctx = FakeCtx()
+    plugin.register(ctx)
+
+    assert [t for t in ctx.tools if t["name"] == "dran_skill_sync"][0]["toolset"] \
+        == "dran_skills"
+    assert [s["name"] for s in ctx.skills] == list(plugin.SYSTEM_SKILL_SLUGS)
+
+    [schema] = [s for s in plugin._tool_schemas() if s["name"] == "dran_skill_sync"]
+    assert set(schema["parameters"]["properties"]) == {"slug", "push", "force"}
+    assert "remote always wins" in schema["description"]
+    assert "DISCARDED unless force=true" in schema["description"]
+
+    declared = set(re.findall(r"^\s*-\s+(dran_[a-z_]+)\s*$",
+                              (_PLUGIN_DIR / "plugin.yaml").read_text(encoding="utf-8"),
+                              re.M))
+    assert "dran_skill_sync" in declared
 
 
 # ── Grupos: un interruptor por superficie (panel + toolset) ──────────────────

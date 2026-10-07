@@ -4,13 +4,24 @@ defmodule Dran.Skills.Builtin do
   credencial que consume su API (cuenta, grupo o admin legacy), sin share y sin
   que nadie tenga que darlos de alta.
 
-  ## La fuente es el repo
+  ## La fuente es la carpeta de skills del PLUGIN
 
-  El contenido son los archivos `skills/<slug>/SKILL.md` — los mismos que un
-  agente Hermes instala en su disco. Se leen al **compilar** (`@external_resource`
-  por archivo, así que tocar un flow recompila este módulo) y quedan horneados en
-  el beam: en runtime el directorio no hace falta, el release sirve exactamente lo
-  que se compiló, y no hay un segundo lugar donde el contenido pueda divergir.
+  El contenido son los `SKILL.md` de `hermes_plugin/dran/skills/<slug>/SKILL.md`:
+  el router (`loader`) y los ocho flows (`knowledge-flow`, `relations-flow`,
+  `workers-flow`, `memory-flow`, `goal-flow`, `plan-flow`, `services-flow`,
+  `skills-flow`).
+
+  Viven CON el plugin porque documentan su superficie de tools — el router no
+  puede quedar describiendo una versión vieja del cliente — y son, además, las
+  filas locales que el plugin registra (`dran:<slug>`): el MISMO archivo se sirve
+  por las dos puertas (el catálogo remoto y `skills_list`), así que ninguna puede
+  divergir de la otra.
+
+  Se leen al **compilar** (`@external_resource` por archivo y por directorio, así
+  que tocar un flow —o agregar uno nuevo— recompila este módulo) y quedan
+  horneados en el beam: en runtime el directorio no hace falta, el release sirve
+  exactamente lo que se compiló, y no hay un segundo lugar donde el contenido
+  pueda divergir.
 
   Corolario: cambiar un built-in es editar el archivo y hacer redeploy. No se
   escriben por API ni por la web (`system: true` es server-side y su slug está
@@ -23,20 +34,20 @@ defmodule Dran.Skills.Builtin do
   archivo que no cumple el wire aborta la compilación con su ruta y el motivo.
   """
 
-  @skills_dir Path.expand("../../../skills", __DIR__)
-  @wildcard Path.join(@skills_dir, "*/SKILL.md")
+  @skills_dir Path.expand("../../../hermes_plugin/dran/skills", __DIR__)
+  @wildcard "*/SKILL.md"
 
-  files = @wildcard |> Path.wildcard() |> Enum.sort()
+  files = @skills_dir |> Path.join(@wildcard) |> Path.wildcard() |> Enum.sort()
 
   if files == [] do
     raise """
-    built-in skills not found: no SKILL.md matched #{@wildcard}
+    built-in skills not found: no SKILL.md matched #{@skills_dir}/#{@wildcard}
 
-    The source of the system skills is the repo's `skills/<slug>/SKILL.md`. If
-    you are building from a different directory (an image without the suite),
-    copy `skills/` into the build context — the content is read at COMPILE time
-    and served from the beam afterwards. Serving an empty catalog in silence is
-    worse than failing the build.
+    The source of the system skills is `hermes_plugin/dran/skills/<slug>/SKILL.md`
+    (the router plus the eight flows). If you are building from a different
+    directory (an image without them), copy that directory into the build context
+    — the content is read at COMPILE time and served from the beam afterwards.
+    Serving an empty catalog in silence is worse than failing the build.
     """
   end
 
@@ -44,11 +55,15 @@ defmodule Dran.Skills.Builtin do
     @external_resource file
   end
 
+  # El directorio también: un skill NUEVO tiene que recompilar el catálogo.
+  @external_resource @skills_dir
+
   @definitions Enum.map(files, &Dran.Skills.Builtin.Parser.parse!/1)
   @slugs Enum.map(@definitions, & &1.slug)
 
   @doc """
-  Las definiciones embebidas: `[%{slug, name, description, body}]`, en orden de archivo.
+  Las definiciones embebidas: `[%{slug, name, description, body, file}]`, en
+  orden de archivo.
   """
   def all, do: @definitions
 

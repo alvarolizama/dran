@@ -1,5 +1,5 @@
 ---
-name: dran-memory-flow
+name: memory-flow
 description: "Use when listing/searching Dran agent memories."
 version: 1.4.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, memory, rest, hermes-plugin]
-    related_skills: [dran]
+    related_skills: [loader]
 ---
 
-# dran-memory-flow — Administer shared agent memories
+# memory-flow — Administer shared agent memories
 
 Memory is the **shared recall of agents**, written through the Hermes
 plugin (`hermes_plugin/dran/` — `dran_memory_add` tool, auto-capture on
@@ -23,7 +23,7 @@ because memory is served by the Hermes memory provider, not by the knowledge too
 flowchart TD
   Q{What do you need?} -->|"list / search /\
 delete memories"| SELF["THIS SKILL\
-dran-memory-flow"]
+memory-flow"]
   Q -->|"save a fact, recall at\
 turn start"| P["Hermes plugin\
 dran_memory_* tools"]
@@ -135,7 +135,7 @@ Repo.get returns nil"]
   and REST exist.
 - **Confusing memory with page knowledge** — memories are agent-facts
   (dedupe + trust server-side); knowledge that humans read goes through
-  dran-knowledge-flow.
+  knowledge-flow.
 - **The ingest cursor lives in Hermes, not here** — the plugin sends only
   each session's message delta (the plugin's cursor file in `$HERMES_HOME`).
   A re-ingest of the same transcript is a no-op cost-wise server-side,

@@ -1,5 +1,5 @@
 ---
-name: dran-services-flow
+name: services-flow
 description: "Use when connecting or running a user's Dran services."
 version: 1.1.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, services, connect, oauth, rest, hermes-plugin]
-    related_skills: [dran]
+    related_skills: [loader]
 ---
 
-# dran-services-flow — Connect the user's apps and run their tools
+# services-flow — Connect the user's apps and run their tools
 
 The **services** surface: the user's own apps (mail, calendar, issues and pull
 requests, chat messages, files) connected to THEIR account and used by their
@@ -22,7 +22,7 @@ the toolkits connected.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"see what is connected,\nconnect a service"| SELF["THIS SKILL\ndran-services-flow"]
+  Q{What do you need?} -->|"see what is connected,\nconnect a service"| SELF["THIS SKILL\nservices-flow"]
   Q -->|"run something in an app\n(mail, event, issue, message)"| SELF
   Q -->|"which tool does X,\nwhat does its schema look like"| D["RUN dran_services_tools\n(use_case / toolkit / slug)"]
   Q -->|"disconnect or reconnect"| OUT["NOT the agent: /services\n(the user does it; no tool exists)"]

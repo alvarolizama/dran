@@ -1,5 +1,5 @@
 name: dran
-version: 1.5.0
+version: 1.6.0
 description: "Dran — shared multi-agent memory store + knowledge tools backed by your Dran instance (REST, per-account API token attribution, X-Hermes-Agent identity)."
 author: Álvaro Lizama
 license: MIT
@@ -104,6 +104,7 @@ provides_tools:
   - dran_skill
   - dran_skill_save
   - dran_skill_delete
+  - dran_skill_sync
 # Credential for BOTH surfaces — one token, one attribution: the account token
 # (Dran → Settings → Account → API token). The runtime reads it from the
 # profile .env; the panel's `api_key` field resolves to it.
@@ -193,7 +194,12 @@ config_schema:
     type: bool
     default: true
     label: Remote skills
-    description: "List the workspace's skills, load one body by slug, and save or delete one (dran_skills, dran_skill, dran_skill_save, dran_skill_delete). Hermes toolset: dran_skills."
+    description: "List the workspace's skills, load one body by slug, save or delete one, and reconcile the local mirror by checksum (dran_skills, dran_skill, dran_skill_save, dran_skill_delete, dran_skill_sync). Hermes toolset: dran_skills."
+  skills_cache:
+    type: bool
+    default: true
+    label: Skills mirror on disk
+    description: "Mirror every skill body the agent loads into $HERMES_HOME/dran/skills (SKILL.md + manifest.json with the hashes). The REMOTE always wins: the body is fetched from Dran on every load and the mirror only answers while Dran does not (a 404 never falls back). At session start the plugin compares the catalog's content_hash against the manifest and downloads only what changed or is missing; dran_skill_sync reconciles on demand and can push local edits (fast-forward only — on a conflict the remote wins unless force=true). The mirror is the plugin's own: it does NOT enter the local skills list."
   brain:
     type: bool
     default: true

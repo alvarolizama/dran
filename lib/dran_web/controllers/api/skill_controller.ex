@@ -203,7 +203,8 @@ defmodule DranWeb.API.SkillController do
   # El detalle del rechazo de escritura: la misma frase que explica el ciclo del
   # contenido de código, para que un cliente sepa qué hacer.
   defp system_readonly_detail do
-    "built-in skills are served by the code: change skills/<slug>/SKILL.md and redeploy"
+    "built-in skills are served by the code: change the file in the repo and redeploy " <>
+      "(`hermes_plugin/dran/skills/<slug>/SKILL.md`)"
   end
 
   # `forbidden/1` vive en `DranWeb.ControllerHelpers` (W3, contract

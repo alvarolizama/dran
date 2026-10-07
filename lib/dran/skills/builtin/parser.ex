@@ -20,7 +20,7 @@ defmodule Dran.Skills.Builtin.Parser do
   # del markdown no se lea como el fin del frontmatter.
   @frontmatter ~r/\A---\r?\n(?<front>.*?)\r?\n---\r?\n(?<body>.*)\z/s
 
-  @doc "Parsea y valida un archivo: `%{slug, name, description, body}`."
+  @doc "Parsea y valida un archivo: `%{slug, name, description, body, file}`."
   def parse!(file) when is_binary(file) do
     case Regex.named_captures(@frontmatter, File.read!(file)) do
       %{"front" => front, "body" => body} ->
@@ -53,7 +53,9 @@ defmodule Dran.Skills.Builtin.Parser do
     validate_description!(file, description)
     validate_body!(file, body)
 
-    %{slug: name, name: name, description: description, body: body}
+    # El archivo queda EN la definición: con dos raíces (los flows en `skills/`,
+    # el router junto al plugin) reconstruir la ruta desde el slug es adivinar.
+    %{slug: name, name: name, description: description, body: body, file: file}
   end
 
   defp front_value(front, key) do

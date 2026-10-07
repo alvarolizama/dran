@@ -1,5 +1,5 @@
 ---
-name: dran-plan-flow
+name: plan-flow
 description: "Use when creating or editing Dran plans and their checklist."
 version: 1.0.0
 author: Álvaro Lizama
@@ -7,25 +7,25 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, plans, checklist, steps, hermes-plugin]
-    related_skills: [dran, dran-goal-flow]
+    related_skills: [loader, goal-flow]
 ---
 
-# dran-plan-flow — Plans and their checklist
+# plan-flow — Plans and their checklist
 
 The **plan** is an ENTITY with its own surface (`/plans`), not a page type: its
 steps are the same ordered jsonb checklist as a task's, and its `progress` is
 DERIVED from that checklist. Everything is a thin client over `/api/plans` and
 `/api/checklist/toggle`. Goals and tasks are the other container — see
-`dran-goal-flow`.
+`goal-flow`.
 
 ## Entry router
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"create / edit a plan"| SELF["THIS SKILL\ndran-plan-flow"]
+  Q{What do you need?} -->|"create / edit a plan"| SELF["THIS SKILL\nplan-flow"]
   Q -->|"rewrite its steps"| S["RUN dran_set_plan_checklist\n(replaces the array)"]
   Q -->|"tick / untick ONE step"| C["RUN dran_toggle_checklist\ntarget: plan, index|text"]
-  Q -->|"tick a TASK's checklist item\nor move a task"| GG[dran-goal-flow]
+  Q -->|"tick a TASK's checklist item\nor move a task"| GG[goal-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
@@ -75,7 +75,7 @@ flowchart TD
   slug* del panel); una **edición** sólo mueve el destino si lo declara.
 - Un grupo del que el dueño de la credencial no es miembro, o inexistente, es
   **422 y no deja fila** (falla cerrado, nunca `private` en silencio). El slug
-  se elige por NOMBRE con `dran_list_groups` (`dran-goal-flow` lo explica).
+  se elige por NOMBRE con `dran_list_groups` (`goal-flow` lo explica).
 
 ## Pitfalls
 
@@ -93,4 +93,4 @@ flowchart TD
 
 - Plugin-side surface (schemas + dispatch): `hermes_plugin/dran/__init__.py`
 - Routes y la puerta de escritura: `lib/dran_web/router.ex`
-- El otro contenedor (goals · tasks · destino): `dran-goal-flow`
+- El otro contenedor (goals · tasks · destino): `goal-flow`

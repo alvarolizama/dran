@@ -52,16 +52,19 @@ RUN mix deps.get --only prod
 RUN ERL_AFLAGS="+S 1:1" mix deps.compile
 
 # --- Application + assets --------------------------------------------------
-# `skills/` MUST be in the build context BEFORE `mix compile`: the built-in
-# catalog (the skills Dran serves to every API credential by default) is read
-# from `skills/<slug>/SKILL.md` at COMPILE time and baked into the beam
-# (`Dran.Skills.Builtin`). The directory is not needed at runtime; without this
-# COPY the build fails loudly instead of shipping an empty catalog.
+# The built-in catalog (the skills Dran serves to every API credential by
+# default) is read at COMPILE time from the PLUGIN's skills directory and baked
+# into the beam (`Dran.Skills.Builtin`): `hermes_plugin/dran/skills/<slug>/SKILL.md`
+# (the `loader` router plus the eight flows). They live with the plugin because
+# they document its tool surface, and they are also the plugin's LOCAL rows — the
+# same file on both doors, so neither side can drift. It MUST be in the build
+# context BEFORE `mix compile`; without it the build fails loudly instead of
+# shipping an empty catalog.
 COPY lib lib
 COPY priv priv
 COPY assets assets
 COPY rel rel
-COPY skills skills
+COPY hermes_plugin/dran/skills hermes_plugin/dran/skills
 
 # JS deps for the TipTap/three.js editor (assets/package.json). The tailwind
 # and esbuild hex wrappers fetch their own platform binaries on first run,

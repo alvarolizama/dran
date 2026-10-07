@@ -1,5 +1,5 @@
 ---
-name: dran-workers-flow
+name: workers-flow
 description: "Use when running Dran workers (curator, graph_rag)."
 version: 2.1.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, workers, maintenance, tools]
-    related_skills: [dran, dran-relations-flow, dran-knowledge-flow]
+    related_skills: [loader, relations-flow, knowledge-flow]
 ---
 
-# dran-workers-flow — Fire and poll the autonomous workers
+# workers-flow — Fire and poll the autonomous workers
 
 Workers are **scheduled crons with manual triggers, not general agents**:
 `curator` (duplicates/conflicts → report), `link_gardener` (relation
@@ -21,9 +21,9 @@ start → poll → verify the report/answer.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"run a worker:\ndedupe, link, graph RAG"| SELF["THIS SKILL\ndran-workers-flow"]
-  Q -->|"apply a relation the\nlink_gardener proposed"| R[dran-relations-flow]
-  Q -->|"cleanup of pages the\ncurator flagged"| K[dran-knowledge-flow]
+  Q{What do you need?} -->|"run a worker:\ndedupe, link, graph RAG"| SELF["THIS SKILL\nworkers-flow"]
+  Q -->|"apply a relation the\nlink_gardener proposed"| R[relations-flow]
+  Q -->|"cleanup of pages the\ncurator flagged"| K[knowledge-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
@@ -74,7 +74,7 @@ flowchart TD
 - **Re-firing while a session runs** — check pending sessions first;
   double curator runs fight over the same duplicates.
 - **Applying link_gardener proposals blindly** — they are PROPOSALS:
-  review each with dran-relations-flow (choose the real type, not always
+  review each with relations-flow (choose the real type, not always
   `related`).
 
 ## Checklist

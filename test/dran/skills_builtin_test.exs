@@ -3,7 +3,7 @@ defmodule Dran.SkillsBuiltinTest do
   Los skills de SISTEMA: el catálogo que Dran sirve por DEFAULT a toda
   credencial que consume su API.
 
-  - el contenido es el repo (`skills/<slug>/SKILL.md`), embebido al compilar;
+  - el contenido es el repo (`hermes_plugin/dran/skills/<slug>/SKILL.md`), embebido al compilar;
   - el sync es idempotente, versiona el cambio de cuerpo y poda lo que se retira;
   - lo lee TODO scope — incluido el de GRUPO, que por la Constraint 3 lee
     exactamente lo compartido a su grupo: el built-in se suma aparte y sin
@@ -39,11 +39,13 @@ defmodule Dran.SkillsBuiltinTest do
       definitions = Builtin.all()
 
       assert length(definitions) == 9
-      assert "dran" in Builtin.slugs()
-      assert "dran-skills-flow" in Builtin.slugs()
+      assert "loader" in Builtin.slugs()
+      assert "skills-flow" in Builtin.slugs()
 
       for definition <- definitions do
-        file = Path.join([Builtin.skills_dir(), definition.slug, "SKILL.md"])
+        # La ruta sale de la DEFINICIÓN: la suite tiene dos raíces desde que el
+        # router vive con el plugin.
+        file = definition.file
         assert File.exists?(file), "#{file} should be the source of #{definition.slug}"
         assert definition.name == definition.slug
         assert String.length(definition.description) <= Skill.description_max()
@@ -108,7 +110,7 @@ defmodule Dran.SkillsBuiltinTest do
       assert length(Skills.list_skills(scope: {:reader, reader.id})) == 9
       assert length(Skills.list_skills(scope: :all)) == 9
       assert Skills.count_skills(scope: {:reader, reader.id}) == 9
-      assert %Skill{slug: "dran"} = Skills.get_skill("dran", scope: {:reader, reader.id})
+      assert %Skill{slug: "loader"} = Skills.get_skill("loader", scope: {:reader, reader.id})
     end
 
     test "el token de GRUPO los ve, sin arrastrar el contenido público ajeno", %{
@@ -128,10 +130,10 @@ defmodule Dran.SkillsBuiltinTest do
       slugs = scope |> then(&Skills.list_skills(scope: &1)) |> Enum.map(& &1.slug)
       assert length(slugs) == 9
       refute other.slug in slugs
-      assert "dran" in slugs
+      assert "loader" in slugs
 
       assert Skills.count_skills(scope: scope) == 9
-      assert %Skill{slug: "dran-plan-flow"} = Skills.get_skill("dran-plan-flow", scope: scope)
+      assert %Skill{slug: "plan-flow"} = Skills.get_skill("plan-flow", scope: scope)
       assert is_nil(Skills.get_skill(other.slug, scope: scope))
     end
 
@@ -140,7 +142,7 @@ defmodule Dran.SkillsBuiltinTest do
 
       # El detalle resuelve SU slug: la cláusula de sistema no puede convertirse
       # en «cualquier built-in» (fue el bug que este test cazó).
-      assert Skills.get_skill("dran-plan-flow", scope: scope).slug == "dran-plan-flow"
+      assert Skills.get_skill("plan-flow", scope: scope).slug == "plan-flow"
       assert is_nil(Skills.get_skill("no-existe", scope: scope))
 
       # Y el filtro del call site sigue mandando: con `visibility: "private"` no
@@ -153,7 +155,7 @@ defmodule Dran.SkillsBuiltinTest do
       group: group
     } do
       scope = {:group, group.id}
-      row = Skills.get_system_skill("dran")
+      row = Skills.get_system_skill("loader")
 
       # El mismo juicio en las dos formas: la query (`filter/4`) y la fila ya
       # cargada (`visible?/4`). Sin el opt, el built-in no se lee con grupo.
@@ -169,18 +171,18 @@ defmodule Dran.SkillsBuiltinTest do
     end
 
     test "actualizar y borrar un built-in es un error explícito" do
-      row = Skills.get_system_skill("dran")
+      row = Skills.get_system_skill("loader")
 
       assert {:error, :system_readonly} = Skills.update_skill(row, %{"body" => "# otro"})
       assert {:error, :system_readonly} = Skills.delete_skill(row)
-      assert Skills.get_system_skill("dran").body == row.body
+      assert Skills.get_system_skill("loader").body == row.body
     end
 
     test "el slug de un built-in está reservado: el alta no crea un homónimo", %{owner: owner} do
       # Con slug explícito, el error va al slug.
       assert {:error, changeset} =
                Skills.create_skill(
-                 %{"slug" => "dran", "name" => "otro", "description" => "d", "body" => "# x"},
+                 %{"slug" => "loader", "name" => "otro", "description" => "d", "body" => "# x"},
                  owner_user_id: owner.id
                )
 
@@ -190,7 +192,7 @@ defmodule Dran.SkillsBuiltinTest do
       # que es el campo que el operador escribió.
       assert {:error, changeset} =
                Skills.create_skill(
-                 %{"name" => "dran", "description" => "d", "body" => "# x"},
+                 %{"name" => "loader", "description" => "d", "body" => "# x"},
                  owner_user_id: owner.id
                )
 

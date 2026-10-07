@@ -722,9 +722,12 @@ defmodule DranWeb.SkillLive do
   defp can_manage?(resource, user), do: can_manage_scope?(resource, user)
 
   # El texto de los dos rechazos que hablan de built-ins: una sola frase, la
-  # misma que dice el API, para que el operador sepa qué hacer.
+  # misma que dice el API, para que el operador sepa qué hacer. Una sola carpeta
+  # ahora: la suite entera vive con el plugin.
   defp builtin_readonly_message do
-    gettext("Built-in skills are served by the code: change the file in skills/ and redeploy.")
+    gettext(
+      "Built-in skills are served by the code: change the file in the repo and redeploy (hermes_plugin/dran/skills/<slug>/)."
+    )
   end
 
   # El dueño de un built-in es el CÓDIGO, no una cuenta ni la instancia: la

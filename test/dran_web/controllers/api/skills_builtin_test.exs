@@ -5,7 +5,7 @@ defmodule DranWeb.API.SkillsBuiltinTest do
   - el índice y el detalle los traen para una cuenta, para un GRUPO y para el
     privilegiado — sin share y sin configurar nada;
   - el `SKILL.md` montado lleva el cuerpo del archivo del repo (la fuente es
-    `skills/<slug>/SKILL.md`);
+    `hermes_plugin/dran/skills/<slug>/SKILL.md`);
   - NO los escribe ninguna credencial (403) y su slug está reservado (422);
   - el grupo sigue viendo EXACTAMENTE lo suyo: los built-ins se suman a su
     lectura, no la ensanchan.
@@ -55,18 +55,18 @@ defmodule DranWeb.API.SkillsBuiltinTest do
       assert Enum.all?(data, &(&1["system"] == true))
       assert Enum.all?(data, &(&1["mine"] == false))
       assert Enum.all?(data, &(not Map.has_key?(&1, "body")))
-      assert "dran" in Enum.map(data, & &1["slug"])
+      assert "loader" in Enum.map(data, & &1["slug"])
     end
 
     test "el detalle sirve el SKILL.md montado con el cuerpo del archivo del repo", %{
       member: member
     } do
-      definition = Enum.find(Builtin.all(), &(&1.slug == "dran-plan-flow"))
+      definition = Enum.find(Builtin.all(), &(&1.slug == "plan-flow"))
 
       data =
         member.api_token
         |> conn_for()
-        |> get("/api/skills/dran-plan-flow")
+        |> get("/api/skills/plan-flow")
         |> json_response(200)
         |> Map.fetch!("data")
 
@@ -75,7 +75,7 @@ defmodule DranWeb.API.SkillsBuiltinTest do
       assert data["description"] == definition.description
       assert data["content_hash"] == Dran.Skills.Skill.content_hash(definition.body)
       assert String.ends_with?(data["skill_md"], definition.body)
-      assert String.starts_with?(data["skill_md"], "---\nname: dran-plan-flow\n")
+      assert String.starts_with?(data["skill_md"], "---\nname: plan-flow\n")
     end
 
     test "el token de un GRUPO también los lee, sin ver el público ajeno", %{
@@ -94,18 +94,18 @@ defmodule DranWeb.API.SkillsBuiltinTest do
       slugs = group.api_token |> index() |> Map.fetch!("data") |> Enum.map(& &1["slug"])
 
       assert length(slugs) == 9
-      assert "dran" in slugs
+      assert "loader" in slugs
       refute "ajeno" in slugs
 
       # Y el detalle de un built-in responde por la misma puerta.
       data =
         group.api_token
         |> conn_for()
-        |> get("/api/skills/dran-goal-flow")
+        |> get("/api/skills/goal-flow")
         |> json_response(200)
         |> Map.fetch!("data")
 
-      assert data["slug"] == "dran-goal-flow"
+      assert data["slug"] == "goal-flow"
     end
   end
 
@@ -117,23 +117,23 @@ defmodule DranWeb.API.SkillsBuiltinTest do
       # Las dos credenciales que PODRÍAN escribir cualquier cosa legible: el
       # rechazo viene del contexto con el detalle que dice qué hacer.
       for token <- [owner.api_token, group.api_token] do
-        conn = token |> conn_for() |> put("/api/skills/dran", %{"body" => "# secuestrado"})
+        conn = token |> conn_for() |> put("/api/skills/loader", %{"body" => "# secuestrado"})
         assert %{"errors" => %{"detail" => detail}} = json_response(conn, 403)
         assert detail =~ "redeploy"
 
-        conn = token |> conn_for() |> delete("/api/skills/dran")
+        conn = token |> conn_for() |> delete("/api/skills/loader")
         assert %{"errors" => %{"detail" => detail}} = json_response(conn, 403)
         assert detail =~ "redeploy"
       end
 
       # El cuerpo sigue siendo el del repo.
-      definition = Enum.find(Builtin.all(), &(&1.slug == "dran"))
+      definition = Enum.find(Builtin.all(), &(&1.slug == "loader"))
 
-      assert Dran.Skills.get_system_skill("dran").body == definition.body
+      assert Dran.Skills.get_system_skill("loader").body == definition.body
     end
 
     test "una credencial sin autoridad recibe el 403 de siempre", %{member: member} do
-      conn = member.api_token |> conn_for() |> put("/api/skills/dran", %{"body" => "# nope"})
+      conn = member.api_token |> conn_for() |> put("/api/skills/loader", %{"body" => "# nope"})
 
       assert %{"errors" => %{"detail" => "forbidden"}} = json_response(conn, 403)
     end
@@ -143,7 +143,7 @@ defmodule DranWeb.API.SkillsBuiltinTest do
         member.api_token
         |> conn_for()
         |> post("/api/skills", %{
-          "name" => "dran",
+          "name" => "loader",
           "description" => "quiero pisarlo",
           "body" => "# mío"
         })

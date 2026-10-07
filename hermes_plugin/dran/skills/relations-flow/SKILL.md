@@ -1,5 +1,5 @@
 ---
-name: dran-relations-flow
+name: relations-flow
 description: "Use when linking two Dran pages with a relation."
 version: 2.0.0
 author: Álvaro Lizama
@@ -7,10 +7,10 @@ license: MIT
 metadata:
   hermes:
     tags: [dran, relations, graph, tools]
-    related_skills: [dran, dran-knowledge-flow, dran-workers-flow]
+    related_skills: [loader, knowledge-flow, workers-flow]
 ---
 
-# dran-relations-flow — Link pages with typed relations
+# relations-flow — Link pages with typed relations
 
 Relations are directed and typed: the graph queryability depends on choosing
 the right type, not more edges. This flow owns create/delete of relations
@@ -20,9 +20,9 @@ between existing pages.
 
 ```mermaid
 flowchart TD
-  Q{What do you need?} -->|"link/unlink two\nexisting pages"| SELF["THIS SKILL\ndran-relations-flow"]
-  Q -->|"the target page\ndoes not exist yet"| K[dran-knowledge-flow]
-  Q -->|"propose relations for\norphans automatically"| X[dran-workers-flow]
+  Q{What do you need?} -->|"link/unlink two\nexisting pages"| SELF["THIS SKILL\nrelations-flow"]
+  Q -->|"the target page\ndoes not exist yet"| K[knowledge-flow]
+  Q -->|"propose relations for\norphans automatically"| X[workers-flow]
 
   style SELF fill:#d1fae5,stroke:#059669
 ```
@@ -83,7 +83,7 @@ flowchart TD
   Omitting `relation_type` deletes every relation between the pair, both
   directions.
 - Missing slug on either side → error, not silent drop: create the page
-  first (dran-knowledge-flow).
+  first (knowledge-flow).
 - Five `meta.props` keys (`role`, `tier`, `location`, `language`,
   `framework`) auto-materialize into edges — prefer them over manual
   relations for taxonomy-style links.
