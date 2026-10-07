@@ -172,7 +172,13 @@ defmodule Dran.Composio do
       %{"tool_slug" => tool_slug, "arguments" => arguments || %{}}
       |> maybe_put("account", opts[:account])
 
-    request(:post, "#{@api_prefix}/tool_router/session/#{session_id}/execute", json: body)
+    # El presupuesto de una EJECUCIÓN es el suyo, no el de lectura: acá el
+    # trabajo real ocurre del otro lado y el cap tiene que quedar por debajo del
+    # del cliente (`services_run_timeout_s`), no empatarlo.
+    request(:post, "#{@api_prefix}/tool_router/session/#{session_id}/execute",
+      json: body,
+      receive_timeout: Config.execute_timeout()
+    )
   end
 
   # ── Connected accounts ─────────────────────────────────────────────────────

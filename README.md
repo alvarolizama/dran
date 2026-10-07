@@ -100,11 +100,14 @@ reach.
 
 3. **Configure** — two surfaces that do not overlap: the plugin's card
    (**Capabilities → Plugins → Dran → gear**: instance, write destination,
-   memory switch, 7 tool toggles) and the memory panel (**Settings → Memory &
-   Context**: only the recall knobs, writing `$HERMES_HOME/dran/config.json`).
-   Per key, the JSON wins over the card. Restart the session and verify: ask
-   it to *"list my pages"* (tools) and *"what do you remember about…"*
-   (memory).
+   memory switch, 7 tool toggles, the two services budgets) and the memory panel
+   (**Settings → Memory & Context**: only the recall knobs, writing
+   `$HERMES_HOME/dran/config.json`). Per key, the JSON wins over the card.
+   Restart the session and verify: ask it to *"list my pages"* (tools) and
+   *"what do you remember about…"* (memory). The service timeouts are a ladder
+   across both sides — the client's cap must stay above the instance's
+   `DRAN_COMPOSIO_*` budgets; see
+   [Presupuestos de servicios](hermes_plugin/dran/README.md#presupuestos-de-servicios-el-ladder).
 
 Full detail: [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md).
 
@@ -161,6 +164,8 @@ The ones that are Dran's:
 |---|---|
 | `DRAN_INFERENCE_API_URL` / `_API_KEY` | any OpenAI-compatible endpoint — e.g. a **TokenGate** instance (`…/v1`): its `/models`, chat and `/embeddings` calls are all Dran uses. Powers embeddings, summaries, semantic search and the workers; without it Dran still works, minus those features |
 | `DRAN_COMPOSIO_API_KEY` | scoped project key for the services surface — unset, the whole surface is off |
+| `DRAN_COMPOSIO_TIMEOUT` | ms budget for one **read** to Composio, default `12000`. It must stay **below** the Hermes plugin's `services_timeout_s` (15 s): the server has to answer first, so a slow provider arrives as Dran's typed error instead of a dumb socket timeout on the client, where there is no context left |
+| `DRAN_COMPOSIO_EXECUTE_TIMEOUT` | ms budget for one tool **execution**, default `25000`. Also below the plugin's `services_run_timeout_s` (45 s). Separate from the read budget because the consequence differs: an execution that ran out of budget may still have landed upstream |
 | `UPLOADS_DIR` / `UPLOADS_MAX_SIZE` | where uploads live (mount a volume there in production) and the size cap |
 | `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` | optional Sign in with Google — unset, login is email + password |
 | `WORKER_MAX_STEPS` / `WORKER_PER_STEP_TIMEOUT` | worker step budget |

@@ -17,7 +17,19 @@ defmodule Dran.Composio.Config do
   """
 
   @default_base_url "https://backend.composio.dev"
-  @default_timeout 30_000
+  # Presupuesto de una LECTURA al vendor. Los defaults del ladder están
+  # documentados en el README («Presupuestos de servicios: el ladder») y el
+  # invariante es uno: **el presupuesto del servidor va por DEBAJO del cap del
+  # cliente** (el plugin de Hermes: 15 s en `services_timeout_s`). Con el
+  # servidor cortando primero, un proveedor lento sale como error TIPADO de dran
+  # — con capa y contexto — en vez de un socket timeout mudo del lado del
+  # cliente, que sólo puede decir «dran unavailable».
+  @default_timeout 12_000
+  # Presupuesto de una EJECUCIÓN (la acción real contra el proveedor: un envío,
+  # una subida, una creación). También por debajo del cap del cliente
+  # (`services_run_timeout_s`, 45 s), y más generoso porque acá el trabajo real
+  # ocurre del otro lado.
+  @default_execute_timeout 25_000
 
   @spec config() :: keyword() | nil
   def config do
@@ -42,6 +54,16 @@ defmodule Dran.Composio.Config do
 
   @spec timeout() :: pos_integer()
   def timeout, do: get(:timeout) || @default_timeout
+
+  @doc """
+  El presupuesto de una EJECUCIÓN contra el vendor (ms).
+
+  Separado del de lectura porque la consecuencia es otra: una lectura lenta se
+  reintenta sin costo, un `execute` que se pasó del cap puede haber aterrizado
+  igual (el mutador corrió y sólo se perdió la respuesta).
+  """
+  @spec execute_timeout() :: pos_integer()
+  def execute_timeout, do: get(:execute_timeout) || @default_execute_timeout
 
   @doc false
   @spec req_plug() :: module() | {module(), term()} | nil
@@ -69,7 +91,12 @@ defmodule Dran.Composio.Config do
           base_url:
             ensure_no_trailing_slash(System.get_env("DRAN_COMPOSIO_BASE_URL", @default_base_url)),
           api_key: key,
-          timeout: parse_timeout(System.get_env("DRAN_COMPOSIO_TIMEOUT", "30000"))
+          timeout: parse_timeout(System.get_env("DRAN_COMPOSIO_TIMEOUT", "12000")),
+          execute_timeout:
+            parse_timeout(
+              System.get_env("DRAN_COMPOSIO_EXECUTE_TIMEOUT", "25000"),
+              @default_execute_timeout
+            )
         ]
     end
   end
@@ -82,10 +109,10 @@ defmodule Dran.Composio.Config do
     end
   end
 
-  defp parse_timeout(value) do
+  defp parse_timeout(value, default \\ @default_timeout) do
     case Integer.parse(value) do
       {n, ""} when n > 0 -> n
-      _ -> @default_timeout
+      _ -> default
     end
   end
 end
