@@ -128,7 +128,10 @@ agent reads locally with `skill_view("dran:loader")`.
 
 Details: [skills/README.md](skills/README.md).
 
-Point the agent at them with one line in its `soul.md`:
+**No soul.md line is needed**: the block above already tells the agent that the
+suite exists and how to read it. Keep a line only in a profile where the block
+cannot warm at all — no `memory.provider: dran`, so nothing fetches the index at
+session start (see [hermes_plugin/dran/README.md](hermes_plugin/dran/README.md)):
 
 ```text
 - **Dran skills** — before a task that may match a skill, list the workspace
