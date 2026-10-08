@@ -394,13 +394,16 @@ el espejo:
 | `dran_skill_delete` | `DELETE /api/skills/:slug` |
 | `dran_skill_sync` | `GET /api/skills` + `GET /api/skills/:slug` (+ `PUT` con `push=true`) — reconcilia el espejo por checksum y sube las ediciones locales |
 
-El descubrimiento no depende de la red en el camino crítico: `initialize()`
-(que corre ANTES del build del prompt) calienta el caché del índice, y la
-sección de prompt `dran-skills` —posición `after_memory`, `max_chars` 3000 bajo
-el tope de 4000— renderiza una línea por skill desde ESE caché y manda a
-`dran_skills` para el listado vivo, porque el bloque se congela por sesión. La
-sección se registra SIEMPRE y con Dran caído devuelve `""`: Hermes la descarta y
-el prompt no se rompe (fail-open).
+El descubrimiento no depende de la red en el camino crítico: `initialize()` (que
+corre ANTES del build del prompt) calienta el caché del índice, y la sección de
+prompt `dran-skills` —posición `after_memory`, `max_chars` 3000 bajo el tope de
+4000— renderiza una línea por skill desde ESE caché y manda a `dran_skills` para el
+listado vivo, porque el bloque se congela por sesión. La sección se registra
+SIEMPRE y **nunca queda muda**: sin índice ni puntero devuelve un PISO de texto fijo
+(`SKILLS_SECTION_FLOOR`) que nombra el catálogo y la suite. Un perfil con el plugin
+pero **sin** `memory.provider: dran` no corre `initialize()` —y con Dran caído la
+primera vez tampoco hay puntero—, así que sin ese piso el aviso desaparecía por una
+elección de MEMORIA que no tiene nada que ver con el catálogo.
 
 ### El espejo en disco (el cache del catálogo)
 

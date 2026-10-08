@@ -84,6 +84,24 @@ SERVICE_WAIT_POLL_SECS = 2.0
 # `_skills_prompt_section` y el `max_chars` por debajo del tope de 4000).
 SKILLS_SECTION_MAX_CHARS = 3_000
 SKILLS_SECTION_MAX_DESC_CHARS = 80
+
+# ── El PISO del bloque ───────────────────────────────────────────────────────
+# Qué se dice cuando no hay índice NI puntero: perfil con el plugin pero sin
+# `memory.provider: dran` (nadie corre `initialize()`), primera sesión con Dran
+# caído, o espejo apagado. Es TEXTO FIJO: no depende de la red, del provider ni
+# de que alguien haya calentado nada.
+#
+# Existe porque el bloque habla del CATÁLOGO, no de memoria: sin piso salía `""`,
+# Hermes descartaba la sección y el agente no sabía que el catálogo (ni la suite)
+# existían — el plugin quedaba sin aviso por una elección que no es suya.
+SKILLS_SECTION_FLOOR = (
+    "Dran skills — the workspace's catalog is served by the `dran_skills` tool "
+    "(list it before a task that may match a skill; the five skill tools are "
+    "DEFERRED, so reach them through tool_search with an English query: "
+    "\"dran skills\"). The SUITE — this plugin's own instructions, the "
+    "`dran:loader` router and its eight flows — ships WITH the plugin and is "
+    "read locally with skill_view(\"dran:loader\")."
+)
 SKILLS_INDEX_TIMEOUT = 3.0
 SKILLS_INDEX_LIMIT = 200
 # ── El ESPEJO en disco (el cache) ────────────────────────────────────────────
@@ -1157,7 +1175,8 @@ class DranMemoryProvider(MemoryProvider):
         # Skills: el índice se calienta ACÁ — antes de que Hermes construya el
         # prompt de la sesión — para que la sección del prompt LEA un caché y no
         # toque la red en el camino del build. Es un GET con timeout corto; con
-        # Dran caído el caché queda vacío y la sección se descarta (fail-open).
+        # Dran caído el caché queda vacío y la sección cae al PISO de texto fijo
+        # (nunca sale vacía: el aviso no depende de esta llamada).
         self._warm_skills_index()
         # El espejo en disco: el índice recién bajado ES el manifest del remoto,
         # así que la reconciliación de los cuerpos sale de acá — en un hilo, para
@@ -4267,16 +4286,20 @@ def _skills_prompt_section(_session_info: Any = None) -> str:
     índice lo calienta la del memory provider — sin el archivo, el bloque salía
     vacío en todas las sesiones.
 
+    Y si NO hay ni índice ni puntero devuelve el PISO (`SKILLS_SECTION_FLOOR`),
+    texto fijo que no depende de la red ni del provider: un perfil con el plugin
+    pero sin `memory.provider: dran` no puede quedarse sin saber que el catálogo y
+    la suite existen (antes salía `""` y Hermes la descartaba en silencio).
+
     Corte por PRESUPUESTO: una sección que se pasa de su `max_chars` la OMITE
     Hermes ENTERA (no la recorta), así que acá se corta por líneas y se declara
-    cuántas quedaron fuera. Sin skills legibles —o con Dran caído— devuelve
-    cadena vacía: la sección se descarta y el prompt no se toca (fail-open).
+    cuántas quedaron fuera.
     """
     skills = _SKILLS_INDEX.get("skills") or _read_skills_index(_active_hermes_home())
     rows = [_brief_skill(s) for s in skills if isinstance(s, dict)]
     rows = [r for r in rows if r.get("slug")]
     if not rows:
-        return ""
+        return SKILLS_SECTION_FLOOR
 
     header = (
         "Dran skills (remote instructions — they live in Dran and are loaded by "
@@ -4626,8 +4649,10 @@ def register(ctx) -> None:
 
     # 3) La sección de prompt con la EXISTENCIA de los skills: una línea por
     # skill desde el caché calentado en `initialize()` (que corre antes del build
-    # del prompt). Se registra SIEMPRE — con Dran caído devuelve "" y Hermes la
-    # descarta: el prompt no se rompe por un bloque vacío (fail-open).
+    # del prompt), y un PISO de texto fijo cuando no hay ni caché ni puntero. Se
+    # registra SIEMPRE y nunca devuelve "": el bloque habla del CATÁLOGO, así que
+    # no puede depender de la memoria (un perfil sin `memory.provider: dran` no
+    # corre initialize() y antes se quedaba sin aviso, en silencio).
     try:
         ctx.register_system_prompt_section(
             "dran-skills",

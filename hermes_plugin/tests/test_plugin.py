@@ -1335,10 +1335,14 @@ def test_skills_prompt_section_registered_always_and_fail_open(plugin):
     assert 0 < section["max_chars"] <= 4_000
     assert callable(section["content"])
 
-    # Sin skills legibles (o con Dran caído) el bloque es "": Hermes lo descarta
-    # y el prompt no se rompe.
+    # Sin skills legibles el bloque NO queda vacío: cae al PISO, que no depende de
+    # la red ni del memory provider (si saliera "", Hermes lo descartaría en
+    # silencio y el agente no sabría que el catálogo existe).
     plugin._SKILLS_INDEX = {"skills": [], "loaded_at": 0.0}
-    assert plugin._skills_prompt_section({}) == ""
+    text = plugin._skills_prompt_section({})
+    assert text == plugin.SKILLS_SECTION_FLOOR
+    assert "dran_skills" in text and "dran:loader" in text
+    assert "- " not in text, "el piso no enumera filas: no hay nada que enumerar"
 
 
 def test_prompt_section_describes_existence_not_content(plugin):
@@ -1426,7 +1430,8 @@ def test_initialize_leaves_the_index_empty_when_dran_is_down(plugin):
         provider.initialize("sess-down")
 
     assert plugin._SKILLS_INDEX["skills"] == []
-    assert plugin._skills_prompt_section({}) == ""
+    # Dran caído: sin filas, pero con el piso — el aviso no depende de la red.
+    assert plugin._skills_prompt_section({}) == plugin.SKILLS_SECTION_FLOOR
 
 
 # ── El PUNTERO del prompt y las dos instancias del plugin ────────────────────
@@ -1480,8 +1485,8 @@ def test_prompt_section_renders_the_index_of_the_other_instance(plugin, hermetic
     monkeypatch.setattr(renderer, "_active_hermes_home", lambda: str(hermetic_dran_home))
 
     assert renderer._SKILLS_INDEX["skills"] == [], "la otra copia nunca corre initialize()"
-    # Sin puntero no hay bloque: el estado exacto del bug.
-    assert renderer._skills_prompt_section({}) == ""
+    # Sin índice ni puntero queda el PISO: el bug era que quedara VACÍO.
+    assert renderer._skills_prompt_section({}) == renderer.SKILLS_SECTION_FLOOR
 
     _warm_index(plugin, [{"slug": "sembrado", "version": 3, "description": "Cómo sembrar",
                           "body": "CUERPO QUE NO DEBE APARECER"}])
@@ -1492,6 +1497,30 @@ def test_prompt_section_renders_the_index_of_the_other_instance(plugin, hermetic
     assert "dran_skills" in text          # el listado VIVO sigue siendo la tool
     assert "CUERPO QUE NO DEBE APARECER" not in text
     assert len(text) <= plugin.SKILLS_SECTION_MAX_CHARS
+
+
+def test_a_profile_without_the_memory_provider_still_gets_the_block(plugin,
+                                                                   hermetic_dran_home,
+                                                                   monkeypatch):
+    """El bug: el bloque habla del CATÁLOGO, pero lo calentaba el memory provider.
+
+    Un perfil con el plugin y `DRAN_API_KEY` pero SIN `memory.provider: dran` nunca
+    corre `initialize()`: índice vacío y sin puntero. Antes eso devolvía `""` y
+    Hermes descartaba la sección en silencio — el agente no sabía que el catálogo ni
+    la suite existían, por una elección de MEMORIA que no tiene nada que ver.
+    """
+    renderer = _load_plugin_module()
+    monkeypatch.setattr(renderer, "_active_hermes_home", lambda: str(hermetic_dran_home))
+
+    assert renderer._SKILLS_INDEX["skills"] == [], "sin provider nadie calienta el índice"
+    assert not _pointer_path(plugin, hermetic_dran_home).exists()
+
+    text = renderer._skills_prompt_section({})
+
+    assert text, "el aviso no puede depender de que alguien haya calentado algo"
+    assert "dran_skills" in text and "tool_search" in text
+    assert "dran:loader" in text and "skill_view" in text
+    assert len(text) <= renderer.SKILLS_SECTION_MAX_CHARS
 
 
 def test_empty_catalog_never_erases_the_pointer(plugin, hermetic_dran_home):
