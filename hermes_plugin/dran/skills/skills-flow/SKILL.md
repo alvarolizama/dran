@@ -139,10 +139,20 @@ things, and neither of them weakens the rule that **the remote always wins**:
   `content_hash` (the index it already fetches for the prompt) against the manifest
   and downloads only what changed or is missing — in the background, without
   blocking the session.
+- **Not dragging dead copies**: the pull walks the CATALOG, so a slug that left the
+  catalog was never looked at again (`forget()` only runs on an explicit delete or a
+  404 while downloading) and stayed on disk for good — with Dran down it was served
+  as an `OFFLINE COPY`. `dran_skill_sync` PRUNES it: the file is MOVED to
+  `$HERMES_HOME/dran/backups/orphans-<ts>/` and dropped from the manifest. Two
+  guards, because deleting is the only irreversible step: a truncated catalog
+  (`index_truncated`) prunes NOTHING — «missing» and «did not fit» are
+  indistinguishable there — and the tool is the only door that prunes: the boot
+  sync just reports them (`orphans`), because it reconciles in a thread with nobody
+  watching.
 
 ```mermaid
 flowchart TD
-  C([the user edited a cached body, or the mirror looks behind]) --> S["RUN dran_skill_sync\n(sin args: mira y reporta)"]
+  C([the user edited a cached body, or the mirror looks behind]) --> S["RUN dran_skill_sync\n(sin args: mira, reporta y poda)"]
   S --> P{"¿pending_push?"}
   P -->|"no"| R([nada que subir: el remoto ya coincide])
   P -->|"sí"| A["ASK[irreversible] mostrar el diff al usuario"]

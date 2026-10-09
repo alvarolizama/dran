@@ -417,6 +417,7 @@ agrega el espejo es lo que la red no puede dar, y vive en un solo lugar:
 | Contestar con Dran caído | si el detalle no llega (sin conexión, timeout, breaker abierto, 5xx) el cuerpo sale del archivo, con `source: cache`, `stale: true` y el frame marcado `OFFLINE COPY`. Un **404 no** cae acá: ahí el servidor contestó y la copia vieja NO se sirve |
 | No re-verificar a mano | el índice ya trae el `content_hash` de todo lo legible: al abrir sesión (en un hilo, sin bloquear el arranque) se compara con `manifest.json` y se bajan SÓLO los cuerpos que cambiaron o faltan |
 | Poder editar y subir | el hash del cuerpo EN DISCO contra la BASE del manifiesto dice si hay una edición local; `dran_skill_sync` (con `push`) la manda |
+| No arrastrar copias muertas | un slug que SALIÓ del catálogo se quedaba en disco para siempre — el pull itera el catálogo y `forget()` sólo corre en un delete o en un 404. `dran_skill_sync` lo PODA: lo mueve a `dran/backups/orphans-<ts>/` y lo saca del manifiesto |
 
 Layout: `manifest.json` (por slug: `content_hash` = el remoto la última vez,
 `body_hash` = lo que hay en disco, versión, `file_mtime_ns`/`file_size`) y
@@ -441,6 +442,19 @@ Las tres invariantes que lo sostienen (y que los tests miden):
    ausente y el próximo pull lo repara;
 3. **el slug es un nombre de directorio** — se valida contra el formato del wire
    antes de armar cualquier ruta: un `../../` no escribe nada.
+
+**La PODA, y por qué el arranque no la hace.** El pull itera el CATÁLOGO, así que
+un slug que salió del catálogo nunca se volvía a mirar: se quedaba en disco para
+siempre y con Dran caído se servía como `OFFLINE COPY` (un `loader` de la era
+pre-plugin no es la fila local que el plugin registra con ese nombre). Lo poda
+`dran_skill_sync`, con dos guardas — porque borrar es lo único irreversible de la
+reconciliación: con `index_truncated` (el índice vino lleno, así que «no existe» y
+«no cupo» son indistinguibles) NO se poda nada, y los bytes se MUEVEN a
+`dran/backups/orphans-<ts>/` antes de salir del manifiesto, así que la poda es
+reversible — y es la única red para una edición local de un huérfano, que no se
+puede pushear porque el slug no está en el remoto. El sync de ARRANQUE sólo lo
+reporta (`orphans`, con nota): reconcilia en un hilo, sin nadie mirando, y borrar
+es una decisión que se pide, no un efecto de abrir sesión.
 
 Nada de esto entra a `skills_list`: el espejo es del plugin, no se copia a
 `~/.hermes/skills/` y no se registra como skill local. Los presupuestos del
@@ -623,7 +637,7 @@ tools comparten. Un `config.json` con un solo knob de memoria no debe arrastrar
 hace el switch apagado: `is_available()` false, `get_tool_schemas()` vacío y la
 llamada rechazada.
 
-**El espejo de skills** tiene su propio bloque (26 tests). Los que fijan el
+**El espejo de skills** tiene su propio bloque (29 tests). Los que fijan el
 contrato, en orden de importancia:
 
 1. `mount → parse` devuelve el MISMO cuerpo (cuerpos con `---`, comillas, barras y
@@ -637,7 +651,10 @@ contrato, en orden de importancia:
    aborta por un slug que falla;
 4. push: una edición local se reporta (`pending_push`) y se sube fast-forward; en
    conflicto gana el remoto y `force` impone la local;
-5. y las guardas: slug inválido (`../../`) no arma ninguna ruta ni escribe,
+5. la poda: la tool mueve el huérfano al respaldo y lo saca del manifiesto (el slug
+   vivo no se toca), el arranque sólo lo reporta, un índice recortado **no** poda
+   nada, y la edición local de un huérfano se conserva en el respaldo;
+6. y las guardas: slug inválido (`../../`) no arma ninguna ruta ni escribe,
    manifiesto corrupto se lee vacío, `"false"` en el `config.json` apaga el espejo
    (sin escribir nada a disco) y el arranque usa el índice que ya bajó el prompt
    (UN GET, en un hilo). El smoke end-to-end contra los payloads reales del

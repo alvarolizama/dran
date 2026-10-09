@@ -2694,9 +2694,13 @@ def _tool_schemas() -> List[Dict[str, Any]]:
                 "checksum: pulls every body whose remote content_hash changed (or "
                 "that is missing locally) and, with push=true, sends local edits "
                 "back. The remote always wins: if a body changed on both sides the "
-                "local edit is DISCARDED unless force=true. The mirror lives in "
-                "$HERMES_HOME/dran/skills (it is not in the local skills list) and a "
-                "body is served from it only while Dran does not answer."
+                "local edit is DISCARDED unless force=true. It also PRUNES the "
+                "mirror: a cached slug the catalog no longer has is moved to "
+                "$HERMES_HOME/dran/backups/orphans-<ts>/ (never deleted outright, "
+                "and never touched while the catalog came back truncated). The "
+                "mirror lives in $HERMES_HOME/dran/skills (it is not in the local "
+                "skills list) and a body is served from it only while Dran does "
+                "not answer."
             ),
             "parameters": {
                 "type": "object",
@@ -3941,13 +3945,44 @@ def _read_skills_index(hermes_home: str) -> List[Dict[str, Any]]:
 _SKILLS_WARM_LOCK = threading.Lock()
 
 
+def _quarantine(cache: Any, slugs: List[str], stamp: str) -> str:
+    """Saca del espejo los archivos de `slugs` MOVIÉNDOLOS, no borrándolos.
+
+    Un rename dentro del mismo filesystem es atómico y REVERSIBLE: los bytes
+    quedan en `$HERMES_HOME/dran/backups/orphans-<ts>/<slug>/SKILL.md`. La poda
+    no puede perder una edición local que el push no pudo subir (un slug que ya
+    no está en el catálogo no se puede pushear), así que el respaldo ES la red
+    de seguridad de la única operación irreversible de esta función.
+
+    Devuelve la ruta del respaldo, o "" si no se movió nada. Fail-open: un disco
+    lleno o un home de sólo lectura deja el archivo donde estaba.
+    """
+    root = getattr(cache, "root", None)
+    if not isinstance(root, Path):
+        return ""
+    dest = root.parent / "backups" / f"orphans-{stamp}"
+    moved = 0
+    for slug in slugs:
+        src = root / slug
+        if not src.exists():
+            continue
+        try:
+            dest.mkdir(parents=True, exist_ok=True)
+            os.replace(src, dest / slug)
+            moved += 1
+        except OSError as exc:
+            logger.warning("Dran skills mirror: could not quarantine %s: %s", slug, exc)
+    return str(dest) if moved else ""
+
+
 def _trim_report(rows: List[Any]) -> List[Any]:
     """Conteos completos, listas recortadas: un reporte acotado pero honesto."""
     return rows[:SKILLS_SYNC_REPORT_MAX]
 
 
 def _skills_sync(client: Any, ctx: Any = None, *, slug: str = "", push: bool = False,
-                 force: bool = False, index_rows: Optional[list] = None,
+                 force: bool = False, prune: bool = False,
+                 index_rows: Optional[list] = None,
                  hermes_home: str = "",
                  max_bodies: int = SKILLS_SYNC_MAX_BODIES,
                  max_chars: int = SKILLS_SYNC_MAX_CHARS) -> Dict[str, Any]:
@@ -3964,6 +3999,12 @@ def _skills_sync(client: Any, ctx: Any = None, *, slug: str = "", push: bool = F
 
     Los fallos por slug se acumulan en `errors` y NO abortan el resto: un skill
     que no se puede bajar no puede costar la sincronización de los otros.
+
+    Con `prune` además PODA el espejo: cada slug del manifiesto que el catálogo
+    ya no tiene se mueve a `$HERMES_HOME/dran/backups/orphans-<ts>/` y sale del
+    manifiesto. Sólo lo pide la tool (`dran_skill_sync`): el sync de arranque
+    reconcilia en un hilo, sin nadie mirando, y borrar es una decisión que se
+    pide — no un efecto de abrir sesión.
     """
     from urllib.parse import quote
 
@@ -3971,6 +4012,8 @@ def _skills_sync(client: Any, ctx: Any = None, *, slug: str = "", push: bool = F
         "pulled": [], "pulled_count": 0, "unchanged": 0, "deferred": 0,
         "conflicts": [], "pushed": [], "pushed_count": 0, "pending_push": [],
         "skipped": [], "errors": [],
+        "orphans": [], "orphans_count": 0, "orphans_pruned": [],
+        "orphans_pruned_count": 0,
     }
     cache = _skill_cache(ctx, hermes_home)
     if cache is None:
@@ -4120,12 +4163,52 @@ def _skills_sync(client: Any, ctx: Any = None, *, slug: str = "", push: bool = F
         })
         report["pushed_count"] += 1
 
+    # -- la PODA: lo que el catálogo ya no tiene -----------------------------
+    # El pull itera el CATÁLOGO, así que un slug que SALIÓ del catálogo se queda
+    # en disco para siempre: `forget()` sólo corre en un delete explícito o en un
+    # 404 al bajar (y el pull nunca pregunta por él). La copia vieja no es
+    # inocua: con Dran caído, `dran_skill` la sirve como OFFLINE COPY, así que un
+    # `loader` de la era pre-plugin se leería como si fuera la fila local que el
+    # plugin registra con ese nombre.
+    #
+    # Dos guardas, porque borrar es lo ÚNICO irreversible de esta función:
+    #   1. `index_truncated` ⇒ no se poda NADA: con el índice recortado en su
+    #      tope, «no está en el catálogo» y «no cupo en la respuesta» son
+    #      indistinguibles (el mismo raciocinio del pull, aplicado a borrar);
+    #   2. los bytes se MUEVEN a `dran/backups/orphans-<ts>/` antes de sacarlos
+    #      del manifiesto, así que la poda es reversible — y es la única red para
+    #      una edición local, que el push no puede subir porque el slug no está
+    #      en el remoto.
+    #
+    # Va DESPUÉS del push a propósito: ahí una edición local de un slug huérfano
+    # ya se reportó como `skipped` (no se puede subir) y el respaldo la conserva.
+    stale = [s for s in sorted(entries) if s not in rows and (not slug or s == slug)]
+    report["orphans"] = _trim_report(stale)
+    report["orphans_count"] = len(stale)
+    if stale and not prune:
+        report["orphans_note"] = (
+            "not pruned: this run only reports — call dran_skill_sync to move "
+            "them out of the mirror")
+    elif stale and report.get("index_truncated"):
+        report["orphans_note"] = (
+            f"NOT pruned: the catalog came back truncated at the {SKILLS_INDEX_LIMIT}-row "
+            "limit, so a missing slug cannot be told apart from one that did "
+            "not fit — nothing was deleted")
+    elif stale:
+        saved = _quarantine(cache, stale, time.strftime("%Y%m%d-%H%M%S"))
+        pruned = [s for s in stale if cache.forget(s)]
+        report["orphans_pruned"] = _trim_report(pruned)
+        report["orphans_pruned_count"] = len(pruned)
+        if saved:
+            report["orphans_backup"] = saved
+
     report["ok"] = True
     report["mirror"] = cache.stats()
     report["note"] = (
         "The remote always wins: a body is served from the mirror only when dran "
         "does not answer at all. `pending_push` are local edits — send them with "
-        "push=true."
+        "`push=true`. `orphans` are slugs the catalog no longer has: this tool "
+        "moves them to dran/backups/orphans-<ts>/ and drops them from the manifest."
     )
     report["pulled"] = _trim_report(report["pulled"])
     report["pushed"] = _trim_report(report["pushed"])
@@ -4555,9 +4638,13 @@ def _handle_skill_tool(client: Any, tool_name: str, args: Dict[str, Any],
         slug = slug_arg()
         if slug and not _valid_skill_slug(slug):
             return json.dumps({"error": f"invalid slug {slug!r}"})
+        # `prune=True`: la TOOL poda el espejo (mueve a `dran/backups/orphans-<ts>/`
+        # lo que el catálogo ya no tiene). El sync de arranque NO: borrar es una
+        # consecuencia que alguien pidió, no un efecto de abrir sesión.
         report = _skills_sync(client, ctx, slug=slug,
                               push=bool(args.get("push")),
-                              force=bool(args.get("force")))
+                              force=bool(args.get("force")),
+                              prune=True)
         return json.dumps(report)
 
     return json.dumps({"error": f"unknown tool {tool_name}"})

@@ -2255,6 +2255,98 @@ def test_the_sync_repairs_a_missing_or_unreadable_file(plugin, hermetic_dran_hom
     assert plugin._SkillCache(str(hermetic_dran_home)).dirty_slugs() == []
 
 
+# ── La PODA: el slug que el catálogo ya no tiene ─────────────────────────────
+# El pull itera el CATÁLOGO, así que un slug que SALIÓ del catálogo se quedaba en
+# disco para siempre: `forget()` sólo corre en un delete explícito o en un 404 al
+# bajar, y el pull nunca pregunta por él. Las copias viejas no eran inocuas — con
+# Dran caído se servían como OFFLINE COPY. Dos guardas: el arranque NO borra
+# (reconcilia en un hilo, sin nadie mirando) y con el índice recortado no se poda
+# nada (no se puede probar ausencia). Los bytes se MUEVEN, nunca se borran.
+
+
+def _sync_tool(plugin, handlers, client, ctx, **args):
+    """El camino de la TOOL (`dran_skill_sync`), que es el ÚNICO que poda."""
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        return json.loads(handlers["dran_skill_sync"](args, ctx=ctx))
+
+
+def _backup_root(home) -> Path:
+    return Path(home) / "dran" / "backups"
+
+
+def test_the_warm_sync_reports_the_orphan_but_does_not_delete_it(plugin, hermetic_dran_home):
+    """El sync de arranque REPORTA el huérfano; borrar es una decisión que se pide."""
+    handlers, client, ctx = _mirror(plugin, {"a": _row("a", "# a"),
+                                             "viejo": _row("viejo", "# v")})
+    _sync(plugin, client, ctx)
+    del client.skills["viejo"]  # salió del catálogo (borrado o descompartido)
+
+    report = _sync(plugin, client, ctx)  # el arranque: prune=False
+
+    assert report["orphans"] == ["viejo"] and report["orphans_count"] == 1
+    assert report["orphans_pruned_count"] == 0
+    assert "not pruned" in report["orphans_note"]
+    assert _mirror_file(hermetic_dran_home, "viejo").exists()
+    assert "viejo" in _manifest(hermetic_dran_home)["skills"]
+
+
+def test_the_tool_prunes_the_orphan_by_moving_it_to_the_backup(plugin, hermetic_dran_home):
+    """La tool lo saca del espejo MOVIÉNDOLO: el slug vivo no se toca."""
+    handlers, client, ctx = _mirror(plugin, {"a": _row("a", "# a"),
+                                             "viejo": _row("viejo", "# v")})
+    _sync(plugin, client, ctx)
+    del client.skills["viejo"]
+
+    report = _sync_tool(plugin, handlers, client, ctx)
+
+    assert report["orphans_pruned"] == ["viejo"] and report["orphans_pruned_count"] == 1
+    assert not _mirror_file(hermetic_dran_home, "viejo").exists()
+    assert "viejo" not in _manifest(hermetic_dran_home)["skills"]
+    # El respaldo conserva los bytes: es un rename, no un borrado.
+    backup = Path(report["orphans_backup"])
+    assert backup.parent == _backup_root(hermetic_dran_home)
+    assert (backup / "viejo" / "SKILL.md").read_text(encoding="utf-8") \
+        == plugin._mount_skill_md("viejo", "d", "# v")
+    # Y el que SÍ está en el catálogo se queda, con su entrada.
+    assert _mirror_file(hermetic_dran_home, "a").exists()
+    assert "a" in _manifest(hermetic_dran_home)["skills"]
+    assert report["mirror"]["skills"] == 1
+
+
+def test_a_truncated_index_never_prunes(plugin, hermetic_dran_home, monkeypatch):
+    """Con el índice recortado en su tope no se puede probar ausencia: NO se borra."""
+    handlers, client, ctx = _mirror(plugin, {"a": _row("a", "# a"),
+                                             "viejo": _row("viejo", "# v")})
+    _sync(plugin, client, ctx)
+    del client.skills["a"]  # el catálogo del servidor ahora es {viejo}…
+    monkeypatch.setattr(plugin, "SKILLS_INDEX_LIMIT", 1)  # …y viene justo en el tope
+
+    report = _sync_tool(plugin, handlers, client, ctx)
+
+    assert report["index_truncated"] is True
+    assert report["orphans"] == ["a"] and report["orphans_pruned_count"] == 0
+    assert "truncated" in report["orphans_note"]
+    assert _mirror_file(hermetic_dran_home, "a").exists()
+    assert "a" in _manifest(hermetic_dran_home)["skills"]
+
+
+def test_a_dirty_orphan_is_reported_and_still_backed_up(plugin, hermetic_dran_home):
+    """Una edición local de un huérfano no se puede subir: el respaldo la conserva."""
+    handlers, client, ctx = _mirror(plugin, {"viejo": _row("viejo", "# v")})
+    _sync(plugin, client, ctx)
+    edited = "# v\n\npaso local\n"
+    _mirror_file(hermetic_dran_home, "viejo").write_text(
+        plugin._mount_skill_md("viejo", "d", edited), encoding="utf-8")
+    del client.skills["viejo"]
+
+    report = _sync_tool(plugin, handlers, client, ctx)
+
+    assert [s["slug"] for s in report["skipped"]] == ["viejo"]
+    assert report["orphans_pruned"] == ["viejo"]
+    assert (Path(report["orphans_backup"]) / "viejo" / "SKILL.md").read_text(encoding="utf-8") \
+        == plugin._mount_skill_md("viejo", "d", edited)
+
+
 def test_the_session_warm_pulls_from_the_index_it_already_has(plugin, hermetic_dran_home):
     """El arranque no paga un segundo GET del índice: usa el que bajó el prompt."""
     handlers, client, ctx = _mirror(plugin, {"a": _row("a", "# a"), "b": _row("b", "# b")})
