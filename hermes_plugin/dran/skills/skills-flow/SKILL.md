@@ -139,6 +139,13 @@ things, and neither of them weakens the rule that **the remote always wins**:
   `content_hash` (the index it already fetches for the prompt) against the manifest
   and downloads only what changed or is missing — in the background, without
   blocking the session.
+- **A body that does not fit inline**: the host persists any tool result above its
+  own cap (default 100,000 chars) as a 1,500-char preview plus the full text on
+  disk, so a heavy skill arrived CUT and the agent believed it had read the steps.
+  Past `SKILLS_INLINE_MAX_CHARS` the answer carries `body_omitted.path` instead of
+  the body — the frame, the version and the hash still travel, and the file is the
+  byte the server served — for `read_file` (never persisted, pageable with
+  offset/limit).
 - **Not dragging dead copies**: the pull walks the CATALOG, so a slug that left the
   catalog was never looked at again (`forget()` only runs on an explicit delete or a
   404 while downloading) and stayed on disk for good — with Dran down it was served
@@ -189,6 +196,13 @@ flowchart TD
   prompt.
 - **Re-reading the same body every turn.** `unchanged` is the answer; re-injecting
   kilobytes per turn is exactly what the hash avoids.
+- **A body too big to travel inline.** The host persists any tool result above its
+  own cap as a 1,500-char preview plus the full text on disk — a heavy skill arrived
+  CUT and the agent believed it had read the steps (JSON escaping adds ~7% to the
+  body, so ~92 K was enough to blow it). Past `SKILLS_INLINE_MAX_CHARS` the answer
+  carries `body_omitted.path` instead of the body: read it with `read_file`
+  (byte-identical, hash-verified, pageable). Do NOT re-request the skill — the
+  pointer is the same bytes, and re-asking only repeats the same answer.
 - **Wasting a tool call on the index when you need one body.** `dran_skills`
   never carries bodies — go straight to `dran_skill(slug)` when the slug is known.
 - **Writing without the ASK.** `dran_skill_save` / `dran_skill_delete` are the

@@ -456,6 +456,21 @@ puede pushear porque el slug no está en el remoto. El sync de ARRANQUE sólo lo
 reporta (`orphans`, con nota): reconcilia en un hilo, sin nadie mirando, y borrar
 es una decisión que se pide, no un efecto de abrir sesión.
 
+**El cuerpo que no cabe inline viaja como PUNTERO.** El resultado de un tool es
+JSON, y el escape de los saltos de línea le suma ~7% al cuerpo: 96,971 chars de
+cuerpo ⇒ 104,258 de resultado. Hermes **persiste** todo resultado arriba de su
+tope (default 100,000 chars) y lo cambia por un preview de 1,500 más una ruta —
+o sea que un skill pesado llegaba CORTADO y el agente se creía que había leído
+los pasos. Con `SKILLS_INLINE_MAX_CHARS` (90 K, con margen bajo el tope de
+Hermes) el corte no puede pasar por tamaño: lo que no cabe sale como el frame, la
+versión, el hash y **la ruta del archivo que se acaba de escribir**
+(`body_omitted.path` + `read_it`), el mismo byte y verificado por hash, para que
+lo lea con `read_file` — que está pinneado a infinito (nunca se persiste) y
+pagina con offset/limit, así que además se lee sólo lo que se necesita. Sin
+archivo a dónde apuntar (espejo apagado, o el write falló) se manda el sobre
+completo: ahí el spill de Hermes sigue siendo la red, y su mensaje ya manda a
+`read_file`.
+
 Nada de esto entra a `skills_list`: el espejo es del plugin, no se copia a
 `~/.hermes/skills/` y no se registra como skill local. Los presupuestos del
 arranque (`SKILLS_CACHE_MAX_BODIES` / `_CHARS`) existen para que una sesión no se
@@ -637,7 +652,7 @@ tools comparten. Un `config.json` con un solo knob de memoria no debe arrastrar
 hace el switch apagado: `is_available()` false, `get_tool_schemas()` vacío y la
 llamada rechazada.
 
-**El espejo de skills** tiene su propio bloque (29 tests). Los que fijan el
+**El espejo de skills** tiene su propio bloque (33 tests). Los que fijan el
 contrato, en orden de importancia:
 
 1. `mount → parse` devuelve el MISMO cuerpo (cuerpos con `---`, comillas, barras y
@@ -654,7 +669,11 @@ contrato, en orden de importancia:
 5. la poda: la tool mueve el huérfano al respaldo y lo saca del manifiesto (el slug
    vivo no se toca), el arranque sólo lo reporta, un índice recortado **no** poda
    nada, y la edición local de un huérfano se conserva en el respaldo;
-6. y las guardas: slug inválido (`../../`) no arma ninguna ruta ni escribe,
+6. el techo inline: lo que cabe sigue llegando con su cuerpo, lo que no cabe llega
+   como PUNTERO al archivo del espejo (y el archivo tiene el cuerpo completo), la
+   copia OFFLINE de un cuerpo grande también apunta, y sin archivo se cae al sobre
+   completo (nunca se inventa un path);
+7. y las guardas: slug inválido (`../../`) no arma ninguna ruta ni escribe,
    manifiesto corrupto se lee vacío, `"false"` en el `config.json` apaga el espejo
    (sin escribir nada a disco) y el arranque usa el índice que ya bajó el prompt
    (UN GET, en un hilo). El smoke end-to-end contra los payloads reales del

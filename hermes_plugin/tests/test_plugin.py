@@ -2347,6 +2347,88 @@ def test_a_dirty_orphan_is_reported_and_still_backed_up(plugin, hermetic_dran_ho
         == plugin._mount_skill_md("viejo", "d", edited)
 
 
+# ── El techo INLINE: el cuerpo que no cabe viaja como PUNTERO ────────────────
+# Hermes PERSISTE (preview de 1,500 chars + ruta) todo resultado arriba de su
+# tope de 100,000: un skill pesado llegaba CORTADO y el agente se creía que había
+# leído los pasos — el escape de JSON le sumaba ~7% al cuerpo y bastaba un cuerpo
+# de ~92 K. El plugin corta el problema de raíz: si el sobre no cabe, manda el
+# frame, la versión, el hash y la RUTA del archivo que ACABA de escribir (mismo
+# byte, verificado por hash) para que lo lea con `read_file`.
+
+
+def _raw_load(plugin, handlers, client, ctx, slug):
+    """El texto CRUDO del resultado (para poder medirlo, no sólo parsearlo)."""
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        return handlers["dran_skill"]({"slug": slug}, ctx=ctx)
+
+
+def _too_big_body(plugin) -> str:
+    return "paso\n" * ((plugin.SKILLS_INLINE_MAX_CHARS + 8_000) // 5)
+
+
+def test_a_body_that_fits_still_travels_inline(plugin, hermetic_dran_home):
+    """Lo que cabe sigue llegando en el sobre, con su cuerpo — sin ceremonia."""
+    handlers, client, ctx = _mirror(plugin, {"chico": _row("chico", "# cuerpo\n\npasos\n")})
+
+    out = json.loads(_raw_load(plugin, handlers, client, ctx, "chico"))
+
+    assert out["body"] == "# cuerpo\n\npasos\n"
+    assert "body_omitted" not in out and out["cache"]["synced"] is True
+
+
+def test_a_body_that_does_not_fit_travels_as_a_pointer_to_the_mirror(plugin, hermetic_dran_home):
+    """El cuerpo gigante NO se manda inline: se manda la ruta del espejo."""
+    body = _too_big_body(plugin)
+    handlers, client, ctx = _mirror(plugin, {"grande": _row("grande", body)})
+
+    raw = _raw_load(plugin, handlers, client, ctx, "grande")
+    out = json.loads(raw)
+
+    # 1) el resultado cabe: ya no puede haber spill (ni corte) por tamaño
+    assert len(raw) <= plugin.SKILLS_INLINE_MAX_CHARS
+    assert body not in raw
+    # 2) lo que viaja es el puntero al archivo que se acaba de escribir
+    omitted = out["body_omitted"]
+    assert omitted["chars"] == len(body)
+    assert omitted["would_be_result_chars"] > plugin.SKILLS_INLINE_MAX_CHARS
+    assert omitted["path"] == str(_mirror_file(hermetic_dran_home, "grande"))
+    assert "read_file" in omitted["read_it"]
+    # 3) el archivo está ahí, con el cuerpo completo: el puntero no miente
+    assert _mirror_file(hermetic_dran_home, "grande").exists()
+    cache = plugin._SkillCache(str(hermetic_dran_home))
+    assert cache.read("grande")["body"] == body
+    # 4) el resto del sobre sigue ahí: frame, versión y hash para el juicio del agente
+    assert out["status"] == "ok" and out["source"] == "remote" and out["content_hash"] == _sha(body)
+    assert out["frame"].startswith("[dran skill grande")
+
+
+def test_the_offline_copy_of_a_big_body_is_also_a_pointer(plugin, hermetic_dran_home):
+    """Con Dran caído el puntero apunta a la copia OFFLINE (y lo sigue diciendo)."""
+    body = _too_big_body(plugin)
+    handlers, client, ctx = _mirror(plugin, {"grande": _row("grande", body)})
+    _raw_load(plugin, handlers, client, ctx, "grande")  # deja la copia en el espejo
+
+    client.down = True
+    plugin._SKILL_HASHES = {}  # sesión nueva
+    out = json.loads(_raw_load(plugin, handlers, client, ctx, "grande"))
+
+    assert out["status"] == "cache" and out["stale"] is True
+    assert "OFFLINE COPY" in out["frame"] and "body" not in out
+    assert out["body_omitted"]["path"] == str(_mirror_file(hermetic_dran_home, "grande"))
+
+
+def test_without_a_mirror_file_a_big_body_falls_back_to_inline(plugin, hermetic_dran_home,
+                                                               monkeypatch):
+    """Sin archivo a dónde apuntar se manda el sobre completo: no se inventa un path."""
+    body = _too_big_body(plugin)
+    handlers, client, ctx = _mirror(plugin, {"grande": _row("grande", body)})
+    monkeypatch.setattr(plugin, "_skill_cache", lambda *a, **k: None)  # espejo apagado
+
+    out = json.loads(_raw_load(plugin, handlers, client, ctx, "grande"))
+
+    assert out["body"] == body and "body_omitted" not in out and "cache" not in out
+
+
 def test_the_session_warm_pulls_from_the_index_it_already_has(plugin, hermetic_dran_home):
     """El arranque no paga un segundo GET del índice: usa el que bajó el prompt."""
     handlers, client, ctx = _mirror(plugin, {"a": _row("a", "# a"), "b": _row("b", "# b")})
