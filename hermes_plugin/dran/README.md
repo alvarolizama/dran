@@ -471,6 +471,16 @@ archivo a dónde apuntar (espejo apagado, o el write falló) se manda el sobre
 completo: ahí el spill de Hermes sigue siendo la red, y su mensaje ya manda a
 `read_file`.
 
+**El techo del cuerpo, del lado del autor: 80 K suave, 90 K duro.** El número vive
+en el servidor (`Dran.Skills.Skill`), que es la puerta única: arriba de 90,000 el
+save es `422` y no se escribe nada (la tool lo rechaza ANTES de la red, para no
+cruzar un cuerpo de 200 K sólo para que le digan que no); arriba de 80,000 el save
+pasa pero la respuesta trae `warnings` — el cuerpo salió del carril inline, que es
+el aviso que de verdad importa. La respuesta a pasarse es **partir el skill y
+agruparlo por prefijo** (`<slug>` + `<slug>-anexos`, con el sufijo diciendo qué
+contiene), nunca recortar instrucciones: el mapa completo está en
+`skills/README.md`.
+
 Nada de esto entra a `skills_list`: el espejo es del plugin, no se copia a
 `~/.hermes/skills/` y no se registra como skill local. Los presupuestos del
 arranque (`SKILLS_CACHE_MAX_BODIES` / `_CHARS`) existen para que una sesión no se
@@ -652,7 +662,7 @@ tools comparten. Un `config.json` con un solo knob de memoria no debe arrastrar
 hace el switch apagado: `is_available()` false, `get_tool_schemas()` vacío y la
 llamada rechazada.
 
-**El espejo de skills** tiene su propio bloque (33 tests). Los que fijan el
+**El espejo de skills** tiene su propio bloque (37 tests). Los que fijan el
 contrato, en orden de importancia:
 
 1. `mount → parse` devuelve el MISMO cuerpo (cuerpos con `---`, comillas, barras y
@@ -673,7 +683,10 @@ contrato, en orden de importancia:
    como PUNTERO al archivo del espejo (y el archivo tiene el cuerpo completo), la
    copia OFFLINE de un cuerpo grande también apunta, y sin archivo se cae al sobre
    completo (nunca se inventa un path);
-7. y las guardas: slug inválido (`../../`) no arma ninguna ruta ni escribe,
+7. los techos del autor: arriba del SUAVE (80 K) el save pasa con `warnings` (el
+   del servidor se reenvía tal cual y, contra un server viejo, se arma local) y
+   arriba del DURO (90 K) se rechaza sin tocar la red;
+8. y las guardas: slug inválido (`../../`) no arma ninguna ruta ni escribe,
    manifiesto corrupto se lee vacío, `"false"` en el `config.json` apaga el espejo
    (sin escribir nada a disco) y el arranque usa el índice que ya bajó el prompt
    (UN GET, en un hilo). El smoke end-to-end contra los payloads reales del

@@ -2429,6 +2429,72 @@ def test_without_a_mirror_file_a_big_body_falls_back_to_inline(plugin, hermetic_
     assert out["body"] == body and "body_omitted" not in out and "cache" not in out
 
 
+# ── Los techos del cuerpo: 80 K SUAVE (avisa) y 90 K DURO (rechaza) ──────────
+# El aviso no es decoración: es el borde del carril inline. Arriba de 80 K el
+# skill sigue sirviendo, pero el agente ya no lo recibe completo de una sola vez;
+# arriba de 90 K hay que partirlo en dos agrupados por prefijo.
+
+
+def _save_tool(plugin, handlers, client, ctx, **args):
+    with mock.patch.object(plugin, "_client_for", return_value=client):
+        return json.loads(handlers["dran_skill_save"](args, ctx=ctx))
+
+
+def test_a_save_under_the_soft_max_carries_no_warnings(plugin, hermetic_dran_home):
+    """Lo normal: sin aviso, sin ceremonia."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# viejo")})
+
+    out = _save_tool(plugin, handlers, client, ctx, slug="weekly",
+                     description="d", body="# nuevo")
+
+    assert out["updated"] is True
+    assert "warnings" not in out and "hint" not in out
+
+
+def test_the_save_refuses_a_body_over_the_hard_max_before_the_network(plugin,
+                                                                     hermetic_dran_home):
+    """90,001 chars no cruzan la red: se rechaza acá y se dice cómo partirlo."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# viejo")})
+
+    out = _save_tool(plugin, handlers, client, ctx, slug="weekly", description="d",
+                     body="a" * (plugin.SKILLS_BODY_MAX + 1))
+
+    assert "error" in out and "hard max" in out["error"] and "Split" in out["error"]
+    assert out["hard_max"] == plugin.SKILLS_BODY_MAX
+    # Ni un PUT ni un GET de detalle: el rechazo es local.
+    assert client.writes == [] and client.detail_calls == []
+
+
+def test_the_save_warns_over_the_soft_max(plugin, hermetic_dran_home):
+    """85 K se guarda — y sale con el aviso de que dejó el carril inline."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# viejo")})
+    body = "b" * (plugin.SKILLS_BODY_SOFT_MAX + 5_000)
+
+    out = _save_tool(plugin, handlers, client, ctx, slug="weekly", description="d", body=body)
+
+    assert out["updated"] is True and client.writes[0]["body"] == body
+    warning = out["warnings"][0]
+    assert warning["code"] == "body_over_soft_max"
+    assert warning["chars"] == len(body) and warning["soft_max"] == plugin.SKILLS_BODY_SOFT_MAX
+    assert "POINTER" in out["hint"]
+
+
+def test_the_server_warning_wins_over_the_local_one(plugin, hermetic_dran_home):
+    """El aviso del servidor se reenvía tal cual: la regla es suya, no nuestra."""
+    handlers, client, ctx = _mirror(plugin, {"weekly": _row("weekly", "# viejo")})
+    server_warning = {"field": "body", "code": "body_over_soft_max", "chars": 1,
+                      "detail": "el aviso del SERVIDOR"}
+
+    def fake_update(slug, description=None, body=None, visibility=""):
+        return {"data": _row("weekly", body or "", version=9), "warnings": [server_warning]}
+
+    client.update_skill = fake_update
+    out = _save_tool(plugin, handlers, client, ctx, slug="weekly", description="d",
+                     body="c" * (plugin.SKILLS_BODY_SOFT_MAX + 1))
+
+    assert out["warnings"] == [server_warning]
+
+
 def test_the_session_warm_pulls_from_the_index_it_already_has(plugin, hermetic_dran_home):
     """El arranque no paga un segundo GET del índice: usa el que bajó el prompt."""
     handlers, client, ctx = _mirror(plugin, {"a": _row("a", "# a"), "b": _row("b", "# b")})

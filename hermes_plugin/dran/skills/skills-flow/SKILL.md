@@ -104,7 +104,8 @@ flowchart TD
   S --> G{"¿creado o\nversionado?"}
   G -->|"created: true"| V["VERIFY: dran_skill(slug)\ntrae el cuerpo nuevo"]
   G -->|"updated: true"| V
-  G -->|"error"| E["422: nombre, descripción >60\no cuerpo fuera de tamaño\n— corregir y reintentar"]
+  G -->|"warnings: body_over_soft_max"| P["DECIR al usuario: el cuerpo pasó 80,000\n— el agente ya lo lee por puntero"]
+  G -->|"error"| E["422: nombre, descripción >60\no cuerpo >90,000\n— corregir o PARTIR, no recortar"]
   E --> A
 ```
 
@@ -114,6 +115,16 @@ flowchart TD
 - The server validates what the web validates (name `^[a-z][a-z0-9_-]*$`,
   description ≤ 60 chars, body size): a `422` is a real error, never something to
   work around by truncating.
+- **Body size: 80,000 soft, 90,000 hard.** Over the soft max the save goes through
+  and the answer carries `warnings` — the body left the inline lane (the agent is
+  sent a pointer to the mirror file and reads it with `read_file`); over the hard
+  max the save is refused. Above 80,000 the answer is either a split or a
+  deliberate choice — never a silent trim, because an agent acting on HALF the
+  instructions is the failure this whole ladder exists to prevent.
+- **Splitting: prefix = family, suffix = content.** `foo` + `foo-anexos` (or
+  `foo-red`, `foo-perfiles`), never `foo-p2`: the description is the routing signal
+  and a number tells the agent nothing. Split by coherence — the agent may load
+  only one part, so each one has to stand on its own.
 - The slug IS the wire address: `dran_skill_save` with a NEW slug creates,
   with an existing one updates the body — there is no rename. To rename, save the
   new slug and share it.

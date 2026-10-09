@@ -360,6 +360,55 @@ defmodule Dran.SkillsTest do
     end
   end
 
+  # ── El techo del CUERPO: 80 K suave, 90 K duro ────────────────────────────
+  # La razón es del TRANSPORTE, no del contenido: el cuerpo viaja dentro del
+  # resultado de un tool (JSON) y el escape de los saltos de línea le suma ~7%,
+  # así que un cuerpo grande empujaba el resultado arriba del tope del host y el
+  # agente recibía un preview de 1,500 chars en vez del skill. 80 K avisa (salió
+  # del carril inline) y 90 K rechaza (hay que partirlo en dos skills).
+
+  describe "el techo del cuerpo (80 K suave, 90 K duro)" do
+    test "los números de la política son los declarados" do
+      assert Skill.body_soft_max() == 80_000
+      assert Skill.body_limits() == {1, 90_000}
+    end
+
+    test "un cuerpo de 80 K justos no avisa nada", %{owner: owner} do
+      skill = insert_skill!(owner, %{"body" => String.duplicate("a", 80_000)})
+
+      assert Skills.warnings(skill) == []
+    end
+
+    test "uno de 80,001 se GUARDA, pero avisa que salió del carril inline", %{owner: owner} do
+      skill = insert_skill!(owner, %{"body" => String.duplicate("a", 80_001)})
+
+      assert [warning] = Skills.warnings(skill)
+      assert warning.code == "body_over_soft_max"
+      assert warning.chars == 80_001
+      assert warning.soft_max == 80_000
+      assert warning.hard_max == 90_000
+      assert warning.detail =~ "inline lane"
+    end
+
+    test "el duro es el borde: 90 K pasa (y avisa), 90,001 no se guarda", %{owner: owner} do
+      skill = insert_skill!(owner, %{"body" => String.duplicate("a", 90_000)})
+      assert [_warning] = Skills.warnings(skill)
+
+      assert {:error, changeset} = insert_skill(owner, %{"body" => String.duplicate("a", 90_001)})
+      assert errors_on(changeset)[:body]
+    end
+
+    test "el aviso sale del cuerpo que hay, no de un dato guardado", %{owner: owner} do
+      skill = insert_skill!(owner, %{"body" => "# chico"})
+      assert Skills.warnings(skill) == []
+
+      # El mismo skill, con el cuerpo grande: el aviso aparece sin tocar nada más.
+      {:ok, big} = Skills.update_skill(skill, %{"body" => String.duplicate("a", 85_000)})
+
+      assert [%{chars: 85_000}] = Skills.warnings(big)
+    end
+  end
+
   # ── Helpers ───────────────────────────────────────────────────────────────
 
   defp attrs(slug \\ "demo", body \\ "# uno") do

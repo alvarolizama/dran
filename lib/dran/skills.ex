@@ -230,6 +230,48 @@ defmodule Dran.Skills do
     |> Map.merge(%{body: skill.body, skill_md: to_skill_md(skill)})
   end
 
+  @doc """
+  Los AVISOS de un skill guardado: cumple la regla, pero está en el borde.
+
+  Lista vacía es lo normal. Hoy hay uno: el cuerpo arriba del techo SUAVE
+  (80 K) — el skill sirve y se guarda, pero salió del carril donde el agente lo
+  recibe COMPLETO en una sola llamada, así que el autor tiene que saberlo (el
+  siguiente escalón, 90 K, ya rechaza).
+
+  Se calcula al servir, no se guarda: el número sale del cuerpo que hay, así que
+  no puede quedar desfasado con lo que el lector vería.
+  """
+  def warnings(%Skill{} = skill) do
+    soft = Skill.body_soft_max()
+    {_min, hard} = Skill.body_limits()
+    chars = body_length(skill.body)
+
+    if chars > soft do
+      [
+        %{
+          field: "body",
+          code: "body_over_soft_max",
+          chars: chars,
+          soft_max: soft,
+          hard_max: hard,
+          detail:
+            "the body is over the #{soft} soft max: it still saves, but it leaves " <>
+              "the inline lane — the agent gets a pointer to the mirror file and reads " <>
+              "it with read_file instead of receiving the whole body in one call. " <>
+              "Split it into two skills grouped by prefix before #{hard}."
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  # El MISMO conteo que usa `validate_length/3` (grafemas, no bytes): si los dos
+  # números discreparan, un cuerpo con acentos pasaría el aviso y fallaría el
+  # rechazo (o al revés).
+  defp body_length(body) when is_binary(body), do: String.length(body)
+  defp body_length(_body), do: 0
+
   defp index_entry(%Skill{} = skill, reader_id) do
     %{
       id: skill.id,

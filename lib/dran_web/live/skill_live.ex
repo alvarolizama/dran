@@ -665,7 +665,7 @@ defmodule DranWeb.SkillLive do
   defp skill_form_result({:ok, skill}, socket) do
     socket =
       socket
-      |> put_flash(:info, gettext("Skill saved."))
+      |> put_flash(:info, saved_message(skill))
       |> assign(skill: skill, editing: false)
 
     if socket.assigns[:live_action] == :show do
@@ -688,6 +688,24 @@ defmodule DranWeb.SkillLive do
 
   defp skill_form_result({:error, _reason}, socket),
     do: {:noreply, put_flash(socket, :error, gettext("Could not save the skill."))}
+
+  # El aviso de tamaño se dice en el MISMO flash del «guardado»: quien acaba de
+  # escribir 84 K de instrucciones tiene que enterarse ahí y no en un reporte que
+  # nadie abre. El skill SÍ se guardó — por eso es info y no error.
+  defp saved_message(skill) do
+    case Skills.warnings(skill) do
+      [] ->
+        gettext("Skill saved.")
+
+      [%{chars: chars, soft_max: soft, hard_max: hard} | _] ->
+        gettext(
+          "Skill saved. The body is %{chars} chars, over the %{soft} comfort line: it no longer travels inline (the agent gets a pointer and reads it with read_file). Split it before %{hard}.",
+          chars: chars,
+          soft: soft,
+          hard: hard
+        )
+    end
+  end
 
   # El destino lo administra quien puede escribir: el DUEÑO (la misma regla que
   # goals y planes — `can_manage_scope?/2` de `DranWeb.ResourceComponents`, acá

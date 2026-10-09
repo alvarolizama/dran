@@ -62,7 +62,7 @@ defmodule DranWeb.API.SkillController do
       {:ok, skill} ->
         conn
         |> put_status(:created)
-        |> json(%{data: Skills.show_payload(skill, owner_id)})
+        |> json(with_warnings(%{data: Skills.show_payload(skill, owner_id)}, skill))
 
       {:error, {:scope, message}} ->
         unprocessable(conn, %{detail: message})
@@ -95,7 +95,10 @@ defmodule DranWeb.API.SkillController do
       skill ->
         case update_with_scope(skill, attrs, scoped?, write_scope, conn.assigns[:user]) do
           {:ok, updated} ->
-            json(conn, %{data: Skills.show_payload(updated, reader_id(conn))})
+            json(
+              conn,
+              with_warnings(%{data: Skills.show_payload(updated, reader_id(conn))}, updated)
+            )
 
           {:error, {:rename}} ->
             unprocessable(conn, %{detail: "the slug is the wire address and cannot be renamed"})
@@ -135,6 +138,17 @@ defmodule DranWeb.API.SkillController do
   # ──────────────────────────────────────────────────────────────────────────
   # Internals
   # ──────────────────────────────────────────────────────────────────────────
+
+  # El aviso viaja JUNTO al recurso: quien guardó (el agente o la web) tiene que
+  # poder decir «esto quedó grande» sin adivinar por el tamaño del cuerpo. La
+  # clave sólo aparece cuando hay algo que avisar, así que su presencia es la
+  # señal (y su ausencia no obliga a nadie a leer una lista vacía).
+  defp with_warnings(payload, skill) do
+    case Skills.warnings(skill) do
+      [] -> payload
+      warnings -> Map.put(payload, :warnings, warnings)
+    end
+  end
 
   # El insert y la traducción del `scope` van en UNA transacción: un destino que
   # no se puede honrar (grupo inexistente o ajeno) revierte la fila y devuelve

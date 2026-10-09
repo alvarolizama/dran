@@ -145,6 +145,14 @@ SKILLS_SYNC_REPORT_MAX = 50
 # de la ventana): ahí el spill puede pasar igual, y su propio mensaje ya manda a
 # `read_file`, que es la misma recuperación que ofrece el puntero.
 SKILLS_INLINE_MAX_CHARS = 90_000
+# ── Los techos del CUERPO, del lado del autor ────────────────────────────────
+# El MISMO número que `Dran.Skills.Skill` (`@body_soft_max` / `@body_max`): el
+# server es la puerta (422 en el duro) y esto es el rechazo temprano, para que un
+# cuerpo de 200 K no cruce la red para que le digan que no. El SUAVE avisa y deja
+# guardar: un cuerpo arriba de 80 K deja ~6 K de margen bajo el techo inline, así
+# que se guarda pero sale del carril donde el agente lo recibe completo de una vez.
+SKILLS_BODY_SOFT_MAX = 80_000
+SKILLS_BODY_MAX = 90_000
 # El slug es la dirección del wire Y un nombre de directorio del espejo: sin esta
 # guarda, un `../..` escribiría fuera del cache (path traversal).
 _SKILL_SLUG_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
@@ -2669,6 +2677,12 @@ def _tool_schemas() -> List[Dict[str, Any]]:
                 "Create or update a Dran skill — the same door the web uses, with "
                 "the same server-side validation. A NEW body bumps the version "
                 "and the content_hash; re-saving the same body changes nothing. "
+                "BODY SIZE: 80,000 chars is the soft max (above it the save goes "
+                "through but the answer carries `warnings` — the body left the "
+                "inline lane and agents receive a pointer to the mirror file "
+                "instead) and 90,000 is the hard max (refused, nothing is saved): "
+                "past it, split the skill into two grouped by a prefix "
+                "(`<slug>` + `<slug>-anexos`) instead of trimming instructions. "
                 "The suite's slugs (`loader` + the eight flows) are RESERVED (422): "
                 "they are the plugin's own instructions, edited in the repo. "
                 "ASK THE USER BEFORE WRITING: a skill is instructions other "
@@ -4654,6 +4668,22 @@ def _handle_skill_tool(client: Any, tool_name: str, args: Dict[str, Any],
         body = args.get("body")
         if description is None or body is None:
             return json.dumps({"error": "description and body are required"})
+        # El techo DURO se rechaza ACÁ, antes de la red: el server valida lo
+        # mismo (422), pero un cuerpo de 200 K no tiene por qué viajar para que le
+        # digan que no — y partir un skill es una decisión del usuario, no algo
+        # que se arregle recortando en silencio.
+        body_chars = len(str(body))
+        if body_chars > SKILLS_BODY_MAX:
+            return json.dumps({
+                "error": (f"the body is {body_chars:,} chars, over the {SKILLS_BODY_MAX:,} "
+                          "hard max: nothing was saved. Split it into two skills grouped "
+                          "by a prefix (`<slug>` + `<slug>-anexos`) — past the inline cap a "
+                          "single body arrives as a POINTER anyway, and an agent acting on "
+                          "HALF the instructions is worse than loading two bodies."),
+                "chars": body_chars,
+                "soft_max": SKILLS_BODY_SOFT_MAX,
+                "hard_max": SKILLS_BODY_MAX,
+            })
         visibility = str(args.get("visibility") or "").strip().lower()
         if visibility and visibility not in ("private", "public", "shared"):
             return json.dumps({"error": "visibility must be private, public or shared"})
@@ -4687,6 +4717,28 @@ def _handle_skill_tool(client: Any, tool_name: str, args: Dict[str, Any],
         }
         if entry:
             payload["cache"] = {"path": entry.get("file"), "synced": True}
+        # El aviso del SERVIDOR se reenvía tal cual (es el que manda); contra un
+        # server viejo que todavía no lo calcula, se arma local con el mismo
+        # número, así el agente nunca guarda 85 K creyendo que quedó todo bien.
+        warnings = data.get("warnings") if isinstance(data, dict) else None
+        if not isinstance(warnings, list) or not warnings:
+            warnings = [{
+                "field": "body",
+                "code": "body_over_soft_max",
+                "chars": body_chars,
+                "soft_max": SKILLS_BODY_SOFT_MAX,
+                "hard_max": SKILLS_BODY_MAX,
+                "detail": ("the body is over the soft max: it saves, but it leaves the "
+                           "inline lane — the agent gets a pointer to the mirror file "
+                           "instead of the whole body in one call"),
+            }] if body_chars > SKILLS_BODY_SOFT_MAX else []
+        if warnings:
+            payload["warnings"] = warnings
+            payload["hint"] = (
+                f"Saved, but the body is {body_chars:,} chars — over the "
+                f"{SKILLS_BODY_SOFT_MAX:,} inline line. Tell the user: it no longer travels "
+                f"in one call (the agent is sent a POINTER to the mirror file). Split it, "
+                f"grouped by a prefix, before it reaches {SKILLS_BODY_MAX:,}.")
         return json.dumps(payload)
 
     if tool_name == "dran_skill_delete":

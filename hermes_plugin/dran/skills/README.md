@@ -155,6 +155,37 @@ for f in hermes_plugin/dran/skills/*/SKILL.md; do
 done
 ```
 
+## Body size: 80,000 soft, 90,000 hard
+
+The body travels inside a tool result (JSON) and the JSON escaping adds ~7% to it
+(every newline costs two chars). Past the host's own per-result cap (100,000 chars
+by default) the body is NOT delivered: the agent gets a 1,500-char preview plus a
+path, so it reads the header of a skill and believes it read the steps.
+
+That is why the ceiling has two steps, both in `Dran.Skills.Skill`:
+
+| Limit | Chars | What happens |
+|---|---|---|
+| **soft** | 80,000 | the save GOES THROUGH and the answer carries `warnings` — the body left the inline lane: agents are sent a pointer to the mirror file (`body_omitted.path`) and read it with `read_file` |
+| **hard** | 90,000 | the save is REFUSED (`422`) and nothing is written: split the skill |
+
+80,000 leaves ~6 K of margin under the plugin's inline cap
+(`SKILLS_INLINE_MAX_CHARS`, 90 K), and that margin is what keeps a skill arriving
+whole in ONE call. The plugin refuses the hard case before the network too, so a
+200 K body never travels to be told no.
+
+**Split by coherence, never by the number.** A skill that is 95 K because it
+covers two jobs should be two skills; one that is 95 K because a single procedure
+is long is better left whole — the pointer serves it correctly, and `read_file`
+lets the agent read the part it needs instead of the whole body every turn.
+
+**Grouping: the prefix carries the family, the suffix carries the content.** Split
+`foo` into `foo` + `foo-anexos` (`foo-red`, `foo-perfiles`) — never `foo-p2`. The
+description is the routing signal (Hermes truncates it to 60 chars) and a number
+tells the agent nothing about whether it needs to load it. Each part has to stand
+on its own: the agent may load only one, so its own description must be enough to
+decide.
+
 ## Naming convention
 
 | Name | Meaning |

@@ -253,7 +253,7 @@ defmodule DranWeb.API.SkillsTest do
                post_json(
                  conn_for(owner),
                  "/api/skills",
-                 Map.put(params("grande"), "body", String.duplicate("a", 100_001))
+                 Map.put(params("grande"), "body", String.duplicate("a", 90_001))
                ),
                422
              )["errors"]["body"]
@@ -264,6 +264,30 @@ defmodule DranWeb.API.SkillsTest do
              )["errors"]["body"]
 
       assert Repo.aggregate(Skill, :count, :id) == before
+    end
+
+    test "un cuerpo arriba del techo SUAVE se guarda con el aviso, no con un 422",
+         %{owner: owner} do
+      body = String.duplicate("a", 85_000)
+
+      response =
+        post_json(conn_for(owner), "/api/skills", Map.put(params("avisado"), "body", body))
+
+      assert %{"data" => %{"slug" => "avisado", "body" => ^body}, "warnings" => [warning]} =
+               json_response(response, 201)
+
+      assert warning["code"] == "body_over_soft_max"
+      assert warning["chars"] == 85_000
+      assert warning["soft_max"] == 80_000
+      assert warning["hard_max"] == 90_000
+      assert Repo.get_by(Skill, slug: "avisado")
+    end
+
+    test "un cuerpo por debajo del suave no lleva la llave de avisos", %{owner: owner} do
+      response = post_json(conn_for(owner), "/api/skills", params("tranquilo"))
+
+      assert %{"data" => %{"slug" => "tranquilo"}} = json_response(response, 201)
+      refute Map.has_key?(json_response(response, 201), "warnings")
     end
 
     test "un PUT con cuerpo nuevo versiona y el mismo cuerpo no", %{owner: owner} do
