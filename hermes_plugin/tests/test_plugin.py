@@ -799,13 +799,18 @@ class _FakeServiceClient:
         self._memories = memories or []
         self.service_calls = 0
         self.search_calls = 0
+        self.queries = []
         self.last_timeout = None
+        self.fail_search = False
 
     def agent_config(self, timeout=3.0):
         return None
 
     def search(self, query, limit=5):
         self.search_calls += 1
+        self.queries.append(query)
+        if self.fail_search:
+            raise RuntimeError("dran unreachable")
         return list(self._memories)
 
     def list_services(self, timeout=None):
@@ -813,10 +818,15 @@ class _FakeServiceClient:
         self.last_timeout = timeout
         return self._services
 
+    def add_memory(self, content, source_session="", force=False):
+        self.add_calls = getattr(self, "add_calls", 0) + 1
+        return {"data": {"id": f"new{self.add_calls}", "content": content}, "duplicate": False}
+
 
 def _armed_provider(plugin, client, *, cadence=1):
     provider = plugin.DranMemoryProvider()
     provider._config = {"auto_recall": True, "recall_cadence": cadence,
+                        "auto_capture": True,
                         "max_recall_results": 5, "max_recall_chars": 800,
                         "base_url": "http://dran.test", "api_key": "k",
                         "workspace": "personal"}
@@ -2931,3 +2941,201 @@ def test_toggle_cache_follows_the_file(plugin, hermetic_dran_home):
     os.utime(path, (future, future))
 
     assert plugin._group_enabled("pages") is True
+
+
+# ── Recall: el SET EN PIE (cuándo se busca y qué se reutiliza) ───────────────
+#
+# El search es caro (una ida a la red + un embed) y el turno es barato; así que
+# la política es: buscar cuando hay razón, reutilizar cuando no. Y lo que ya
+# volvió NO se tira — un reinicio, un turno interrumpido o un search fallido no
+# pueden dejar el turno siguiente ciego.
+
+_MEMORIES = [
+    {"id": "m1", "content": "El usuario posee tres dominios.", "created_by": "default"},
+    {"id": "m2", "content": "El proyecto vende cursos de IA.", "created_by": "default"},
+]
+
+
+def _recall_pass(plugin, provider, client, query, session_id="s1"):
+    """Un turno completo de recall: encolar (fin del turno) + inyectar (inicio)."""
+    with mock.patch.object(plugin, "_DranClient", return_value=client):
+        provider.queue_prefetch(query, session_id=session_id)
+        provider.shutdown()  # join the background recall pass
+        return provider.prefetch(query, session_id=session_id)
+
+
+def test_recall_tokens_ignore_accents_case_and_stopwords(plugin):
+    tokens = plugin._recall_tokens("¿Cuál es el PROYECTO de Álvaro, el de Mérida?")
+    assert "proyecto" in tokens and "alvaro" in tokens and "merida" in tokens
+    assert "cual" not in tokens and "de" not in tokens and "el" not in tokens
+
+
+def test_topic_overlap_separates_followups_from_new_topics(plugin):
+    assert plugin._topic_overlap("¿y eso por qué?", "el proyecto de cursos") == 1.0
+    assert plugin._topic_overlap("el proyecto de cursos de IA", "el proyecto de cursos") == 1.0
+    assert plugin._topic_overlap("clima en tokio mañana", "el proyecto de cursos") == 0.0
+
+
+def test_followup_reuses_the_standing_set_without_searching(plugin, hermetic_dran_home):
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    provider = _armed_provider(plugin, client)
+
+    assert "Relevant shared memories" in _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")
+    assert client.search_calls == 1
+
+    # Seguimiento: mismo tema ⇒ NO se vuelve a buscar (cero red). El set sigue en
+    # pie y sigue inyectable — reutilizar no es olvidar.
+    _recall_pass(plugin, provider, client, "¿y eso por qué?")
+    assert client.search_calls == 1, "un seguimiento no paga una búsqueda nueva"
+    assert provider._standing_recall("s1")["ids"], "el set en pie sigue ahí"
+
+
+def test_topic_shift_triggers_a_new_search(plugin, hermetic_dran_home):
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    provider = _armed_provider(plugin, client)
+
+    _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")
+    _recall_pass(plugin, provider, client, "el clima en Tokio mañana temprano")
+
+    assert client.search_calls == 2, "tema nuevo ⇒ se busca"
+
+
+def test_stale_standing_set_is_refreshed(plugin, hermetic_dran_home, monkeypatch):
+    monkeypatch.setattr(plugin, "RECALL_MAX_AGE_TICKS", 2)
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    provider = _armed_provider(plugin, client)
+
+    _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")
+    assert client.search_calls == 1
+
+    _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")  # age 1 → reuse
+    assert client.search_calls == 1
+
+    _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")  # age 2 → refresh
+    assert client.search_calls == 2, "el set se puso viejo: se refresca"
+
+
+def test_identical_set_is_reinjected_after_the_window(plugin, hermetic_dran_home, monkeypatch):
+    """El dedupe ahorra tokens, pero no puede volverse un olvido permanente."""
+    monkeypatch.setattr(plugin, "RECALL_REINJECT_TICKS", 2)
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    provider = _armed_provider(plugin, client)
+
+    first = _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")
+    assert first
+
+    assert provider.prefetch("el proyecto de cursos de IA", session_id="s1") == ""
+    assert provider.prefetch("el proyecto de cursos de IA", session_id="s1") == ""
+    assert provider.prefetch("el proyecto de cursos de IA", session_id="s1") == first, \
+        "pasada la ventana el set se re-inyecta"
+
+
+def test_a_restart_does_not_blind_the_next_turn(plugin, hermetic_dran_home):
+    """La RAM muere con el proceso; el set en pie vive en disco."""
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    first_provider = _armed_provider(plugin, client)
+    text = _recall_pass(plugin, first_provider, client, "el proyecto de cursos de IA")
+    assert text
+
+    # Proceso nuevo, misma sesión: cero búsqueda y AÚN ASÍ hay memoria.
+    fresh_client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    second_provider = _armed_provider(plugin, fresh_client)
+    survived = second_provider.prefetch("¿seguimos con lo mismo?", session_id="s1")
+
+    assert survived == text
+    assert fresh_client.search_calls == 0, "el set se lee de disco, no de la red"
+
+
+def test_another_session_does_not_inherit_the_standing_set(plugin, hermetic_dran_home):
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    provider = _armed_provider(plugin, client)
+    assert _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")
+
+    other = _armed_provider(plugin, _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES))
+    assert other.prefetch("hola", session_id="otra_sesion") == ""
+
+
+def test_session_reset_clears_the_standing_set(plugin, hermetic_dran_home):
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    provider = _armed_provider(plugin, client)
+    assert _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")
+
+    provider.on_session_switch("nueva", reset=True)
+
+    assert provider._standing_recall("nueva") == {}
+    assert plugin._read_recall_state(str(hermetic_dran_home))["text"] == ""
+
+
+def test_failed_search_is_logged_and_retried(plugin, hermetic_dran_home, caplog):
+    """Un search que falla no se traga: se reintenta y el set viejo sigue sirviendo."""
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    provider = _armed_provider(plugin, client)
+    good = _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")
+    assert good
+
+    client.fail_search = True
+    with caplog.at_level("WARNING", logger=plugin.logger.name):
+        provider.queue_prefetch("clima en Tokio", session_id="s1")
+        provider.shutdown()
+
+    assert client.search_calls == 2, "se reintentó"
+    assert provider._recall_failures == 1
+    assert any("search failed" in r.message for r in caplog.records), \
+        "un fallo de recall no puede ser silencioso"
+    assert provider._standing_recall("s1")["text"] == good, \
+        "el set en pie se queda aunque el search haya fallado (el dedupe puede saltarse la inyección)"
+
+    client.fail_search = False
+    provider.queue_prefetch("clima en Tokio", session_id="s1")
+    provider.shutdown()
+    assert provider._recall_failures == 0, "el siguiente turno se recupera"
+
+
+def test_services_inventory_is_reused_within_its_ttl(plugin, hermetic_dran_home):
+    """El inventario viaja en la pasada, pero no cambia cada turno."""
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    provider = _armed_provider(plugin, client)
+
+    _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")
+    _recall_pass(plugin, provider, client, "el clima en Tokio mañana temprano")
+
+    assert client.search_calls == 2
+    assert client.service_calls == 1, "un GET /api/services por ventana, no por búsqueda"
+
+
+def test_long_fresh_query_is_not_enriched(plugin):
+    """Pegarle el tema viejo a una pregunta nueva ensucia el match."""
+    provider = plugin.DranMemoryProvider()
+    provider._last_search_query = "cursos de inteligencia artificial"
+
+    enriched = provider._enrich_query("¿y eso por qué?")
+    assert enriched.endswith("¿y eso por qué?") and "cursos" in enriched
+
+    fresh = "cuál es el pronóstico del clima en Tokio mañana por la tarde"
+    assert provider._enrich_query(fresh) == fresh
+
+
+def test_memory_search_reports_a_missing_client(plugin, hermetic_dran_home):
+    """Sin cliente no es "cero resultados": es "no consulté"."""
+    provider = plugin.DranMemoryProvider()
+    provider._client = None
+
+    payload = json.loads(provider.handle_tool_call("dran_memory_search", {"query": "hola"}))
+
+    assert "error" in payload, payload
+    assert "results" not in payload
+
+
+def test_a_memory_write_refreshes_the_standing_set(plugin, hermetic_dran_home):
+    """Guardar un hecho lo vuelve recordable en ESTA sesión, no dentro de tres turnos."""
+    client = _FakeServiceClient(_SERVICES_PAYLOAD, memories=_MEMORIES)
+    provider = _armed_provider(plugin, client)
+    _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")
+    assert client.search_calls == 1
+
+    stored = json.loads(provider.handle_tool_call("dran_memory_add", {"content": "Un hecho nuevo."}))
+
+    assert stored["stored"] is True
+    assert provider._recall_stale is True
+    _recall_pass(plugin, provider, client, "el proyecto de cursos de IA")  # mismo tema
+    assert client.search_calls == 2, "una escritura obliga a re-buscar"

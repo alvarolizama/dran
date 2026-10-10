@@ -225,8 +225,8 @@ read, no solo por agent keys (a diferencia de `/api/agent/config`).
 
 | Hook | Comportamiento |
 |---|---|
-| `queue_prefetch` | Recall en background → `GET /api/memory/search`. La query se enriquece con la conversación reciente (seguimientos cortos como "¿y eso por qué?" también recuerdan); la cadence salta la búsqueda en turnos off |
-| `prefetch` | Inyecta el cache sin bloquear el turno. Si el set de facts es idéntico al ya inyectado, **no re-inyecta** (ahorro de tokens); el presupuesto de chars corta en hechos completos |
+| `queue_prefetch` | Recall en background → `GET /api/memory/search`. **Busca sólo cuando se paga**: no hay set, cambió el tema, el set se puso viejo (`RECALL_MAX_AGE_TICKS`), el search anterior falló, o se escribió memoria — cualquier otro turno **reutiliza el set en pie** (cero red). La query se enriquece con la anterior SÓLO si el mensaje no trae tema propio (`RECALL_FOLLOWUP_MAX_TOKENS`: "¿y eso por qué?"); una pregunta nueva se busca sola. La cadence sigue siendo el piso de turnos entre búsquedas |
+| `prefetch` | Lee el set en pie (RAM y, si el proceso arrancó de cero, el espejo `$HERMES_HOME/dran/recall_state.json`) — nunca toca la red. Un set idéntico al ya inyectado no se re-inyecta (tokens), pero **se re-inyecta igual** pasados `RECALL_REINJECT_TICKS` turnos: ni la compresión ni una fila caída dejan la sesión sin memoria. El presupuesto de chars corta en hechos completos. `on_session_switch(reset)` lo tira: una sesión nueva no hereda recall ajeno |
 | `system_prompt_block` | Instrucción corta: ofrece guardar hechos durables con `dran_memory_add` |
 | tools | `dran_memory_search`, `dran_memory_add` (con `force` y manejo de 409 near-duplicate), `dran_memory_update`, `dran_memory_feedback` |
 | `on_session_end` | POST al ingest de Dran **solo con el delta de mensajes** (cursor por sesión en `$HERMES_HOME/dran_memory_cursor.json`): una sesión que termina dos veces no re-paga la extracción LLM. El transcript nunca se persiste |

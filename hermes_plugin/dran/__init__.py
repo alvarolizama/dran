@@ -18,6 +18,7 @@ import re
 import socket
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -64,6 +65,118 @@ CONFIG_REFRESH_SECS = 300
 # Recall query depth: how many recent turns are concatenated into the
 # search query. Short follow-ups ("and why?") recall nothing on their own.
 RECALL_QUERY_TURNS = 3
+# ── Recall trigger policy ────────────────────────────────────────────────────
+# El recall es un SET EN PIE para la sesión, no un one-shot: la búsqueda sale
+# sólo cuando se paga sola, y lo que devolvió sigue siendo inyectable turnos
+# después. Eso es lo que lo hace barato Y a prueba de olvidos — un reinicio, un
+# turno interrumpido o un search fallido dejan el set anterior en su lugar en
+# vez de dejar el turno ciego.
+#
+#   * no hay set todavía        → buscar
+#   * cambió el tema            → buscar
+#   * el set ya está viejo      → buscar
+#   * el search anterior falló  → buscar
+#   * cualquier otra cosa       → reutilizar (cero red, cero tokens)
+RECALL_STATE_FILENAME = "recall_state.json"
+# Turnos de antigüedad antes de refrescar un set en pie (sólo cuenta en los
+# turnos donde la cadencia dejó pasar el recall).
+RECALL_MAX_AGE_TICKS = 3
+# Un set IDÉNTICO se re-inyecta al menos cada N turnos, aunque nada haya
+# cambiado: si la compresión tiró la fila que llevaba el bloque, el dedupe
+# dejaría la sesión sin memoria para siempre.
+RECALL_REINJECT_TICKS = 4
+# Qué tanto del mensaje NUEVO tiene que estar ya cubierto por la query anterior
+# para considerarlo el mismo tema (seguimiento) y no buscar de nuevo.
+RECALL_TOPIC_OVERLAP = 0.34
+# Un mensaje SIN señal propia (0-2 palabras de contenido: "¿y eso por qué?") se
+# asume continuación y se enriquece con la query anterior. Uno que trae tema
+# propio se busca solo: pegarle el tema viejo ensucia el match.
+RECALL_FOLLOWUP_MAX_TOKENS = 3
+RECALL_TOKEN_MIN = 3
+# El inventario de servicios viaja en la MISMA pasada que la memoria, pero no
+# cambia cada turno: se reutiliza dentro de esta ventana.
+SERVICES_INVENTORY_TTL_SECS = 300.0
+
+# Palabras vacías (es + en) de la firma de query: no dicen de qué se habla.
+_RECALL_STOPWORDS = frozenset("""
+a al algo aquel aqui asi como con cual cuando de del desde donde dos el ella ellas ellos en es esa ese
+eso esta este esto estos ha hasta hay la las le les lo los mas me mi mis mucha mucho muy no nos o os
+otra otro para pero poco por porque que quien se si sin sobre son su sus te tener tiene todo tu tus un
+una uno unos y ya
+the a an and or of to in on for with is are was were be been being this that these those it its at by
+from as not no do does did how what when where which who why you your i my me we our they their he she
+them there then can could would should will just about into over out up down
+""".split())
+
+
+def _recall_tokens(text: Any) -> frozenset:
+    """Firma de contenido de un texto: sin acentos, sin stopwords, minúsculas.
+
+    Pura y sin red a propósito: corre en el camino del turno, donde decide si el
+    mensaje nuevo sigue el tema del último search o abrió otro.
+    """
+    normalized = unicodedata.normalize("NFKD", str(text or ""))
+    plain = "".join(c for c in normalized if not unicodedata.combining(c))
+    tokens = re.findall(r"[a-z0-9_]+", plain.lower())
+    return frozenset(t for t in tokens
+                     if len(t) >= RECALL_TOKEN_MIN and t not in _RECALL_STOPWORDS)
+
+
+def _topic_overlap(new_text: Any, previous_query: Any) -> float:
+    """Qué tanto del mensaje NUEVO ya estaba cubierto por la query anterior.
+
+    1.0 = es un seguimiento (el set en pie sigue sirviendo); cerca de 0 = tema
+    nuevo (hay que buscar).
+    """
+    new_tokens = _recall_tokens(new_text)
+    if not new_tokens:
+        return 1.0
+    return len(new_tokens & _recall_tokens(previous_query)) / len(new_tokens)
+
+
+def _is_followup_query(query: str, previous_query: str) -> bool:
+    """¿El mensaje nuevo continúa el tema anterior (y no abre uno nuevo)?
+
+    Dos señales, y ninguna es "qué tan corto es": o el mensaje no trae tema
+    propio (0-2 palabras de contenido, el caso "¿y eso por qué?"), o su tema ya
+    estaba cubierto por la query anterior.
+    """
+    if not previous_query:
+        return False
+    tokens = _recall_tokens(query)
+    if len(tokens) < RECALL_FOLLOWUP_MAX_TOKENS:
+        return True
+    return _topic_overlap(query, previous_query) >= RECALL_TOPIC_OVERLAP
+
+
+def _recall_state_path(hermes_home: str) -> Path:
+    return Path(hermes_home) / CANONICAL_CONFIG_DIR / RECALL_STATE_FILENAME
+
+
+def _read_recall_state(hermes_home: str) -> Dict[str, Any]:
+    """El último set de recall del perfil; `{}` si no hay o está ilegible.
+
+    Un JSON a medio escribir no puede costar la sesión: se descarta la lectura
+    y el próximo search lo rehace.
+    """
+    try:
+        raw = json.loads(_recall_state_path(hermes_home).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _write_recall_state(hermes_home: str, payload: Dict[str, Any]) -> None:
+    """Persiste el set de recall — atómico (tmp + `os.replace`) y fail-open."""
+    try:
+        path = _recall_state_path(hermes_home)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, path)
+    except Exception as exc:  # el set en disco es una red de seguridad, no un requisito
+        logger.debug("Dran recall: could not persist the standing set: %s", exc)
+
 # Circuit breaker: after N consecutive failures, sleep before retrying.
 BREAKER_THRESHOLD = 3
 BREAKER_COOLDOWN_SECS = 60.0
@@ -1129,8 +1242,26 @@ class DranMemoryProvider(MemoryProvider):
         # The counter starts armed (huge) so the FIRST recall always fires;
         # prefetch resets it to 0 after each actual injection.
         self._turns_since_inject = 1_000_000
+        self._last_injected = 0
         self._last_injected_ids: frozenset = frozenset()
         self._last_search_query = ""
+        # El SET EN PIE: qué devolvió el último search, con qué query, de qué
+        # sesión, en qué turno y cuándo. No se consume al inyectarlo — se
+        # reutiliza mientras siga sirviendo — y se persiste a disco para que un
+        # reinicio a medio sesión no deje el turno siguiente ciego.
+        self._prefetch_ids: frozenset = frozenset()
+        self._prefetch_query = ""
+        self._prefetch_session = ""
+        self._prefetch_tick = 0
+        self._prefetch_ts = 0.0
+        self._recall_ticks = 0
+        self._recall_failures = 0
+        # Una escritura (add/update) deja el set en pie obsoleto: el hecho nuevo
+        # tiene que poder recordarse en ESTA sesión, no dentro de tres turnos.
+        self._recall_stale = False
+        self._turns_since_reinject = 0
+        self._services_line_cache: Tuple[str, float] = ("", 0.0)
+        self._recall_state_home = ""
 
     # -- Core lifecycle ----------------------------------------------------
 
@@ -1180,6 +1311,8 @@ class DranMemoryProvider(MemoryProvider):
         self._agent_identity = str(kwargs.get("agent_identity") or "")
         self._agent_context = str(kwargs.get("agent_context") or "primary")
         self._config = _load_dran_config(kwargs.get("hermes_home") or self._hermes_home())
+        # Dónde vive la red de seguridad del recall (el set en pie, en disco).
+        self._recall_state_home = str(kwargs.get("hermes_home") or "") or self._hermes_home()
         self._client = _DranClient(
             self._config["base_url"],
             self._config["api_key"],
@@ -1269,7 +1402,8 @@ class DranMemoryProvider(MemoryProvider):
         if not self._client:
             return
         now = time.monotonic()
-        if not force and now - self._workspace_resolved_at < CONFIG_REFRESH_SECS:
+        resolved_at = getattr(self, "_workspace_resolved_at", 0.0)
+        if not force and now - resolved_at < CONFIG_REFRESH_SECS:
             return
         self._workspace_resolved_at = now
         config = self._client.agent_config()
@@ -1326,9 +1460,9 @@ class DranMemoryProvider(MemoryProvider):
         if not (self._config.get("auto_recall") and self._client and query and query.strip()):
             return
 
-        # Cadence (Honcho-style): skip the SEARCH itself on off-turns — an
-        # unchanged query would return the same facts anyway. The counter
-        # resets on every actual injection (prefetch).
+        # Cadence (Honcho-style): piso de turnos entre BÚSQUEDAS. El contador se
+        # reinicia en cada inyección real (prefetch), así que con cadence=1 no
+        # estorba y con cadence>1 espacia los turnos que pagan red.
         cadence = max(1, int(self._config.get("recall_cadence", 1) or 1))
         self._turns_since_inject += 1
         if self._turns_since_inject < cadence:
@@ -1336,17 +1470,26 @@ class DranMemoryProvider(MemoryProvider):
         if self._worker and self._worker.is_alive():
             return  # a recall is already in flight — skip, next turn will retry
 
-        self._last_injected = 0  # a new recall cycle starts
+        self._recall_ticks += 1
+        standing = self._standing_recall(session_id)
+        if not self._recall_due(query.strip(), standing):
+            # Reutilizar NO es olvidar: el set sigue en pie y el prefetch lo
+            # vuelve a inyectar cuando toque. Lo que se ahorra es la búsqueda
+            # (una ida a la red y un embed) por un tema que no cambió.
+            logger.debug("Dran recall: reusing the standing set %r — no search this turn",
+                         standing.get("query", ""))
+            return
 
         # Multi-turn query: short follow-ups ("and why?") recall nothing on
-        # their own; concatenating recent turns gives the search context.
-        # The raw query is the user's new message; this provider keeps no
-        # message history, so the caller-provided query is enriched with the
-        # last completed search query (stable conversational thread).
-        enriched = self._enrich_query(query.strip())
+        # their own; only then is the previous query concatenated. A long, fresh
+        # question is searched on its own — enrichment would drag the old topic
+        # into the match. This provider keeps no message history, so the thread
+        # comes from the last completed search query.
+        enriched = self._enrich_query(query.strip(), standing)
 
         client = self._client
         last_query = enriched
+        tick = self._recall_ticks
 
         def work():
             try:
@@ -1358,17 +1501,7 @@ class DranMemoryProvider(MemoryProvider):
                 # Inventario de servicios: MISMA pasada y MISMA cadencia que la
                 # memoria — a lo sumo un GET /api/services por ventana de
                 # prefetch, nunca uno por turno ni en el camino crítico del turno.
-                # Cliente EFÍMERO y cap corto: esta línea es decoración, y un
-                # Composio lento no puede ni retrasar el turno ni abrir el
-                # breaker que apaga el recall.
-                try:
-                    inventory = self._inventory_client()
-                    services_line = (
-                        _services_line(inventory.list_services(timeout=PREFETCH_SERVICES_TIMEOUT))
-                        if inventory else ""
-                    )
-                except Exception:
-                    services_line = ""
+                services_line = self._services_inventory_line()
                 if services_line:
                     text = f"{text}\n{services_line}" if text else services_line
                     # Si cambia el inventario, se re-inyecta aunque el set de
@@ -1378,12 +1511,161 @@ class DranMemoryProvider(MemoryProvider):
                     self._prefetch_cache = text
                     self._prefetch_count = len(results)
                     self._prefetch_ids = injected_ids
+                    self._prefetch_query = last_query
+                    self._prefetch_session = session_id
+                    self._prefetch_tick = tick
+                    self._prefetch_ts = time.time()
                 self._last_search_query = last_query
-            except Exception:
-                logger.debug("Dran prefetch failed", exc_info=True)
+                self._recall_failures = 0
+                self._recall_stale = False
+                self._persist_recall_state()
+            except Exception as exc:
+                # Un search que falla NO se traga: queda contado (el siguiente
+                # turno reintenta, no espera a que "caduzque" el set viejo) y el
+                # set en pie sigue sirviendo mientras tanto — nunca un turno
+                # ciego y en silencio.
+                self._recall_failures += 1
+                logger.warning(
+                    "Dran recall: search failed (%s) — keeping the standing set "
+                    "and retrying next turn", exc,
+                )
 
         self._worker = threading.Thread(target=work, daemon=True)
         self._worker.start()
+
+    # -- El set en pie: cuándo buscar y qué se reutiliza -----------------------
+
+    def _recall_due(self, query: str, standing: Dict[str, Any]) -> bool:
+        """¿Vale la pena buscar? Barato y sin red — corre en el camino del turno.
+
+        Busca cuando hay una razón: no hay set, el anterior falló, se puso viejo
+        o el tema cambió. Reutiliza en cualquier otro caso.
+        """
+        if not standing:
+            return True  # primer turno, o el proceso arrancó de cero
+        if self._recall_failures:
+            return True  # el search anterior no llegó: reintentar
+        if self._recall_stale:
+            return True  # se escribió memoria: el set en pie quedó obsoleto
+        age = self._recall_ticks - int(standing.get("tick") or 0)
+        if age < 0:
+            # El set viene de otro proceso (los ticks se reinician con él): se
+            # usa para no dejar el turno ciego, pero el search se rehace.
+            return True
+        if age >= RECALL_MAX_AGE_TICKS:
+            return True  # el set se puso viejo: refrescar
+        if _topic_overlap(query, standing.get("query") or "") < RECALL_TOPIC_OVERLAP:
+            return True  # tema nuevo
+        return False
+
+    def _standing_recall(self, session_id: str = "") -> Dict[str, Any]:
+        """El set en pie: RAM primero, disco después (y sólo de la MISMA sesión).
+
+        El disco es la red de seguridad: un reinicio a media sesión se lleva la
+        RAM, y sin esto el turno siguiente llegaría sin nada.
+        """
+        with self._prefetch_lock:
+            ram = {
+                "text": self._prefetch_cache,
+                "ids": self._prefetch_ids,
+                "count": self._prefetch_count,
+                "query": self._prefetch_query,
+                "session": self._prefetch_session,
+                "tick": self._prefetch_tick,
+                "ts": self._prefetch_ts,
+            }
+        wanted = session_id or self._session_id
+        # "Recordado" NO es "con texto": un search que no encontró nada igual ya
+        # se hizo, y eso se respeta (no se re-busca el mismo tema cada turno).
+        if self._prefetch_tick or ram["text"] or ram["ids"]:
+            if wanted and ram["session"] and ram["session"] != wanted:
+                return {}  # otra sesión: no se le arrastra el recall ajeno
+            return ram
+
+        disk = _read_recall_state(self._recall_state_home or self._hermes_home())
+        if not disk or not (disk.get("tick") or disk.get("text") or (disk.get("ids") or [])):
+            return {}
+        if wanted and disk.get("session_id") and disk.get("session_id") != wanted:
+            return {}
+        return {
+            "text": str(disk.get("text") or ""),
+            "ids": frozenset(str(i) for i in (disk.get("ids") or [])),
+            "count": int(disk.get("count") or 0),
+            "query": str(disk.get("query") or ""),
+            "session": str(disk.get("session_id") or ""),
+            "tick": int(disk.get("tick") or 0),
+            "ts": float(disk.get("ts") or 0.0),
+        }
+
+    def _persist_recall_state(self) -> None:
+        """Baja el set en pie a disco (fail-open: es una red, no un requisito)."""
+        with self._prefetch_lock:
+            payload = {
+                "text": self._prefetch_cache,
+                "ids": sorted(self._prefetch_ids),
+                "count": self._prefetch_count,
+                "query": self._prefetch_query,
+                "session_id": self._prefetch_session,
+                "tick": self._prefetch_tick,
+                "ts": self._prefetch_ts,
+            }
+        _write_recall_state(self._recall_state_home or self._hermes_home(), payload)
+
+    def _clear_recall_state(self) -> None:
+        """Tira el set en pie (sesión nueva de verdad: no se hereda nada)."""
+        with self._prefetch_lock:
+            self._prefetch_cache = ""
+            self._prefetch_count = 0
+            self._prefetch_ids = frozenset()
+            self._prefetch_query = ""
+            self._prefetch_session = ""
+            self._prefetch_tick = 0
+            self._prefetch_ts = 0.0
+        self._last_injected = 0
+        self._last_injected_ids = frozenset()
+        self._recall_failures = 0
+        self._recall_stale = False
+        self._turns_since_reinject = 0
+        self._services_line_cache = ("", 0.0)
+        _write_recall_state(
+            self._recall_state_home or self._hermes_home(),
+            {"session_id": self._session_id, "text": "", "ids": [], "tick": 0, "ts": 0.0},
+        )
+
+    def on_session_switch(self, new_session_id: str, *, parent_session_id: str = "",
+                          reset: bool = False, rewound: bool = False, **kwargs) -> None:
+        """Rebind el set en pie a la sesión nueva (Hermes reusa el provider).
+
+        `reset` = conversación nueva de verdad (/new, /reset): el recall de la
+        anterior no debe arrastrarse a una que no lo pidió.
+        """
+        self._session_id = new_session_id or ""
+        if reset:
+            self._clear_recall_state()
+
+    def _services_inventory_line(self) -> str:
+        """La línea de inventario del turno, con TTL.
+
+        Cliente EFÍMERO a propósito: su breaker y su contador de fallos mueren
+        con él, así que una ventana lenta de Composio no puede abrir el breaker
+        que apaga el recall — y el cap corto no deja que la decoración retrase el
+        turno. Como el inventario no cambia cada turno, se reutiliza dentro de la
+        ventana: a lo sumo un GET por ventana, nunca uno por búsqueda.
+        """
+        line, at = self._services_line_cache
+        if line and (time.time() - at) < SERVICES_INVENTORY_TTL_SECS:
+            return line
+        fresh = ""
+        try:
+            inventory = self._inventory_client()
+            if inventory is not None:
+                fresh = _services_line(inventory.list_services(timeout=PREFETCH_SERVICES_TIMEOUT))
+        except Exception:
+            fresh = ""
+        if fresh:
+            self._services_line_cache = (fresh, time.time())
+            return fresh
+        return line  # el inventario viejo sirve más que ninguno
 
     def _inventory_client(self):
         """Cliente EFÍMERO para la línea de inventario del turno.
@@ -1404,43 +1686,52 @@ class DranMemoryProvider(MemoryProvider):
         except Exception:
             return None
 
-    def _enrich_query(self, query: str) -> str:
-        parts = []
-        prev = getattr(self, "_last_search_query", "")
-        if prev:
-            parts.append(prev)
-        parts.append(query)
-        enriched = " ".join(parts)
+    def _enrich_query(self, query: str, standing: Optional[Dict[str, Any]] = None) -> str:
+        """La query del search: el mensaje del usuario, y el tema anterior SÓLO
+        si el mensaje es un seguimiento.
+
+        Un "¿y eso por qué?" no recuerda nada por sí solo: concatenarle la query
+        anterior le devuelve el hilo. Un mensaje largo y nuevo se busca solo —
+        pegarle el tema viejo ensucia el match.
+        """
+        previous = (str((standing or {}).get("query") or "")
+                    or getattr(self, "_last_search_query", ""))
+        if not previous or not _is_followup_query(query, previous):
+            return query
+        enriched = f"{previous} {query}"
         # Keep the NEW message dominant: truncate from the front.
         return enriched[-300:]
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
+        """Lo que se inyecta este turno — SÓLO lee, nunca toca la red."""
         if not _memory_enabled():
-            return ""  # el cache queda intacto: si se re-enciende, vuelve solo
-        with self._prefetch_lock:
-            cached = self._prefetch_cache
-            injected_ids = getattr(self, "_prefetch_ids", frozenset())
-            # Recall contract: recall_status must reflect ONLY the LAST
-            # prefetch — keep the count after consuming the cache.
-            self._last_injected = self._prefetch_count
-            self._prefetch_cache = ""
-            self._prefetch_count = 0
-            self._prefetch_ids = frozenset()
-
+            return ""  # el set queda intacto: si se re-enciende, vuelve solo
+        standing = self._standing_recall(session_id)
+        if not standing:
+            return ""
+        text = str(standing.get("text") or "")
+        injected_ids = standing.get("ids") or frozenset()
+        # Recall contract: recall_status must reflect ONLY the LAST prefetch.
+        self._last_injected = int(standing.get("count") or 0)
         self._turns_since_inject = 0
 
-        # Injected-set dedupe: if the fact set is identical to what the
-        # previous turn already received, skip re-injecting — pure token
-        # savings, the agent already has this context.
-        if cached and injected_ids and injected_ids == self._last_injected_ids:
-            logger.debug("Dran recall: fact set unchanged, skipping injection")
+        # Injected-set dedupe: un set IDÉNTICO ya está en contexto (el fence se
+        # re-manda con su fila), así que re-inyectarlo es puro gasto de tokens —
+        # pero sólo hasta cierto punto: pasados RECALL_REINJECT_TICKS turnos se
+        # inyecta igual, para que ni la compresión ni una fila caída dejen la
+        # sesión sin sus memorias.
+        if (text and injected_ids and injected_ids == self._last_injected_ids
+                and self._turns_since_reinject < RECALL_REINJECT_TICKS):
+            logger.debug("Dran recall: standing set unchanged, skipping injection "
+                         "(%d/%d turns)", self._turns_since_reinject, RECALL_REINJECT_TICKS)
             self._last_injected = 0
+            self._turns_since_reinject += 1
             return ""
 
         if injected_ids:
             self._last_injected_ids = injected_ids
-
-        return cached or ""
+        self._turns_since_reinject = 0
+        return text or ""
 
     def recall_status(self) -> Optional[RecallStatus]:
         count = getattr(self, "_last_injected", 0)
@@ -1517,7 +1808,16 @@ class DranMemoryProvider(MemoryProvider):
                 query = str((args or {}).get("query", "")).strip()
                 if not query:
                     return json.dumps({"error": "query is required"})
-                results = self._client.search(query, limit=10) if self._client else []
+                if self._client is None:
+                    # Sin cliente NO es "cero resultados": es "no consulté". Se
+                    # distinguen explícitamente — un `{"results": []}` mudo dejaba
+                    # al agente creyendo que la memoria está vacía.
+                    return json.dumps({
+                        "error": "dran memory is not connected in this session — the "
+                                 "search never ran (check the plugin's api_key/base_url). "
+                                 "This is NOT an empty store.",
+                    })
+                results = self._client.search(query, limit=10)
                 return json.dumps({"results": [
                     {"id": r.get("id"), "content": r.get("content"),
                      "score": r.get("score"), "created_by": r.get("created_by")}
@@ -1550,6 +1850,10 @@ class DranMemoryProvider(MemoryProvider):
                     })
                 dup = bool(data.get("duplicate"))
                 memory = data.get("data") or {}
+                # Un hecho recién guardado es la mejor razón para volver a
+                # buscar: sin esto tardaría hasta RECALL_MAX_AGE_TICKS turnos (o
+                # un cambio de tema) en poder recordarse en esta misma sesión.
+                self._recall_stale = True
                 return json.dumps({
                     "stored": True,
                     "duplicate": dup,
@@ -1566,6 +1870,7 @@ class DranMemoryProvider(MemoryProvider):
                     return json.dumps({"error": "memory writes are disabled in this context"})
                 data = self._client.update_memory(memory_id, content) if self._client else {}
                 memory = data.get("data") or {}
+                self._recall_stale = True  # el hecho cambió: que se pueda re-leer
                 return json.dumps({
                     "updated": True,
                     "id": memory.get("id"),

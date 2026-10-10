@@ -1,5 +1,5 @@
 name: dran
-version: 1.6.0
+version: 1.7.0
 description: "Dran — shared multi-agent memory store + knowledge tools backed by your Dran instance (REST, per-account API token attribution, X-Hermes-Agent identity)."
 author: Álvaro Lizama
 license: MIT
